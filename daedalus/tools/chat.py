@@ -8,7 +8,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, refuse_protected, services_for
 
 
@@ -83,6 +83,7 @@ async def attach_media(context: ToolContext, items: list[dict[str, str]], layout
     return ok(context, f"media prepared ({attached['kind']}). Put this line in the final answer:\n\n{attached['markdown']}", presentation_id=attached["id"])
 
 
+@tool_group("agents")
 @search_hint(
     "spawn independent agent own session separate chat topic persistent worker brief peer "
     "создать создай отдельного агента завести заведи независимый агент своя сессия отдельный чат воркер"

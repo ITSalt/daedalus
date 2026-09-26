@@ -22,6 +22,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 from mcp.shared.exceptions import MCPError
+from protocore.contracts.tool_registry import IToolRegistry
 from protocore.contracts.tools import Tool, ToolContext
 from protocore.contracts.types import ToolDefinition, ToolParameterSchema, ToolResult
 
@@ -34,9 +35,17 @@ logger = logging.getLogger(__name__)
 
 
 def mcp_tool_name(server: str, tool: str) -> str:
-    safe_server = re.sub(r"[^A-Za-z0-9]+", "", server.title()) or "Server"
-    safe_tool = re.sub(r"[^A-Za-z0-9_]+", "_", tool)
-    return f"Mcp_{safe_server}_{safe_tool}"[:64]
+    return f"{mcp_tool_prefix(server)}{re.sub(r'[^A-Za-z0-9_]+', '_', tool)}"[:64]
+
+
+def mcp_tool_prefix(server: str) -> str:
+    """What every proxy of ``server`` is named with, and so what its tool group is declared by."""
+    return f"Mcp_{re.sub(r'[^A-Za-z0-9]+', '', server.title()) or 'Server'}_"
+
+
+def mcp_group_name(server: str) -> str:
+    """The name the core's catalogue of held-back tools shows for ``server``'s tools."""
+    return f"MCP server {server}"
 
 
 VAULT_NOTE = (
@@ -367,7 +376,7 @@ def _config_digest(config: McpServerConfig) -> str:
 
 
 class McpManager:
-    def __init__(self, servers: dict[str, McpServerConfig], registry: Any, token_dir: Path | None = None) -> None:
+    def __init__(self, servers: dict[str, McpServerConfig], registry: IToolRegistry, token_dir: Path | None = None) -> None:
         self._configs = servers
         self._registry = registry
         self._connections: dict[str, McpConnection] = {}
@@ -385,10 +394,18 @@ class McpManager:
                 self._replace_catalog(name, ())
 
     def _replace_catalog(self, server: str, tools: Sequence[McpToolProxy]) -> None:
-        """Publish one server's current catalogue without disturbing another server's bindings."""
+        """Publish one server's current catalogue without disturbing another server's bindings.
+
+        The server's tools are declared a dynamic group by their name prefix, which is what lets the
+        core hold them back behind ToolSearch and name them in one catalogue line instead of putting
+        a server of three hundred tools on the surface. The declaration is made again with every
+        catalogue, so an edited description reaches the next run; the registry has no way to withdraw
+        one, and a group whose server is gone has no members and is never shown.
+        """
         previous = self._registered_tools.get(server, {})
         current = {tool.name: tool for tool in tools}
         if current:
+            self._registry.declare_group(mcp_group_name(server), self.group_description(server), dynamic=True, prefix=mcp_tool_prefix(server))
             self._registered_tools[server] = current
         else:
             self._registered_tools.pop(server, None)
@@ -409,6 +426,11 @@ class McpManager:
     def describe(self, name: str) -> str:
         cfg = self._configs.get(name)
         return cfg.description if cfg else ""
+
+    def group_description(self, name: str) -> str:
+        """One line for the catalogue: the operator's description of the server, or what it is when there is none."""
+        line = " ".join(self.describe(name).split())
+        return line[:200] if line else f"Tools of the MCP server {name}"
 
     def oauth_client(self, name: str) -> MCPOAuthClient | None:
         """The lazily-created OAuth client for an HTTP server that declares an ``oauth`` block."""
@@ -539,4 +561,4 @@ def blocked_for(manager: McpManager, enabled: Sequence[str]) -> set[str]:
     return {name for name in manager.all_tool_names() if not any(name in manager.tool_names(s) for s in enabled_set)}
 
 
-__all__ = ["McpConnection", "McpManager", "McpToolProxy", "blocked_for", "mcp_tool_name"]
+__all__ = ["McpConnection", "McpManager", "McpToolProxy", "blocked_for", "mcp_group_name", "mcp_tool_name", "mcp_tool_prefix"]

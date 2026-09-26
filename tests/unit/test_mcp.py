@@ -5,12 +5,13 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from protocore.contracts.tool_registry import policy_admits
 from protocore.contracts.tools import ToolContext
-from protocore.tests_support.adapters import InMemoryToolRegistry
+from protocore.runtime.tool_registry import ToolRegistry
 
 from daedalus.config import McpServerConfig, RuntimeConfig, Settings
 from daedalus.host.session_runner import SessionManager
-from daedalus.mcp.manager import McpConnection, McpManager, blocked_for, mcp_tool_name
+from daedalus.mcp.manager import McpConnection, McpManager, blocked_for, mcp_group_name, mcp_tool_name, mcp_tool_prefix
 from daedalus.stores.database import Database
 
 SERVER = Path(__file__).resolve().parents[1] / "support" / "mcp_echo_server.py"
@@ -25,7 +26,7 @@ def _remote(name: str) -> SimpleNamespace:
 
 
 async def test_manager_connects_and_registers_proxies() -> None:
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager(_config(), registry)
     assert manager.status()[0]["connected"] is False
     await manager.ensure("echo")
@@ -42,7 +43,7 @@ async def test_manager_connects_and_registers_proxies() -> None:
 
 
 async def test_concurrent_enable_is_single_flight() -> None:
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager(_config(), registry)
     connections = await asyncio.gather(*(manager.ensure("echo") for _ in range(10)))
     assert len({id(connection) for connection in connections}) == 1
@@ -51,7 +52,7 @@ async def test_concurrent_enable_is_single_flight() -> None:
 
 
 async def test_changed_server_config_replaces_connection_and_catalog_proxy() -> None:
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager(_config(), registry)
     first = await manager.ensure("echo")
     retired = first._proxy(_remote("retired"))
@@ -70,7 +71,7 @@ async def test_changed_server_config_replaces_connection_and_catalog_proxy() -> 
 
 
 async def test_catalog_shrink_unregisters_only_that_servers_removed_tools() -> None:
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager({}, registry)
     first = McpConnection("first", McpServerConfig(transport="stdio", command="first"))
     other = McpConnection("other", McpServerConfig(transport="stdio", command="other"))
@@ -89,8 +90,42 @@ async def test_catalog_shrink_unregisters_only_that_servers_removed_tools() -> N
     await manager.close()
 
 
+def test_a_servers_tools_are_declared_a_dynamic_group_by_their_prefix() -> None:
+    registry = ToolRegistry()
+    manager = McpManager({"git hub": McpServerConfig(transport="stdio", command="x", description="GitHub issues\n and pull requests")}, registry)
+    connection = McpConnection("git hub", McpServerConfig(transport="stdio", command="x"))
+    proxies = [connection._proxy(_remote(name)) for name in ("list_issues", "create_pr")]
+
+    manager._replace_catalog("git hub", proxies)
+
+    (group,) = registry.tool_groups()
+    assert group.name == mcp_group_name("git hub") and group.dynamic
+    assert group.prefix == mcp_tool_prefix("git hub") == "Mcp_GitHub_"
+    assert all(proxy.name.startswith(group.prefix) for proxy in proxies)
+    # One line in the catalogue, whatever the operator wrote across lines.
+    assert group.description == "GitHub issues and pull requests"
+
+
+def test_a_group_is_redeclared_with_the_current_description_and_empties_with_its_server() -> None:
+    registry = ToolRegistry()
+    config = McpServerConfig(transport="stdio", command="x")
+    manager = McpManager({"jira": config}, registry)
+    proxy = McpConnection("jira", config)._proxy(_remote("search"))
+    manager._replace_catalog("jira", [proxy])
+    assert registry.tool_groups()[0].description == "Tools of the MCP server jira"
+
+    manager.reload({"jira": config.model_copy(update={"description": "Jira tickets"})})
+    assert registry.get(proxy.name) is None  # a changed config retires the catalogue
+    manager._replace_catalog("jira", [proxy])
+    assert registry.tool_groups()[0].description == "Jira tickets"
+
+    manager._replace_catalog("jira", ())
+    # The declaration stays (the registry cannot withdraw one), but it has no members left to show.
+    assert not [tool for tool in registry.list_all() if tool.name.startswith(mcp_tool_prefix("jira"))]
+
+
 async def test_reload_removing_server_unregisters_its_catalog() -> None:
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager(_config(), registry)
     await manager.ensure("echo")
     names = manager.tool_names("echo")
@@ -143,7 +178,7 @@ async def test_expired_token_refresh_is_single_flight() -> None:
 
 async def test_call_reconnects_after_transport_drop() -> None:
     """A dropped transport (server restart / idle reset) must not break every call."""
-    registry = InMemoryToolRegistry()
+    registry = ToolRegistry()
     manager = McpManager(_config(), registry)
     await manager.ensure("echo")
     tool = registry.get(mcp_tool_name("echo", "add"))
@@ -205,12 +240,12 @@ async def test_child_mcp_policy_cannot_outlive_parent_access(settings: Settings,
         await manager.set_mcp(leader.session.id, "echo", True)
         await manager.set_mcp(child.session.id, "echo", True)
         tool = mcp_tool_name("echo", "add")
-        assert tool in manager.tool_policy_for(child).pinned
+        assert policy_admits(manager.tool_policy_for(child), tool)
 
         await manager.set_mcp(leader.session.id, "echo", False)
         await manager.set_mcp(child.session.id, "echo", True)  # a child refresh cannot widen past its parent
         policy = manager.tool_policy_for(child)
-        assert tool in policy.blocked and tool not in policy.pinned
+        assert tool in policy.blocked and not policy_admits(policy, tool)
         denied = manager.policy_gate(child.session.id, "run-child").decide(tool, {"a": 2, "b": 3})
         assert denied.action == "deny" and denied.rule == "session.capabilities"
 

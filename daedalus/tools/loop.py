@@ -6,7 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -30,6 +30,7 @@ def _describe(loop: dict) -> str:  # type: ignore[type-arg]
     return f"loop {loop['status']} ({cadence}, iterations {loop['run_count']}{' of ' + str(loop['max_runs']) if loop.get('max_runs') else ''}{nxt})"
 
 
+@tool_group("loop")
 @search_hint(
     "next wake up delay loop iteration check again later interval pace "
     "следующая проверка через интервал задержка цикла разбудить позже реже чаще темп"
@@ -55,6 +56,7 @@ async def loop_next(context: ToolContext, delay_seconds: float, reason: str) -> 
     return ok(context, f"next wake-up in {result['delay_seconds']} s{note}: {reason.strip()}", next_run_at=result.get("next_run_at"))
 
 
+@tool_group("loop")
 @search_hint(
     "end the loop stop repeating purpose achieved monitoring done finish loop "
     "остановить цикл хватит повторять закончить закончи мониторинг прекратить прекрати завершить заверши"
@@ -71,6 +73,7 @@ async def loop_stop(context: ToolContext, reason: str) -> ToolResult:
     return ok(context, f"loop stopped: {result.get('stop_reason')}")
 
 
+@tool_group("loop")
 @search_hint(
     "park the loop until operator resumes blocked needs operator hold loop "
     "поставить паузу приостановить приостанови цикл ждать оператора заморозить заморозь отложить отложи"
@@ -87,6 +90,7 @@ async def loop_pause(context: ToolContext, what_is_needed: str) -> ToolResult:
     return ok(context, "loop paused; the operator has been told what is needed. LoopResume starts it again.")
 
 
+@tool_group("loop")
 @search_hint(
     "resume the loop continue again unpause restart loop "
     "возобновить возобнови продолжить продолжи цикл снова снять паузы запустить запусти"
@@ -103,6 +107,7 @@ async def loop_resume(context: ToolContext) -> ToolResult:
     return ok(context, _describe(result))
 
 
+@tool_group("loop")
 @search_hint(
     "loop status iterations next wake up mode instruction how is the loop "
     "статус цикла итерации когда следующая проверка режим сколько итераций состояние цикла"

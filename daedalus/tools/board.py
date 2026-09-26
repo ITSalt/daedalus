@@ -6,7 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -15,6 +15,7 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("board") if manager is not None else None
 
 
+@tool_group("board")
 @search_hint(
     "add todo item to my board backlog ticket checklist step plan card new entry "
     "добавить добавь завести заведи закинуть закинь кинь таска таску тудушка тикет доска доску пункт план чеклист"
@@ -41,6 +42,7 @@ async def board_add(
     return ok(context, f"task {task['id']} added ({task['status']}): {task['title']}", task_id=task["id"])
 
 
+@tool_group("board")
 @search_hint(
     "move mark status done doing blocked progress note tick checklist item close reopen "
     "обновить обнови отметить отметь пометить пометь закрыть закрой статус готово сделано чеклист галочка продвинуть"
@@ -73,6 +75,7 @@ async def board_update(
     return ok(context, f"task {task['id']} is now {task['status']}" + (f", checklist {done}/{len(task['checklist'])}" if task["checklist"] else ""))
 
 
+@tool_group("board")
 @search_hint(
     "my board kanban open todo items backlog overview what is planned "
     "доска доску канбан таски тудушки бэклог список открытые запланировано показать покажи глянуть глянь"
@@ -93,6 +96,7 @@ async def board_list(context: ToolContext, status: str | None = None, include_do
     return ok(context, await hook("render", status=status, include_done=include_done, actor=context.session_id))
 
 
+@tool_group("board")
 @search_hint(
     "one card details acceptance criteria checklist dependencies notes who works on it "
     "подробности детали карточка тикета критерии приемки чеклист зависимости заметки кто делает открыть открой"

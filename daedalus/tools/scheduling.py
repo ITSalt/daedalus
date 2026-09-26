@@ -6,10 +6,11 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, services_for
 
 
+@tool_group("scheduling")
 @search_hint(
     "schedule recurring job cron every morning daily one-off later run at time reminder remind "
     "запланировать запланируй каждый день каждое утро по расписанию напоминалка напоминание крон напомни напомнить"
@@ -69,6 +70,7 @@ async def schedule_create(
     return ok(context, f"scheduled {created['id']} '{name}' ({created.get('kind', kind)}{where}), next at {created.get('next_run_at')}", schedule_id=created["id"])
 
 
+@tool_group("scheduling")
 @search_hint(
     "scheduled jobs list upcoming cron reminders recurring "
     "расписание запланированные напоминалки напоминания список какие стоят регулярные задания показать покажи"
@@ -90,6 +92,7 @@ async def schedule_list(context: ToolContext) -> ToolResult:
     return ok(context, "\n".join(lines))
 
 
+@tool_group("scheduling")
 @search_hint(
     "delete scheduled job cancel cron reminder unschedule stop recurring "
     "удалить удали отменить отмени напоминалку напоминание расписание снять сними регулярное"

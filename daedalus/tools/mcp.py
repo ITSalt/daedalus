@@ -6,7 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -15,6 +15,7 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("mcp") if manager is not None else None
 
 
+@tool_group("mcp")
 @search_hint(
     "mcp servers list which integrations connectors external tools available "
     "мсп мцп интеграции коннекторы подключения внешние сервисы какие доступны серверы"
@@ -34,6 +35,7 @@ async def mcp_list(context: ToolContext) -> ToolResult:
     return ok(context, await hook("list", session_id=context.session_id))
 
 
+@tool_group("mcp")
 @search_hint(
     "enable mcp server connect integration turn on connector activate plugin "
     "включить включи подключить подключи мсп интеграцию коннектор активировать активируй плагин"
@@ -55,6 +57,7 @@ async def mcp_enable(context: ToolContext, server: str) -> ToolResult:
         return error(context, str(exc))
 
 
+@tool_group("mcp")
 @search_hint(
     "disable mcp server turn off integration disconnect connector deactivate "
     "выключить выключи отключить отключи мсп интеграцию коннектор деактивировать убрать убери"
