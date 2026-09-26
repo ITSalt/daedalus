@@ -18,8 +18,8 @@ import (
 // The two repositories the stack runs: the bot and the core it is built on. A fork is used by
 // setting DAEDALUS_GIT_REMOTE or DAEDALUS_CORE_GIT_REMOTE before starting the launcher.
 const (
-	defaultBotRemote  = "https://github.com/ascorblack/daedalus"
-	defaultCoreRemote = "https://github.com/ascorblack/protocore-exp"
+	defaultBotRemote  = "https://github.com/anchor-inference/daedalus"
+	defaultCoreRemote = "https://github.com/anchor-inference/protocore-exp"
 )
 
 // branch is what a checkout follows. There is one: the published code is what main says it is.
