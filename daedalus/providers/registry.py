@@ -116,7 +116,7 @@ class ProviderRegistry:
             "vllm": self._settings.vllm_api_key,
         }
         if pc.kind == "openrouter":
-            headers = {"HTTP-Referer": "https://github.com/ascorblack/daedalus", "X-Title": "Daedalus"}
+            headers = {"HTTP-Referer": "https://github.com/anchor-inference/daedalus", "X-Title": "Daedalus"}
         elif pc.kind == "vllm":
             # The environment pair is the deployment-time default; the operator may point
             # any of these at a different endpoint (base_url, api_key) in config.toml.

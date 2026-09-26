@@ -43,8 +43,8 @@ Ask these once, together; do not start until you have the answers.
 
 ```bash
 # as the operator's user, in their home directory
-git clone https://github.com/ascorblack/daedalus
-git clone https://github.com/ascorblack/protocore-exp     # the core, next to the bot: ../protocore-exp
+git clone https://github.com/anchor-inference/daedalus
+git clone https://github.com/anchor-inference/protocore-exp     # the core, next to the bot: ../protocore-exp
 mkdir -p daedalus-secrets/ssh && chmod 700 daedalus-secrets
 cd daedalus
 cp deploy/env.example .env

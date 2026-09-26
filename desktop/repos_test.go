@@ -46,11 +46,11 @@ func tarGz(t *testing.T, root string, files map[string]string) []byte {
 
 func TestTheTarballURLFollowsTheRemote(t *testing.T) {
 	for remote, want := range map[string]string{
-		"https://github.com/ascorblack/daedalus":     "https://codeload.github.com/ascorblack/daedalus/tar.gz/refs/heads/main",
-		"https://github.com/ascorblack/daedalus.git": "https://codeload.github.com/ascorblack/daedalus/tar.gz/refs/heads/main",
-		"git@github.com:a-fork/protocore-exp.git":    "https://codeload.github.com/a-fork/protocore-exp/tar.gz/refs/heads/main",
-		"ssh://git@github.com/a-fork/daedalus":       "https://codeload.github.com/a-fork/daedalus/tar.gz/refs/heads/main",
-		"nonsense":                                   "",
+		"https://github.com/anchor-inference/daedalus":     "https://codeload.github.com/anchor-inference/daedalus/tar.gz/refs/heads/main",
+		"https://github.com/anchor-inference/daedalus.git": "https://codeload.github.com/anchor-inference/daedalus/tar.gz/refs/heads/main",
+		"git@github.com:a-fork/protocore-exp.git":          "https://codeload.github.com/a-fork/protocore-exp/tar.gz/refs/heads/main",
+		"ssh://git@github.com/a-fork/daedalus":             "https://codeload.github.com/a-fork/daedalus/tar.gz/refs/heads/main",
+		"nonsense":                                         "",
 	} {
 		if got := tarballURL(remote); got != want {
 			t.Fatalf("%s: got %q, want %q", remote, got, want)
@@ -65,7 +65,7 @@ func TestFetchAndUnpackDropTheWrapperFolder(t *testing.T) {
 		"daedalus/main.py": "print(1)\n",
 	})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ascorblack/daedalus/tar.gz/refs/heads/main" {
+		if r.URL.Path != "/anchor-inference/daedalus/tar.gz/refs/heads/main" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -73,7 +73,7 @@ func TestFetchAndUnpackDropTheWrapperFolder(t *testing.T) {
 	}))
 	defer server.Close()
 
-	body, err := fetchTarball(context.Background(), server.URL+"/ascorblack/daedalus/tar.gz/refs/heads/main")
+	body, err := fetchTarball(context.Background(), server.URL+"/anchor-inference/daedalus/tar.gz/refs/heads/main")
 	if err != nil {
 		t.Fatal(err)
 	}

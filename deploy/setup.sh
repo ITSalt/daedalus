@@ -33,7 +33,7 @@ PY
 say "Daedalus setup. Values go to $ENV_FILE and $SECRETS_FILE."
 command -v docker >/dev/null || { echo "docker is not installed"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "docker compose is not available"; exit 1; }
-[ -d "$CORE_DIR" ] || { say "The core checkout is missing: cloning protocore-exp next to this repository."; git clone -q https://github.com/ascorblack/protocore-exp "$CORE_DIR"; }
+[ -d "$CORE_DIR" ] || { say "The core checkout is missing: cloning protocore-exp next to this repository."; git clone -q https://github.com/anchor-inference/protocore-exp "$CORE_DIR"; }
 [ -t 0 ] || { echo "setup.sh asks questions: run it in a terminal"; exit 1; }
 [ -f "$ENV_FILE" ] || cp deploy/env.example "$ENV_FILE"
 chmod 600 "$ENV_FILE"

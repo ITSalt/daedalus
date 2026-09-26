@@ -295,12 +295,12 @@ native mode, the Python it runs on. Nothing is installed system-wide and nothing
 else, so uninstalling is deleting the folder.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ascorblack/daedalus/main/desktop/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/anchor-inference/daedalus/main/desktop/install.sh | sh
 ```
 
 That takes the newest `desktop-v*` release, checks it against the release's `SHA256SUMS`, and
 unpacks it into `./Daedalus`. By hand, take the archive for your machine from the
-[releases](https://github.com/ascorblack/daedalus/releases): `Daedalus-macOS.zip` holds
+[releases](https://github.com/anchor-inference/daedalus/releases): `Daedalus-macOS.zip` holds
 `Daedalus.app` for both kinds of Mac and is opened with a double-click,
 `daedalus-desktop-linux-<arch>.tar.gz` and `daedalus-desktop-windows-amd64.zip` hold the executable.
 
@@ -332,7 +332,7 @@ SuperGrok login on the host. **Telegram is optional**: with a bot token you get 
 without one the app in the browser is the whole interface.
 
 ```bash
-git clone https://github.com/ascorblack/daedalus
+git clone https://github.com/anchor-inference/daedalus
 cd daedalus
 bash deploy/setup.sh            # asks for the values, writes .env and ../daedalus-secrets/keyproxy.env, starts the stack
 ```
@@ -531,7 +531,7 @@ Have a coding agent (Claude Code, Codex, Cursor, another Daedalus) set the serve
 the output it must see. Paste this into the agent, on a shell with Docker on the target server:
 
 ```text
-Install Daedalus (https://github.com/ascorblack/daedalus) on this server for me, following the
+Install Daedalus (https://github.com/anchor-inference/daedalus) on this server for me, following the
 instructions for agents in docs/AGENT-SETUP.md of that repository exactly. Before you start, ask me
 in one message for everything section 1 of that page needs (a model key or a CLI login to use,
 whether I want Telegram, whether there is a domain, the daily cap, a GitHub token or "later").

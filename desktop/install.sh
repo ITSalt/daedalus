@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the Daedalus desktop launcher into a folder of its own:
 #
-#   curl -fsSL https://raw.githubusercontent.com/ascorblack/daedalus/main/desktop/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/anchor-inference/daedalus/main/desktop/install.sh | sh
 #
 # It takes the newest desktop-v* release, downloads the archive for this machine, checks it against
 # the release's SHA256SUMS, and unpacks it into ./Daedalus (or $DAEDALUS_DIR). Everything the
@@ -13,7 +13,7 @@
 # by a Developer ID certificate.
 set -eu
 
-repo="${DAEDALUS_REPO:-ascorblack/daedalus}"
+repo="${DAEDALUS_REPO:-anchor-inference/daedalus}"
 dir="${DAEDALUS_DIR:-./Daedalus}"
 api="https://api.github.com/repos/$repo"
 

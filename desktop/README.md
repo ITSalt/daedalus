@@ -36,11 +36,11 @@ One line on macOS and Linux — it takes the newest `desktop-v*` release, checks
 the release's `SHA256SUMS`, and unpacks it into `./Daedalus`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ascorblack/daedalus/main/desktop/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/anchor-inference/daedalus/main/desktop/install.sh | sh
 ```
 
 `DAEDALUS_DIR=/somewhere/else` puts it elsewhere. Or take the archive by hand from the
-[releases page](https://github.com/ascorblack/daedalus/releases) (the tags beginning with
+[releases page](https://github.com/anchor-inference/daedalus/releases) (the tags beginning with
 `desktop-v`):
 
 | Machine | File | What is in it |

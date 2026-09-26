@@ -140,12 +140,12 @@ func TestTheImageFollowsTheRemote(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 	for remote, want := range map[string]string{
-		"https://github.com/ascorblack/daedalus":     "ascorblack",
-		"https://github.com/ascorblack/daedalus.git": "ascorblack",
-		"git@github.com:a-fork/daedalus.git":         "a-fork",
-		"ssh://git@github.com/a-fork/daedalus":       "a-fork",
-		"https://github.com:443/a-fork/daedalus":     "a-fork",
-		"nonsense":                                   defaultImageOwner,
+		"https://github.com/anchor-inference/daedalus":     "anchor-inference",
+		"https://github.com/anchor-inference/daedalus.git": "anchor-inference",
+		"git@github.com:a-fork/daedalus.git":               "a-fork",
+		"ssh://git@github.com/a-fork/daedalus":             "a-fork",
+		"https://github.com:443/a-fork/daedalus":           "a-fork",
+		"nonsense":                                         defaultImageOwner,
 	} {
 		if got := imageOwner(remote); got != want {
 			t.Fatalf("%s names owner %q, want %q", remote, got, want)
