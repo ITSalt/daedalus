@@ -15,6 +15,7 @@ from protocore.tools.decorator import tool
 
 from daedalus.security.redact import redact
 from daedalus.terminals.model import TerminalError, Unsupported
+from daedalus.tools import search_hint
 from daedalus.tools._common import FRAME_CHARS, clip, error, ok, output_limit, services_for
 
 WHATS = ("list", "screen", "output", "commands")
@@ -65,6 +66,10 @@ def _bounded(context: ToolContext, body: str, header: str, footer: str, *, note:
     return "\n".join(part for part in (header, clip(redact(body), room, note=note), footer) if part)
 
 
+@search_hint(
+    "operator terminal dock screen what the terminal shows read terminal "
+    "терминал оператора экран терминала что в терминале консоль в доке прочитать"
+)
 @tool(
     name="TerminalRead",
     description=(

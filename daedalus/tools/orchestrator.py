@@ -9,12 +9,13 @@ office; a replaced orchestrator is refused with the name of its successor.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from protocore.contracts.tools import Tool, ToolContext
 from protocore.contracts.types import ToolDefinition, ToolParameterSchema, ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 WATCH_EVENTS = (
@@ -41,6 +42,10 @@ async def _call(tool_context: ToolContext, operation: str, /, **kwargs: Any) -> 
     return ok(tool_context, str(text))
 
 
+@search_hint(
+    "project brief goals constraints preferences done when allowed without operator scope "
+    "бриф проекта цели ограничения предпочтения критерии готовности рамки прочитать прочитай дописать допиши"
+)
 @tool(
     name="Brief",
     description=(
@@ -54,6 +59,10 @@ async def brief(context: ToolContext, section: str | None = None, body: str | No
     return await _call(context, "brief", section=section, body=body, append=append)
 
 
+@search_hint(
+    "project folders directories add folder mount path readonly "
+    "папки проекта директории добавить папку подключить папку путь папок каталоги список"
+)
 @tool(
     name="Folders",
     description=(
@@ -76,6 +85,10 @@ async def folders(
     return await _call(context, "folders", op=op, path=path, folder=folder, label=label, env=env, readonly=readonly)
 
 
+@search_hint(
+    "project journal log decisions record why decision diary rationale "
+    "журнал проекта решения записать запиши журнал почему решили дневник обоснование"
+)
 @tool(
     name="Journal",
     description=(
@@ -88,6 +101,10 @@ async def journal(context: ToolContext, op: str = "write", text: str = "", why: 
     return await _call(context, "journal", op=op, text=text, why=why, kind=kind, before=before, limit=limit)
 
 
+@search_hint(
+    "team members staff roster who is working who is free status of people stuck busy workload "
+    "команда сотрудники штат кто работает кто свободен состав команды застрял загружен свободные руки"
+)
 @tool(
     name="Team",
     description=(
@@ -100,6 +117,10 @@ async def team(context: ToolContext, staff: str | None = None, concurrency: int 
     return await _call(context, "team", staff=staff, concurrency=concurrency)
 
 
+@search_hint(
+    "project board tasks of the team create assign update tasks for staff project backlog "
+    "задачи проекта доска проекта таски команды задачу создать создай бэклог проекта статус задачи"
+)
 @tool(
     name="Tasks",
     description=(
@@ -131,6 +152,10 @@ async def tasks(
     )
 
 
+@search_hint(
+    "peek into project files git log git diff commits read-only look inside repo "
+    "заглянуть загляни файлы проекта коммиты дифф гит лог посмотреть репозиторий"
+)
 @tool(
     name="Peek",
     description=(
@@ -161,6 +186,11 @@ QUESTION_PROPERTIES: dict[str, Any] = {
 class AskOperator(Tool):
     """Written out rather than decorated: its questions carry an argument called ``context``, which the
     decorator keeps for the tool context."""
+
+    search_hint: ClassVar[str] = (
+        "ask operator decision question for the owner needs approval from the human "
+        "спросить спроси оператора решение владельца вопрос оператору уточнить оператора"
+    )
 
     @property
     def name(self) -> str:
@@ -212,6 +242,10 @@ class AskOperator(Tool):
         )
 
 
+@search_hint(
+    "withdraw take back questions no longer needed retract cancel questions "
+    "отозвать отзови вопросы снять вопросы забрать заберите вопросы неактуально отменить отмени"
+)
 @tool(
     name="WithdrawQuestions",
     description=(
@@ -225,6 +259,10 @@ async def withdraw_questions(context: ToolContext, ids: list[str], reason: str) 
     return await _call(context, "withdraw_questions", ids=ids, reason=reason)
 
 
+@search_hint(
+    "report to operator milestone done blocker decision notify phone journal entry outcome "
+    "доложить доложи сообщить оператору отчитаться отчитайся готово блокер итог блокировка результат"
+)
 @tool(
     name="ProjectReport",
     description=(
@@ -239,6 +277,10 @@ async def project_report(context: ToolContext, text: str, title: str = "", kind:
     return await _call(context, "project_report", text=text, title=title, kind=kind, task_id=task_id, dispatch_id=dispatch_id, files=files)
 
 
+@search_hint(
+    "hire add member onboard new staff developer recruit coder engineer "
+    "нанять найми нанимать взять возьми сотрудника разработчика команду новый сотрудник кодера"
+)
 @tool(
     name="Hire",
     description=(
@@ -272,6 +314,10 @@ async def hire(
     )
 
 
+@search_hint(
+    "change member settings role model permissions instructions reconfigure "
+    "поменять поменяй модель сотруднику роль права настройки сотрудника сменить смени"
+)
 @tool(
     name="StaffEdit",
     description=(
@@ -300,6 +346,10 @@ async def staff_edit(
     )
 
 
+@search_hint(
+    "dismiss remove member from team fire let go roster "
+    "уволить уволь убрать убери из команды выгнать выгони исключить состав"
+)
 @tool(
     name="Dismiss",
     description=(
@@ -312,6 +362,10 @@ async def dismiss(context: ToolContext, staff: str, release: bool = False, keep_
     return await _call(context, "dismiss", staff=staff, release=release, keep_worktree=keep_worktree)
 
 
+@search_hint(
+    "assign hand task to member give work to staff put someone on it "
+    "назначить назначь поручить поручи сотруднику дать задачу выдать выдай посадить посади"
+)
 @tool(
     name="Assign",
     description=(
@@ -344,6 +398,10 @@ async def assign(
     )
 
 
+@search_hint(
+    "tell member message correction say to staff live session nudge send message teammate colleague "
+    "сказать скажи написать напиши сотруднику передать поправку поправить курс отправить отправь сообщение коллеге"
+)
 @tool(
     name="Tell",
     description=(
@@ -366,6 +424,10 @@ async def tell(context: ToolContext, staff: str, text: str, when: str = "now", f
 tell().definition.parameters.properties["when"]["enum"] = ["now", "after_turn", "interrupt"]
 
 
+@search_hint(
+    "what did member do last reply turns terminal screen diff of staff recent actions activity "
+    "что сделал сотрудник посмотреть работу ответ сотрудника его изменения дифф экран успел сделать активность"
+)
 @tool(
     name="ReadStaff",
     description=(
@@ -379,6 +441,10 @@ async def read_staff(context: ToolContext, staff: str, what: str = "last", turns
     return await _call(context, "read_staff", staff=staff, what=what, turns=turns, cursor=cursor, max_chars=max_chars)
 
 
+@search_hint(
+    "answer staff request permission grant deny approve reject question from staff "
+    "ответить ответь сотруднику разрешить разреши отклонить отклони одобрить одобри запрос стаффа стейфа"
+)
 @tool(
     name="Answer",
     description=(
@@ -400,11 +466,19 @@ async def answer(
     return await _call(context, "answer", request_id=request_id, allow=allow, text=text, selected=selected, basis=basis, escalate=escalate)
 
 
+@search_hint(
+    "interrupt stop current turn escape member break in colleague cut short "
+    "прервать прерви остановить ход сотрудника перебить перебей эскейп коллегу оборвать оборви"
+)
 @tool(name="Interrupt", description="Stop a member's current turn (Esc for a command-line agent). The session stays; Tell says what next.")
 async def interrupt(context: ToolContext, staff: str) -> ToolResult:
     return await _call(context, "interrupt", staff=staff)
 
 
+@search_hint(
+    "pause member finish turn commit wip hold start nothing new "
+    "пауза поставить на паузу стопнуть стопни притормозить притормози сотрудника дописать коммит"
+)
 @tool(
     name="Pause",
     description="Let a member finish the current turn, commit their work in progress on their branch, and start nothing new until Tell or Assign.",
@@ -413,6 +487,10 @@ async def pause(context: ToolContext, staff: str) -> ToolResult:
     return await _call(context, "pause", staff=staff)
 
 
+@search_hint(
+    "release end member session free up unassign task back to todo "
+    "освободить освободи завершить сессию сотрудника снять с задачи отпустить отпусти"
+)
 @tool(
     name="Release",
     description=(
@@ -424,6 +502,10 @@ async def release(context: ToolContext, staff: str, keep_worktree: bool = True) 
     return await _call(context, "release", staff=staff, keep_worktree=keep_worktree)
 
 
+@search_hint(
+    "harnesses executors claude codex grok opencode installed signed in cli execution environments capabilities "
+    "харнесы исполнители установлены какие cli агенты доступны версия окружения модели возможности"
+)
 @tool(
     name="Harnesses",
     description=(
@@ -436,6 +518,10 @@ async def harnesses(context: ToolContext, harness: str | None = None, env: str |
     return await _call(context, "harnesses", harness=harness, env=env, folder=folder)
 
 
+@search_hint(
+    "wake me alarm timer remind me later in minutes at time cron "
+    "разбуди будильник таймер напомни мне через минут позже разбудить поставь будильник"
+)
 @tool(
     name="WakeMe",
     description=(
@@ -453,6 +539,11 @@ async def wake_me(context: ToolContext, note: str, at: str | None = None, in_min
 class Watch(Tool):
     """Written out rather than decorated: ``when`` and ``then`` are objects whose shape the model has to
     be shown, and the decorator describes a dict as nothing more than an object."""
+
+    search_hint: ClassVar[str] = (
+        "watch event staff finishes crashes goes silent task moves react without polling subscribe whenever alert me "
+        "следить следи отслеживать когда закончит упадет замолчит событие подписаться при событии как только дай знать"
+    )
 
     @property
     def name(self) -> str:
@@ -518,6 +609,10 @@ class Watch(Tool):
         )
 
 
+@search_hint(
+    "cancel wake-up remove watch unsubscribe stop watching alarm "
+    "отменить отмени будильник снять слежку перестать следить отписаться отпишись убрать"
+)
 @tool(
     name="Unwatch",
     description="Cancel a wake-up or remove a watch, by the id the state block or WakeMe/Watch gave you.",

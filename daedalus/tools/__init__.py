@@ -1,7 +1,8 @@
 """Host tools.
 
 Every module in this package that defines ``TOOLS`` (a list of ``Tool`` classes or
-instances) is picked up by :func:`discover_tools`. Adding a tool is adding a file.
+instances) is picked up by :func:`discover_tools`. Adding a tool is adding a file, and every tool
+carries a ``search_hint`` (see :func:`search_hint`).
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import importlib
 import inspect
 import pkgutil
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from protocore.contracts.tools import Tool, ToolContext
@@ -51,6 +52,23 @@ def _guarded(tool: Tool) -> Tool:
     return tool
 
 
+def search_hint(text: str) -> Callable[[type[Tool]], type[Tool]]:
+    """Give a ``@tool``-decorated class the words the tool retriever indexes besides its description.
+
+    The core reads ``search_hint`` off the registered object and never sends it to the model, so it can
+    carry what a description written for the model should not: Russian words in their dictionary and
+    imperative forms, and the slang the operator actually types. Without one, a Russian message shares
+    no word with an English description and the tool is not found. Written as a decorator above
+    ``@tool`` because that decorator builds the class and offers no place of its own for the attribute.
+    """
+
+    def attach(cls: type[Tool]) -> type[Tool]:
+        cls.search_hint = text  # type: ignore[attr-defined]
+        return cls
+
+    return attach
+
+
 def discover_tools() -> list[Tool]:
     """Import every submodule and collect its ``TOOLS``."""
     package = importlib.import_module(__name__)
@@ -68,4 +86,4 @@ def tool_names(tools: Iterable[Tool]) -> list[str]:
     return sorted(t.name for t in tools)
 
 
-__all__ = ["discover_tools", "tool_names"]
+__all__ = ["discover_tools", "search_hint", "tool_names"]

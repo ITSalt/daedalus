@@ -6,6 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -29,6 +30,10 @@ def _describe(loop: dict) -> str:  # type: ignore[type-arg]
     return f"loop {loop['status']} ({cadence}, iterations {loop['run_count']}{' of ' + str(loop['max_runs']) if loop.get('max_runs') else ''}{nxt})"
 
 
+@search_hint(
+    "next wake up delay loop iteration check again later interval pace "
+    "следующая проверка через интервал задержка цикла разбудить позже реже чаще темп"
+)
 @tool(
     name="LoopNext",
     description=(
@@ -50,6 +55,10 @@ async def loop_next(context: ToolContext, delay_seconds: float, reason: str) -> 
     return ok(context, f"next wake-up in {result['delay_seconds']} s{note}: {reason.strip()}", next_run_at=result.get("next_run_at"))
 
 
+@search_hint(
+    "end the loop stop repeating purpose achieved monitoring done finish loop "
+    "остановить цикл хватит повторять закончить закончи мониторинг прекратить прекрати завершить заверши"
+)
 @tool(name="LoopStop", description="End this session's loop: its purpose is achieved, it became obsolete, or the operator asked. Give a short reason. The session stays; only the wake-ups stop.")
 async def loop_stop(context: ToolContext, reason: str) -> ToolResult:
     hook = _hook(context)
@@ -62,6 +71,10 @@ async def loop_stop(context: ToolContext, reason: str) -> ToolResult:
     return ok(context, f"loop stopped: {result.get('stop_reason')}")
 
 
+@search_hint(
+    "park the loop until operator resumes blocked needs operator hold loop "
+    "поставить паузу приостановить приостанови цикл ждать оператора заморозить заморозь отложить отложи"
+)
 @tool(name="LoopPause", description="Park this session's loop until the operator resumes it, because only the operator can unblock it. Say plainly what is needed; it goes to the inbox.")
 async def loop_pause(context: ToolContext, what_is_needed: str) -> ToolResult:
     hook = _hook(context)
@@ -74,6 +87,10 @@ async def loop_pause(context: ToolContext, what_is_needed: str) -> ToolResult:
     return ok(context, "loop paused; the operator has been told what is needed. LoopResume starts it again.")
 
 
+@search_hint(
+    "resume the loop continue again unpause restart loop "
+    "возобновить возобнови продолжить продолжи цикл снова снять паузы запустить запусти"
+)
 @tool(name="LoopResume", description="Resume this session's paused or stopped loop; the next iteration runs at once.")
 async def loop_resume(context: ToolContext) -> ToolResult:
     hook = _hook(context)
@@ -86,6 +103,10 @@ async def loop_resume(context: ToolContext) -> ToolResult:
     return ok(context, _describe(result))
 
 
+@search_hint(
+    "loop status iterations next wake up mode instruction how is the loop "
+    "статус цикла итерации когда следующая проверка режим сколько итераций состояние цикла"
+)
 @tool(name="LoopStatus", description="This session's loop: mode, status, iterations, next wake-up and the instruction.")
 async def loop_status(context: ToolContext) -> ToolResult:
     hook = _hook(context)

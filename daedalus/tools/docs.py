@@ -11,6 +11,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 MAX_RESULTS = 20
@@ -86,6 +87,10 @@ def _utf8_chunk(text: str, start: int, end: int, byte_limit: int) -> str:
     return candidate[:low]
 
 
+@search_hint(
+    "documentation manual how to configure reference guide help docs how does it work "
+    "документация доки мануал справка руководство как настроить инструкция поискать поищи как правильно как работает"
+)
 @tool(
     name="DocsSearch",
     description="Search the public documentation shipped with this installed Daedalus version. Returns page ids and headings; read a result with DocsRead.",
@@ -113,6 +118,10 @@ async def docs_search(context: ToolContext, query: str, limit: int = 10) -> Tool
     return ok(context, body or f"no installed documentation matches {query!r}", version=version, count=len(capped))
 
 
+@search_hint(
+    "read documentation page section heading continue manual docs chapter "
+    "прочитать прочитай страница документации раздел доки мануал глава справки продолжить продолжи"
+)
 @tool(
     name="DocsRead",
     description="Read one page or heading from the installed documentation. Use the opaque next_cursor to continue a long section.",

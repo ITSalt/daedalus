@@ -12,9 +12,14 @@ from protocore.tools.decorator import tool
 
 from daedalus.host.services import locator
 from daedalus.host.toolchain import status as toolchain_status
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok
 
 
+@search_hint(
+    "load skill playbook recipe procedure how-to instructions guide "
+    "скилл навык плейбук рецепт методичка загрузить загрузи подгрузить подгрузи инструкция"
+)
 @tool(
     name="Skill",
     description=(
@@ -83,6 +88,10 @@ def _listing(files: list[Any]) -> str:
     return "\n".join(lines)
 
 
+@search_hint(
+    "save new skill draft distill procedure write playbook "
+    "сохранить сохрани навык скилл черновик оформить оформи рецепт запомнить как делать"
+)
 @tool(
     name="SkillDraft",
     description=(

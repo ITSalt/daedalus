@@ -10,13 +10,13 @@ the office.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from protocore.contracts.tools import Tool, ToolContext
 from protocore.contracts.types import ToolDefinition, ToolParameterSchema, ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import _guarded
+from daedalus.tools import _guarded, search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -32,6 +32,10 @@ async def _call(context: ToolContext, operation: str, /, **kwargs: Any) -> ToolR
     return ok(context, str(text))
 
 
+@search_hint(
+    "operator projects overview orchestrator on off open dispatches staff working latest reports project status "
+    "проекты проектов какие проекты что по проектам обзор проектов статус проекта оркестратор диспатчи кто работает отчеты"
+)
 @tool(
     name="Projects",
     description=(
@@ -44,6 +48,10 @@ async def projects(context: ToolContext, project: str | None = None) -> ToolResu
     return await _call(context, "projects", project=project)
 
 
+@search_hint(
+    "hand work to a project orchestrator dispatch job follow-up correction pass on hand over "
+    "поручить поручи передать передай проекту отдать отдай оркестратору диспатч поручение дослать дошли делегировать делегируй"
+)
 @tool(
     name="Delegate",
     description=(
@@ -59,6 +67,10 @@ async def delegate(context: ToolContext, project: str, text: str, title: str = "
     return await _call(context, "delegate", project=project, text=text, title=title, dispatch_id=dispatch_id, enable_orchestrator=enable_orchestrator, files=files)
 
 
+@search_hint(
+    "operator attachments uploaded files handles att list read uploaded earlier "
+    "вложения приложил прикрепленные файлы от оператора аттачи загрузил скинул в чат"
+)
 @tool(
     name="Files",
     description=(
@@ -71,6 +83,10 @@ async def files(context: ToolContext, op: str = "list", file: str = "", offset: 
     return await _call(context, "files", op=op, file=file, offset=offset, limit=limit)
 
 
+@search_hint(
+    "dispatch progress status of handed over work where does it stand "
+    "статус диспатча диспатчи как там работа проекта прогресс поручения что с поручением"
+)
 @tool(
     name="Progress",
     description=(
@@ -83,6 +99,10 @@ async def progress(context: ToolContext, dispatch_id: str | None = None, project
     return await _call(context, "progress", dispatch_id=dispatch_id, project=project)
 
 
+@search_hint(
+    "cancel dispatch stop handed over work call off abort "
+    "отменить отмени диспатч поручение отозвать работу проекта прервать прерви"
+)
 @tool(
     name="Cancel",
     description="Stop a dispatch: its project's orchestrator is told to stop that work, and the dispatch closes as cancelled. Only when the operator said so.",
@@ -93,6 +113,11 @@ async def cancel(context: ToolContext, dispatch_id: str, reason: str = "") -> To
 
 class CreateProject(Tool):
     """Written out rather than decorated: ``folders`` is a list of objects whose shape the model has to be shown."""
+
+    search_hint: ClassVar[str] = (
+        "create new project folders goal start orchestrator "
+        "создать создай новый проект завести заведи проект папки проекта цель"
+    )
 
     @property
     def name(self) -> str:
@@ -153,6 +178,10 @@ class CreateProject(Tool):
         )
 
 
+@search_hint(
+    "pass on operator answer question card reply relay answer waiting question "
+    "передать ответ ответить ответь на вопрос карточка вопроса оператор ответил переслать перешли ответ проекту"
+)
 @tool(
     name="Answer",
     description=(

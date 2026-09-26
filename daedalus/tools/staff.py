@@ -7,13 +7,14 @@ writes the rows and publishes the events; nothing here touches a table.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from protocore.contracts.tools import Tool, ToolContext
 from protocore.contracts.types import ToolDefinition, ToolParameterSchema, ToolResult
 from protocore.tools.ask_user import AskUserInput, AskUserOption, AskUserPauseRequested, AskUserQuestion
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 QUESTION_MAX = 2000
@@ -25,6 +26,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("staff") if manager is not None else None
 
 
+@search_hint(
+    "report to team progress checkpoint stuck needs input done deliverable "
+    "отчитаться отчитайся доложить прогресс застрял готово нужна помощь чекпоинт сдать сдаю"
+)
 @tool(
     name="Report",
     description=(
@@ -55,6 +60,11 @@ async def report(
 class AskOrchestrator(Tool):
     """Written out rather than decorated: its third argument is called ``context``, as on the team
     server of a command-line member, and the decorator keeps that name for the tool context."""
+
+    search_hint: ClassVar[str] = (
+        "ask orchestrator lead manager question which option decision unsure stuck between options advice "
+        "спросить спроси оркестратора лида руководителя посоветоваться уточнить какой вариант не уверен какой лучше"
+    )
 
     @property
     def name(self) -> str:

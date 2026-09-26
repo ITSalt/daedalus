@@ -42,7 +42,6 @@ from protocore.runtime.loop_state import LoopState
 from protocore.runtime.query_engine import QueryEngine
 from protocore.runtime.soft_stop import CAUSE_MODEL_NO_PROGRESS, CAUSE_PROVIDER_ERROR
 from protocore.tests_support.adapters import InMemoryToolRegistry
-from protocore.tools.ask_user import AskUserTool
 from protocore.tools.memory import build_memory_tools
 
 from daedalus.config import (
@@ -589,7 +588,6 @@ class SessionManager:
             self.tools.register(tool)
         for tool in build_memory_tools(self.memory):
             self.tools.register(tool)
-        self.tools.register(AskUserTool())
         for tool in build_dispatcher_tools():
             self.dispatcher_tools.register(tool)
         for tool in self.tools.list_all():

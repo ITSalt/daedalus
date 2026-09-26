@@ -25,6 +25,7 @@ from daedalus.browser.agent import LOOK_INSTRUCTION, BrowserAgent, Caller, Sensi
 from daedalus.browser.model import EnvUnavailable, Forbidden, NotFound, Owner
 from daedalus.host.services import SessionServices
 from daedalus.stores.files import FileRefused, human_size, parse_handle, safe_name
+from daedalus.tools import search_hint
 from daedalus.tools._common import FRAME_CHARS, error, ok, output_limit, services_for
 from daedalus.tools.vision import VisionUnavailable, look
 
@@ -146,6 +147,10 @@ async def _run(context: ToolContext, name: str, arguments: dict[str, Any]) -> To
     return error(context, text) if failed else ok(context, text)
 
 
+@search_hint(
+    "launch start chromium chrome real browser watch live login profile incognito throwaway "
+    "браузер браузера запустить запусти открыть открой хром инкогнито профиль логины поднять подними"
+)
 @tool(
     name="BrowserOpen",
     description=(
@@ -158,6 +163,10 @@ async def browser_open(context: ToolContext, url: str | None = None, fresh: bool
     return await _run(context, "BrowserOpen", {"url": url, "fresh": fresh})
 
 
+@search_hint(
+    "go to address url visit website homepage back forward reload refresh open page "
+    "перейти перейди зайти зайди сайт адрес ссылка главная страница назад вперед обновить обнови перезагрузить перезагрузи"
+)
 @tool(
     name="BrowserNavigate",
     description=(
@@ -169,6 +178,10 @@ async def browser_navigate(context: ToolContext, url: str | None = None, go: str
     return await _run(context, "BrowserNavigate", {"url": url, "go": go, "tab": tab})
 
 
+@search_hint(
+    "page structure elements outline buttons fields links refs dom accessibility tree interactive references "
+    "структура страницы элементы кнопки поля ссылки разметка дерево интерактивные осмотреть осмотри снимок"
+)
 @tool(
     name="BrowserSnapshot",
     description=(
@@ -181,6 +194,10 @@ async def browser_snapshot(context: ToolContext, tab: str | None = None, scope: 
     return await _run(context, "BrowserSnapshot", {"tab": tab, "scope": scope})
 
 
+@search_hint(
+    "reader view page text article clean plain text without markup extract readable "
+    "текст страницы статья чистый текст без разметки выписать выпиши вытащить вытащи прочитать прочитай сайт"
+)
 @tool(
     name="BrowserText",
     description=(
@@ -192,6 +209,10 @@ async def browser_text(context: ToolContext, tab: str | None = None, ref: str | 
     return await _run(context, "BrowserText", {"tab": tab, "ref": ref, "max_chars": max_chars})
 
 
+@search_hint(
+    "vision look at the page chart canvas map layout visual appearance how it looks "
+    "как выглядит визуально график карта верстка макет картинка страницы глянуть глянь рассмотреть рассмотри"
+)
 @tool(
     name="BrowserLook",
     description=(
@@ -204,6 +225,11 @@ async def browser_look(context: ToolContext, question: str, tab: str | None = No
     return await _run(context, "BrowserLook", {"question": question, "tab": tab, "ref": ref, "full_page": full_page})
 
 
+@search_hint(
+    "click type fill form input press enter hover select option check scroll drag upload submit search bar "
+    "кликнуть кликни нажать нажми ткнуть ткни ввести введи вбить вбей заполнить заполни форма кнопка поле прокрутить прокрути "
+    "скролл"
+)
 @tool(
     name="BrowserAct",
     description=(
@@ -232,6 +258,10 @@ async def browser_act(
     return await _run(context, "BrowserAct", {"action": action, "element": element, "ref": ref, "text": text, "keys": keys, "option": option, "submit": submit, "to_ref": to_ref, "direction": direction, "paths": paths, "tab": tab})
 
 
+@search_hint(
+    "tabs new tab switch tab close tab list open tabs browser windows "
+    "вкладка вкладки вкладку новая вкладка переключить переключи табы таб список вкладок открытые вкладки браузера"
+)
 @tool(
     name="BrowserTabs",
     description="Your browser's tabs: action='list' (the default), 'new' (url opens in it), 'select' or 'close' (tab = its id).",
@@ -240,6 +270,10 @@ async def browser_tabs(context: ToolContext, action: str = "list", tab: str | No
     return await _run(context, "BrowserTabs", {"action": action, "tab": tab, "url": url})
 
 
+@search_hint(
+    "wait until loaded appears disappears network idle rendered timeout spinner "
+    "подождать подожди дождаться дождись загрузится появится исчезнет прогрузится отрисуется ожидание загрузки"
+)
 @tool(
     name="BrowserWait",
     description=(
@@ -251,6 +285,10 @@ async def browser_wait(context: ToolContext, until: str = "load", value: str | N
     return await _run(context, "BrowserWait", {"until": until, "value": value, "timeout_s": timeout_s, "tab": tab})
 
 
+@search_hint(
+    "alert confirm prompt dialog popup modal accept dismiss "
+    "алерт диалог всплывающее окно попап модалка модальное подтвердить подтверди отклонить отклони принять прими"
+)
 @tool(
     name="BrowserDialog",
     description="Answer the page's alert, confirm or prompt: accept=true or false, text for a prompt. Every other action waits while one is open.",
@@ -259,6 +297,10 @@ async def browser_dialog(context: ToolContext, accept: bool, text: str | None = 
     return await _run(context, "BrowserDialog", {"accept": accept, "text": text, "tab": tab})
 
 
+@search_hint(
+    "hand over to operator login sign in captcha two factor 2fa payment take over manually "
+    "передать передай оператору войти капча двухфакторка 2фа оплата залогиниться залогинься вручную"
+)
 @tool(
     name="BrowserHandoff",
     description=(
@@ -271,6 +313,10 @@ async def browser_handoff(context: ToolContext, reason: str, what: str) -> ToolR
     return await _run(context, "BrowserHandoff", {"reason": reason, "what": what})
 
 
+@search_hint(
+    "close browser quit exit close tab shut down browser end browsing "
+    "закрыть закрой браузер вкладку выйти выйди выключить выключи погасить погаси хром"
+)
 @tool(
     name="BrowserClose",
     description="Close one tab (tab = its id), or the whole browser (all=true, or no tab). The profile and its logins stay for the next BrowserOpen.",
@@ -279,6 +325,10 @@ async def browser_close(context: ToolContext, tab: str | None = None, all: bool 
     return await _run(context, "BrowserClose", {"tab": tab, "all": all})
 
 
+@search_hint(
+    "downloaded file save download into workspace copy download fetch browser download "
+    "скачать скачай скачанный загрузки сохранить сохрани загруженный файл браузера забрать забери"
+)
 @tool(
     name="BrowserDownload",
     description=(

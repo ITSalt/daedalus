@@ -8,9 +8,14 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, refuse_protected, services_for
 
 
+@search_hint(
+    "send file to operator chat share document archive report deliver upload attach grab "
+    "отправить отправь скинуть скинь прислать пришли приложить файл документ архив отчет чат"
+)
 @tool(
     name="SendFile",
     description=(
@@ -34,6 +39,10 @@ async def send_file(context: ToolContext, path: str, caption: str | None = None)
     return ok(context, f"sent {target.name} ({target.stat().st_size} bytes): {result}")
 
 
+@search_hint(
+    "attach picture photo image video audio gif album inline answer embed media "
+    "прикрепить прикрепи вставить вставь картинку фото фотку видео гифку альбом медиа ответ"
+)
 @tool(
     name="AttachMedia",
     description=(
@@ -74,6 +83,10 @@ async def attach_media(context: ToolContext, items: list[dict[str, str]], layout
     return ok(context, f"media prepared ({attached['kind']}). Put this line in the final answer:\n\n{attached['markdown']}", presentation_id=attached["id"])
 
 
+@search_hint(
+    "spawn independent agent own session separate chat topic persistent worker brief peer "
+    "создать создай отдельного агента завести заведи независимый агент своя сессия отдельный чат воркер"
+)
 @tool(
     name="SpawnAgent",
     description=(

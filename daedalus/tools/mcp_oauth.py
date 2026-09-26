@@ -13,6 +13,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -21,6 +22,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("mcp") if manager is not None else None
 
 
+@search_hint(
+    "oauth link status mcp authorization linked check connected account "
+    "авторизация привязка оаус статус подключен привязан ли аккаунт проверить проверь"
+)
 @tool(
     name="McpOAuthStatus",
     description=(
@@ -38,6 +43,10 @@ async def mcp_oauth_status(context: ToolContext, server: str) -> ToolResult:
         return error(context, str(exc))
 
 
+@search_hint(
+    "oauth start authorization link sign in mcp server connect account "
+    "авторизовать авторизуй привязать привяжи оаус начать вход аккаунт залогинить залогинь"
+)
 @tool(
     name="McpOAuthBegin",
     description=(
@@ -57,6 +66,10 @@ async def mcp_oauth_begin(context: ToolContext, server: str) -> ToolResult:
         return error(context, str(exc))
 
 
+@search_hint(
+    "oauth finish redirect url code exchange complete authorization callback "
+    "завершить заверши авторизацию редирект ссылку вставил оаус закончить закончи привязку"
+)
 @tool(
     name="McpOAuthFinish",
     description=(
@@ -78,6 +91,10 @@ async def mcp_oauth_finish(context: ToolContext, server: str, redirect_url: str)
         return error(context, str(exc))
 
 
+@search_hint(
+    "oauth unlink revoke tokens forget authorization sign out account "
+    "отвязать отвяжи отозвать отзови токены оаус разлогинить разлогинь аккаунт выйти"
+)
 @tool(
     name="McpOAuthDisconnect",
     description="Forget the stored OAuth tokens of an MCP server (the server keeps its registration; relink with McpOAuthBegin).",

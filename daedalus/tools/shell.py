@@ -21,6 +21,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import FRAME_CHARS, clip, error, ok, services_for, tool_config
 
 _warned_missing_bwrap = False
@@ -223,6 +224,10 @@ def shell_environment(session_id: str, extra: dict[str, str] | None = None) -> d
     return env
 
 
+@search_hint(
+    "run shell command bash terminal script execute install output "
+    "выполнить выполни запустить запусти команду баш шелл скрипт консоль шелле"
+)
 @tool(
     name="Exec",
     description=(
@@ -458,6 +463,10 @@ def _tail(path: Path, lines: int) -> str:
     return "\n".join(data.decode("utf-8", "replace").splitlines()[-max(1, lines):])
 
 
+@search_hint(
+    "background job output progress status last lines of job log "
+    "вывод фоновой задачи что пишет джоба как там прогресс команды в фоне сборка"
+)
 @tool(name="JobOutput", description="The latest output of a background job started with Exec(background=true): its status and the last lines of its log.")
 async def job_output(context: ToolContext, job_id: str, tail_lines: int = 100) -> ToolResult:
     services = services_for(context)
@@ -470,6 +479,10 @@ async def job_output(context: ToolContext, job_id: str, tail_lines: int = 100) -
     return ok(context, clip(text, services.max_tool_output_chars), running=job.running, exit_code=job.process.returncode)
 
 
+@search_hint(
+    "kill background job stop process group abort command "
+    "убить убей джобу остановить фоновую команду прибить прибей оборвать"
+)
 @tool(name="JobKill", description="Stop a background job (its whole process group). Returns the job's final status.")
 async def job_kill(context: ToolContext, job_id: str) -> ToolResult:
     services = services_for(context)
@@ -492,6 +505,10 @@ async def job_kill(context: ToolContext, job_id: str) -> ToolResult:
     return ok(context, f"{job.id}: exited with code {job.process.returncode}; log in {job.log}", exit_code=job.process.returncode)
 
 
+@search_hint(
+    "background jobs list what commands run in background "
+    "фоновые джобы фоновые задачи список что крутится в фоне какие команды"
+)
 @tool(name="JobList", description="The background jobs of this session: id, status, age, command.")
 async def job_list(context: ToolContext) -> ToolResult:
     services = services_for(context)

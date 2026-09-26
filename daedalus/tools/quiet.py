@@ -6,9 +6,14 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
+@search_hint(
+    "stay silent nothing to report quiet heartbeat no news unattended "
+    "молчать промолчи ничего нового тихо без уведомления не писать не беспокоить"
+)
 @tool(
     name="StaySilent",
     description=(

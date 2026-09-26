@@ -23,6 +23,7 @@ from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
 from daedalus.security import redact
+from daedalus.tools import search_hint
 from daedalus.tools._common import FRAME_CHARS, clip, error, ok, services_for, tool_config
 from daedalus.tools.shell import SandboxUnavailable, sandbox_argv, shell_environment
 
@@ -334,6 +335,10 @@ def _test_counts(output: str) -> tuple[int | None, int | None]:
     return executed, skipped
 
 
+@search_hint(
+    "verify claim run tests record receipt proof check passes evidence "
+    "проверить проверь подтвердить тесты проходят доказать чек квитанция прогнать прогони"
+)
 @tool(
     name="Verify",
     description=(

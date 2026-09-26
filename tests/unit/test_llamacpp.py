@@ -9,7 +9,6 @@ import pytest
 from fastapi.testclient import TestClient
 from protocore.contracts.llm import LLMRateLimitError, LLMRequest, ProviderDeltaKind
 from protocore.contracts.types import Message, MessageRole, TextBlock, ToolDefinition, ToolParameterSchema
-from protocore.tools.ask_user import AskUserTool
 from protocore.tools.memory import build_memory_tools
 
 from daedalus import doctor
@@ -151,7 +150,6 @@ def test_llamacpp_removes_the_rejected_nested_max_length_boundary() -> None:
 def test_llamacpp_translation_preserves_every_registry_tool_and_required_argument() -> None:
     definitions = [tool.definition for tool in discover_tools()]
     definitions += [tool.definition for tool in build_memory_tools(object())]
-    definitions.append(AskUserTool().definition)
     before = tools_to_wire(definitions)
     after = tools_to_llamacpp_wire(definitions)
     expected = {

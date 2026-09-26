@@ -14,6 +14,7 @@ from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
 from daedalus.host.services import PathOutsideProject
+from daedalus.tools import search_hint
 from daedalus.tools._common import FRAME_CHARS, clip, error, ok, output_limit, refuse_protected, services_for
 from daedalus.tools.shell import shell_environment
 
@@ -51,6 +52,10 @@ def _line_allowance(text: str, lines: int, budget: int) -> int:
     return max(1, budget // min(average, _MAX_LINE_CHARS + 8))
 
 
+@search_hint(
+    "read open view show file contents cat lines config source "
+    "прочитать прочитай открыть открой показать покажи содержимое файла конфиг глянуть глянь"
+)
 @tool(
     name="Read",
     description=(
@@ -118,6 +123,10 @@ def _binary_refusal(target: Path, size: int) -> str:
     )
 
 
+@search_hint(
+    "write create new file save overwrite put content "
+    "записать запиши создать создай новый файл сохранить сохрани перезаписать перезапиши"
+)
 @tool(
     name="Write",
     description="Create or overwrite a text file with the given content. Parent directories are created.",
@@ -135,6 +144,10 @@ async def write_file(context: ToolContext, path: str, content: str) -> ToolResul
     return ok(context, f"wrote {len(content)} characters to {target}" + await diagnostics(services, target), path=str(target))
 
 
+@search_hint(
+    "edit change replace fix typo modify patch line update value version string "
+    "поменять поменяй заменить замени исправить исправь поправить поправь изменить измени опечатка правка обновить значение"
+)
 @tool(
     name="Edit",
     description=(
@@ -257,6 +270,10 @@ def apply_edit(text: str, old: str, new: str, *, replace_all: bool = False) -> t
     return "".join(lines), len(chosen), f"{how} at line {hits[0] + 1}" + (f" and {len(chosen) - 1} more" if len(chosen) > 1 else "")
 
 
+@search_hint(
+    "several edits many changes one file batch replace atomic multiple replacements "
+    "несколько правок много замен одном файле пачкой внести внеси правки сразу"
+)
 @tool(
     name="MultiEdit",
     description=(
@@ -334,6 +351,10 @@ async def diagnostics(services: Any, target: Path) -> str:
     return ""
 
 
+@search_hint(
+    "find files by name glob pattern where is locate path which files exist "
+    "найти найди файлы имени маске где лежит где находится путь расположение"
+)
 @tool(
     name="Find",
     description="Find files by glob pattern (e.g. '**/*.py') under a directory (default: workspace).",
@@ -352,6 +373,10 @@ async def find_files(
     return ok(context, "\n".join(matches) or "(no matches)", count=len(matches))
 
 
+@search_hint(
+    "grep ripgrep search code contents regex occurrences usages text inside files where implemented "
+    "грепнуть грепни поиск по коду вхождения использования где используется искать ищи где реализовано"
+)
 @tool(
     name="Search",
     description=(

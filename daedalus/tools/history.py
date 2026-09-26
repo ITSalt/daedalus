@@ -15,6 +15,7 @@ from protocore.tools.decorator import tool
 
 from daedalus.security.redact import redact
 from daedalus.stores.sqlite import message_text
+from daedalus.tools import search_hint
 from daedalus.tools._common import clip, error, ok, services_for
 
 MAX_EXPAND_ROWS = 60
@@ -26,6 +27,10 @@ def _store(context: ToolContext) -> Any:
     return getattr(manager, "sessions", None)
 
 
+@search_hint(
+    "search conversation history transcript what did I say earlier past chat messages discussed mentions "
+    "история переписка переписке разговор что я писал говорил раньше вчера чате поискать поищи упоминания обсуждали"
+)
 @tool(
     name="HistorySearch",
     description=(
@@ -54,6 +59,10 @@ async def history_search(context: ToolContext, query: str, limit: int = 10, all_
     return ok(context, "\n".join(lines) + "\n\nHistoryExpand(from_seq=N) reads a turn in full; give to_seq for a range.")
 
 
+@search_hint(
+    "full transcript turns verbatim range of messages by number expand old messages "
+    "дословно реплики переписки полностью диапазон сообщений развернуть разверни старые сообщения вербатим"
+)
 @tool(
     name="HistoryExpand",
     description=(

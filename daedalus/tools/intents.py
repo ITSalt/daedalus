@@ -6,6 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -14,6 +15,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("intents") if manager is not None else None
 
 
+@search_hint(
+    "standing intent rule on webhook event trigger react when message arrives automation listener inbox incoming "
+    "правило вебхук триггер реагировать реагируй когда придет событие автоматизация входящие слушать"
+)
 @tool(
     name="IntentCreate",
     description=(
@@ -37,6 +42,10 @@ async def intent_create(
     return ok(context, f"intent {created['id']} registered: /{pattern}/ → {action[:80]}" + (f", expires {created['expires_at']}" if created.get("expires_at") else ""), intent_id=created["id"])
 
 
+@search_hint(
+    "list standing intents rules webhooks triggers fire counts listeners automations "
+    "правила вебхуки триггеры интенты список какие правила стоят автоматизации срабатывания слушатели"
+)
 @tool(name="IntentList", description="List standing intents with their fire counts and state.")
 async def intent_list(context: ToolContext) -> ToolResult:
     hook = _hook(context)
@@ -48,6 +57,10 @@ async def intent_list(context: ToolContext) -> ToolResult:
     return ok(context, "\n".join(f"- {i['id']} /{i['pattern']}/ → {i['action'][:80]} · enabled={bool(i['enabled'])} fired={i['fired_count']}/{i['max_fires']} cooldown={i['cooldown_minutes']}m" for i in items))
 
 
+@search_hint(
+    "remove delete standing intent rule webhook trigger listener automation "
+    "удалить удали убрать убери правило вебхук триггер интент отключить отключи автоматизацию"
+)
 @tool(name="IntentDelete", description="Remove a standing intent by id.")
 async def intent_delete(context: ToolContext, intent_id: str) -> ToolResult:
     hook = _hook(context)

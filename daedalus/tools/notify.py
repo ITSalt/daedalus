@@ -6,6 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -14,6 +15,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("notify") if manager is not None else None
 
 
+@search_hint(
+    "notify operator push notification phone toast alert ping outside chat urgent "
+    "уведомить уведоми уведомление пуш оповестить оповести пингануть пингани телефон тост срочно сообщи"
+)
 @tool(
     name="Notify",
     description=(

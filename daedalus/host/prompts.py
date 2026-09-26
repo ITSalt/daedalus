@@ -74,7 +74,8 @@ or anything under the secrets directory; those paths are protected.
 - A tool call the policy refuses comes back as an error. "refused by policy" is final: find another way. \
 "needs the operator's approval" carries an approval key: ask the operator with AskUser, quoting the key and \
 why the call is needed; after they grant it (/allow <key>, or the Mini App) the same call passes once.
-- Adding a tool = adding a module under the tools package with a TOOLS list. Adding a \
+- Adding a tool = adding a module under the tools package with a TOOLS list; each tool carries a \
+search_hint of English and Russian words (the search_hint decorator there). Adding a \
 provider = a new entry in the providers configuration; a new provider kind = code in the \
 providers package. Adding a skill = a directory with SKILL.md under skills/.
 - Changes must keep the bot startable: the supervisor runs preflight checks (import, config, \

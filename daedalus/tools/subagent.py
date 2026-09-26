@@ -6,6 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import clip, error, ok, services_for
 
 
@@ -14,6 +15,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("subagents") if manager is not None else None
 
 
+@search_hint(
+    "subagent helper here same workspace parallel research one-off background helper "
+    "сабагент помощник субагент подагент в этой папке параллельно помощника отправить помощника"
+)
 @tool(
     name="SubAgent",
     description=(
@@ -75,6 +80,10 @@ def _report(context: ToolContext, result: dict, *, started: bool) -> ToolResult:
     return ok(context, f"{what} (session {result['session_id']}); its report arrives as a message when it finishes", session_id=result["session_id"], run_id=result.get("run_id"))
 
 
+@search_hint(
+    "send message to subagent steer helper follow up "
+    "написать напиши сабагенту субагенту помощнику передать передай направить направь"
+)
 @tool(
     name="SubAgentSend",
     description=(
@@ -95,6 +104,10 @@ async def sub_agent_send(context: ToolContext, name: str, text: str, wait: bool 
     return _report(context, result, started=False)
 
 
+@search_hint(
+    "subagents list running helpers presets models "
+    "сабагенты субагенты список помощники пресеты моделей какие помощники работают"
+)
 @tool(name="SubAgentList", description="List this session's subagents and whether they are still running, plus the model presets SubAgent accepts.")
 async def sub_agent_list(context: ToolContext) -> ToolResult:
     hook = _hook(context)

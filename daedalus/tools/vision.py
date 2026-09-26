@@ -10,12 +10,17 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import Message, MessageRole, TextBlock, ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, refuse_protected, services_for
 
 MAX_IMAGE_BYTES = 20_000_000
 SUPPORTED = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 
 
+@search_hint(
+    "image picture photo screenshot ocr transcribe describe look at image file analyze chart error on screenshot "
+    "картинка фото скриншот скрин распознать текст описать изображение глянь проанализируй график"
+)
 @tool(
     name="ImageView",
     description=(

@@ -6,6 +6,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import clip, error, ok, services_for
 
 
@@ -20,6 +21,10 @@ def _line(s: dict) -> str:  # type: ignore[type-arg]
     return f"- {s['name']} [{s['status']}]{where} pid {s.get('pid')} · {s['command'][:80]}{note}"
 
 
+@search_hint(
+    "start dev server demo site long running process port preview host frontend backend "
+    "запустить запусти поднять подними дев сервер демку сайт на порту фронт бэк"
+)
 @tool(
     name="ServiceStart",
     description=(
@@ -44,6 +49,10 @@ async def service_start(context: ToolContext, name: str, command: str, cwd: str 
     return ok(context, f"service {s['name']!r} running (pid {s['pid']}), {where}. Log: ServiceLogs({s['name']!r}).", url=s.get("url"), port=s.get("port"), pid=s.get("pid"))
 
 
+@search_hint(
+    "stop service shut down dev server kill demo terminate "
+    "остановить останови сервис погасить погаси выключить демку прибить"
+)
 @tool(name="ServiceStop", description="Stop one of this session's services by name (SIGTERM, then SIGKILL after a few seconds). It will not be restarted after a rebuild.")
 async def service_stop(context: ToolContext, name: str) -> ToolResult:
     hook = _hook(context)
@@ -56,6 +65,10 @@ async def service_stop(context: ToolContext, name: str) -> ToolResult:
     return ok(context, f"service {s['name']!r} {s['status']}")
 
 
+@search_hint(
+    "running services ports urls what is running servers list "
+    "какие сервисы запущены порты адреса что крутится демки список сервисов"
+)
 @tool(name="ServiceList", description="This session's services: name, status, URL, pid and command.")
 async def service_list(context: ToolContext) -> ToolResult:
     hook = _hook(context)
@@ -65,6 +78,10 @@ async def service_list(context: ToolContext) -> ToolResult:
     return ok(context, "\n".join(_line(s) for s in items) or "(no services)")
 
 
+@search_hint(
+    "service log stdout stderr tail logs of dev server why crashed "
+    "логи сервиса лог сервера почему упал хвост вывода посмотреть посмотри"
+)
 @tool(name="ServiceLogs", description="The last lines of a service's log (stdout and stderr together).")
 async def service_logs(context: ToolContext, name: str, lines: int = 60) -> ToolResult:
     hook = _hook(context)

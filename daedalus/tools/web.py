@@ -10,7 +10,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import websearch
+from daedalus.tools import search_hint, websearch
 from daedalus.tools._common import clip, error, ok, services_for, tool_config
 
 _TAG_RE = re.compile(r"<(script|style|noscript)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -29,6 +29,10 @@ def html_to_text(raw: str) -> str:
     return _NL_RE.sub("\n\n", text).strip()
 
 
+@search_hint(
+    "fetch url download page raw text read link content http "
+    "скачать страницу ссылке ссылку содержимое сырой текст забрать забери урл"
+)
 @tool(
     name="WebFetch",
     description="Fetch a URL and return its content as plain text (HTML is converted).",
@@ -54,6 +58,10 @@ async def web_fetch(context: ToolContext, url: str, max_chars: int | None = None
     return ok(context, f"HTTP {response.status_code} {url}\n\n{clip(body, limit)}", status=response.status_code)
 
 
+@search_hint(
+    "search web internet google news online latest releases find online open source alternatives "
+    "загуглить загугли погуглить поищи в интернете новости свежие гугл найди в сети релизы"
+)
 @tool(
     name="WebSearch",
     description=(

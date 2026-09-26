@@ -11,6 +11,7 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
@@ -19,6 +20,10 @@ def _hook(context: ToolContext):  # type: ignore[no-untyped-def]
     return manager.service_hooks.get("voice") if manager is not None else None
 
 
+@search_hint(
+    "hand off delegate work to an agent background parallel hand-over dispatch project "
+    "поручить поручи делегировать делегируй передать передай отдать отдай агенту фоном проекту"
+)
 @tool(
     name="Delegate",
     description=(
@@ -54,6 +59,10 @@ async def delegate(context: ToolContext, title: str, task: str, session_id: str 
     return ok(context, f"agent {result['title']!r} started as session {result['session_id']} {where}; it reports here when it finishes", session_id=result["session_id"])
 
 
+@search_hint(
+    "running agents status list what are they doing who is stuck overview workers "
+    "агенты агентов какие работают что делают кто завис статус агентов список воркеров"
+)
 @tool(
     name="Agents",
     description=(
@@ -82,6 +91,10 @@ async def agents(context: ToolContext) -> ToolResult:
     return ok(context, "\n".join(lines))
 
 
+@search_hint(
+    "agent answer full result detail what the agent said output exact response full text "
+    "результат агента ответ агента что ответил подробно итог агента полный ответ дословно"
+)
 @tool(
     name="AgentResult",
     description=(
@@ -101,6 +114,10 @@ async def agent_result(context: ToolContext, session_id: str) -> ToolResult:
     return ok(context, f"{result['title']} — {result['status']}\n\n{body}")
 
 
+@search_hint(
+    "stop kill an agent halt abort running agent drop it cancel agent "
+    "остановить останови убить убей агента прекратить прекрати хватит отменить отмени тормознуть тормозни"
+)
 @tool(
     name="StopAgent",
     description=(
@@ -119,6 +136,10 @@ async def stop_agent(context: ToolContext, session_id: str) -> ToolResult:
     return ok(context, "it is stopping" if stopped else "it was not running")
 
 
+@search_hint(
+    "projects list which projects agents per project project id identifiers overview "
+    "проекты проектов список проектов какие проекты айди проекта сколько агентов обзор проектам"
+)
 @tool(
     name="Projects",
     description=(

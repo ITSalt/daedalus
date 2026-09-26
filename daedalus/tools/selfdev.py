@@ -11,9 +11,14 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
+from daedalus.tools import search_hint
 from daedalus.tools._common import error, ok, services_for
 
 
+@search_hint(
+    "worktree own code self development repository branch edit your own source "
+    "свой код ворктри ветку создать самоулучшение исходники бота ядро поправить себя доработать"
+)
 @tool(
     name="SelfWorkspace",
     description=(
@@ -38,6 +43,10 @@ async def self_workspace(context: ToolContext, repo: str, branch: str) -> ToolRe
         return error(context, f"could not create the worktree: {exc}")
 
 
+@search_hint(
+    "pull request open pr propose change merge review own repository "
+    "пулреквест пул реквест пиар предложить предложи изменение ревью мерж открыть открой"
+)
 @tool(
     name="SelfPropose",
     description=(
@@ -71,6 +80,10 @@ async def self_propose(
     return ok(context, result)
 
 
+@search_hint(
+    "apply branch locally commit onto checkout install own change "
+    "применить примени ветку локально накатить накати свои изменения влить влей"
+)
 @tool(
     name="SelfApply",
     description=(
@@ -99,6 +112,10 @@ async def self_apply(context: ToolContext, repo: str, summary: str, branch: str 
     return ok(context, result)
 
 
+@search_hint(
+    "rebuild restart pull merged main redeploy supervisor "
+    "пересобрать пересобери перезапуститься перезапустись после мержа обновиться обновись ребилд"
+)
 @tool(
     name="SelfRebuild",
     description=(
@@ -114,6 +131,10 @@ async def self_rebuild(context: ToolContext, reason: str) -> ToolResult:
     return ok(context, await services.self_rebuild(reason=reason, session_id=context.session_id))
 
 
+@search_hint(
+    "rollback revert previous good revision undo update "
+    "откатить откати откат вернуть верни прошлую версию предыдущую сломалось после обновления"
+)
 @tool(
     name="SelfRollback",
     description="Roll the agent back to a previous known-good revision (0 = the last one).",
