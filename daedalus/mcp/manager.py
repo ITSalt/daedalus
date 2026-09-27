@@ -399,8 +399,9 @@ class McpManager:
         The server's tools are declared a dynamic group by their name prefix, which is what lets the
         core hold them back behind ToolSearch and name them in one catalogue line instead of putting
         a server of three hundred tools on the surface. The declaration is made again with every
-        catalogue, so an edited description reaches the next run; the registry has no way to withdraw
-        one, and a group whose server is gone has no members and is never shown.
+        catalogue, so an edited description reaches the next run, and withdrawn with the last tool: a
+        declaration left behind by a removed or reconfigured server would hand its old description to
+        the next server whose name sanitises to the same prefix.
         """
         previous = self._registered_tools.get(server, {})
         current = {tool.name: tool for tool in tools}
@@ -409,6 +410,7 @@ class McpManager:
             self._registered_tools[server] = current
         else:
             self._registered_tools.pop(server, None)
+            self._registry.undeclare_group(mcp_group_name(server))
         for name in previous.keys() - current.keys():
             self._registry.unregister(name)
             # Sanitised server names can collide. Removing one owner must reveal the

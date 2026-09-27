@@ -120,8 +120,26 @@ def test_a_group_is_redeclared_with_the_current_description_and_empties_with_its
     assert registry.tool_groups()[0].description == "Jira tickets"
 
     manager._replace_catalog("jira", ())
-    # The declaration stays (the registry cannot withdraw one), but it has no members left to show.
     assert not [tool for tool in registry.list_all() if tool.name.startswith(mcp_tool_prefix("jira"))]
+    # The declaration goes with the last tool, so it cannot outlive the server.
+    assert registry.tool_groups() == []
+
+
+async def test_removing_a_server_withdraws_its_group_and_leaves_the_others() -> None:
+    """A server removed from the config must not leave its catalogue line behind for the next server
+    whose name sanitises to the same prefix."""
+    registry = ToolRegistry()
+    config = McpServerConfig(transport="stdio", command="x", description="Old tracker")
+    manager = McpManager({"jira": config, "git hub": config}, registry)
+    manager._replace_catalog("jira", [McpConnection("jira", config)._proxy(_remote("search"))])
+    manager._replace_catalog("git hub", [McpConnection("git hub", config)._proxy(_remote("list_issues"))])
+    assert [group.name for group in registry.tool_groups()] == [mcp_group_name("git hub"), mcp_group_name("jira")]
+
+    manager.reload({"git hub": config})
+
+    assert [group.name for group in registry.tool_groups()] == [mcp_group_name("git hub")]
+    await manager.close()
+    assert registry.tool_groups() == []
 
 
 async def test_reload_removing_server_unregisters_its_catalog() -> None:
