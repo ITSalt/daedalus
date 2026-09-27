@@ -26,7 +26,7 @@ import { SessionDetails } from "../details";
 import { JobsTab } from "../jobs";
 import { navigate, pathFor, projectHome, projectSessionPath, useRoute } from "../router";
 import { useMedia } from "../shell";
-import { Windowed, stillAtEnd } from "../virtual";
+import { SCROLL_KEYS, Windowed, keepOpened, openedLine, stillAtEnd, type OpenedLine } from "../virtual";
 import { DICT, plural, t } from "../i18n";
 import { groupDetail, groupName, searchedGroup } from "../toolgroups";
 import { usePresenceScope } from "../presence";
@@ -160,6 +160,8 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
   const userScrolling = useRef(false);
   /** Where the list was at the last scroll event: a move up from here is the reader leaving the end. */
   const lastTop = useRef(0);
+  /** The line the reader just opened or closed, and where it was on the screen, for a moment after. */
+  const opened = useRef<OpenedLine | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [preview, setPreview] = useState<PreviewSource | null>(null);
   const [filesGeneration, setFilesGeneration] = useState(0);
@@ -697,10 +699,23 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
   }, [older, pageable, loadOlder]);
   const onTopOfList = useCallback(() => wantOlder.current(), []);
 
-  // Follow the newest content only while the reader is at the bottom and not scrolling by hand.
+  // Follow the newest content only while the reader is at the bottom and not scrolling by hand. A
+  // list that grew because the reader opened something in it is not new content: the line they
+  // clicked stays where it was, and the end is theirs again only if that leaves them at it. Followed,
+  // opening the steps of a turn on the screen at the end threw that turn up and out of view.
   const pinBottom = useCallback(() => {
     const el = scroller.current;
-    if (el && stick.current && !userScrolling.current) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    const line = opened.current;
+    if (line && keepOpened(el, line)) {
+      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+      stick.current = gap < 48;
+      lastTop.current = el.scrollTop;
+      setAtBottom(gap < 160);
+      return;
+    }
+    opened.current = null;
+    if (stick.current && !userScrolling.current) el.scrollTop = el.scrollHeight;
   }, []);
   useEffect(pinBottom, [turns, pinBottom]);
 
@@ -779,11 +794,40 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
         userScrolling.current = false;
       }, 400);
     };
+    // A step, the line of a turn's work, a system note: whatever the reader opens or closes is held
+    // where it is while the list takes its new height.
+    const toggled = (e: Event) => {
+      if (e instanceof KeyboardEvent && e.key !== "Enter" && e.key !== " ") return;
+      const line = openedLine(e.target, el);
+      if (line) opened.current = line;
+    };
+    // The keyboard and the scrollbar drive the list as a wheel does.
+    const keys = (e: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(e.key)) {
+        startHand();
+        endHand();
+      }
+    };
+    // A press right of the content is on the scrollbar; the release may land anywhere on the page.
+    const press = (e: PointerEvent) => {
+      if (e.target !== el || e.offsetX < el.clientWidth) return;
+      startHand();
+      window.addEventListener("pointerup", endHand, { once: true });
+    };
+    el.addEventListener("click", toggled, { capture: true });
+    el.addEventListener("keydown", toggled, { capture: true });
+    el.addEventListener("keydown", keys);
+    el.addEventListener("pointerdown", press, { passive: true });
     el.addEventListener("touchstart", startHand, { passive: true });
     el.addEventListener("touchend", endHand, { passive: true });
     el.addEventListener("wheel", startHand, { passive: true });
     el.addEventListener("wheel", endHand, { passive: true });
     return () => {
+      el.removeEventListener("click", toggled, { capture: true });
+      el.removeEventListener("keydown", toggled, { capture: true });
+      el.removeEventListener("keydown", keys);
+      el.removeEventListener("pointerdown", press);
+      window.removeEventListener("pointerup", endHand);
       el.removeEventListener("touchstart", startHand);
       el.removeEventListener("touchend", endHand);
       el.removeEventListener("wheel", startHand);

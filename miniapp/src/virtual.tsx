@@ -42,6 +42,49 @@ export function stillAtEnd({ pinned, gap, top, lastTop, hand }: { pinned: boolea
   return pinned && !hand && top >= lastTop - 1;
 }
 
+/** The keys that scroll a list, which the reader drives it with as they would with a wheel. */
+export const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
+
+/** A line the reader opened or closed in a conversation, where it was below the top of the screen,
+ *  and until when it is held there. */
+export type OpenedLine = { el: Element; top: number; until: number };
+
+/** How long after a click the list's growth is the reader's own doing and not new output. Long enough
+ *  for an opened step to render and its code to take its height; short enough that output arriving
+ *  while the reader sits at the end is followed again at once. */
+const OPENED_HOLD_MS = 800;
+
+/** What a click or a key press toggled inside the conversation, if it toggled anything. The steps, the
+ *  line of a turn's work and a system note say whether they are open (`aria-expanded`); the rows of
+ *  a turn's thinking and prose are only an `.act`. A link, a menu item or a retry is not held: the
+ *  ones meant to take the reader to the end say so themselves. */
+export function openedLine(target: EventTarget | null, host: HTMLElement, now = performance.now()): OpenedLine | null {
+  if (!(target instanceof Element)) return null;
+  const el = target.closest("[aria-expanded], summary, .act");
+  if (!el || !host.contains(el)) return null;
+  return { el, top: el.getBoundingClientRect().top - host.getBoundingClientRect().top, until: now + OPENED_HOLD_MS };
+}
+
+/** Puts a line the reader just opened back where it was on the screen. False once the moment has
+ *  passed or the line is gone, and the list is then free to follow its end again. */
+export function keepOpened(host: HTMLElement, line: OpenedLine, now = performance.now()): boolean {
+  if (now > line.until || !line.el.isConnected) return false;
+  const moved = line.el.getBoundingClientRect().top - host.getBoundingClientRect().top - line.top;
+  if (Math.abs(moved) >= 1) host.scrollTop += moved;
+  return true;
+}
+
+/** The first rendered item that reaches into the screen, and how far below the screen's top it starts. */
+function firstInView(host: HTMLElement): { key: string; top: number } | null {
+  const edge = host.getBoundingClientRect().top;
+  let best: HTMLElement | null = null;
+  for (const slot of host.querySelectorAll<HTMLElement>("[data-slot]")) {
+    best = slot;
+    if (slot.getBoundingClientRect().bottom > edge) break;
+  }
+  return best ? { key: best.dataset.slot!, top: best.getBoundingClientRect().top - edge } : null;
+}
+
 export type WindowedProps = {
   /** One stable key per item, in order. */
   keys: string[];
@@ -67,8 +110,15 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
   const sizes = useRef(new Map<string, number>());
   /** The width every stored height was measured at: at another width they describe nothing. */
   const width = useRef(0);
-  /** The item the reader is looking at and where the list put it, so it can be put back there. */
-  const anchor = useRef<{ key: string; offset: number } | null>(null);
+  /** The item the reader is looking at and how far below the top of the screen it starts, so it can be
+   *  put back there. Read from the page rather than from the list's own sums: the browser moves the
+   *  page for a spacer that changed above the reader by itself where it can, and a correction worked
+   *  out from the sums was then applied a second time, throwing the reader down by that much again. */
+  const anchor = useRef<{ key: string; top: number } | null>(null);
+  /** The heights items had when they were first measured, summed, which is what an unseen item is
+   *  guessed at. Not what they measure now: a turn whose steps the reader opened says nothing about
+   *  the turns nobody has seen, and counting it moved the spacer above the reader on every click. */
+  const firstSeen = useRef({ sum: 0, count: 0 });
   const [, bump] = useState(0);
   const [range, setRange] = useState({ start: 0, end: keys.length });
   const windowed = keys.length > threshold;
@@ -78,9 +128,7 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
   // grow under the reader as they scroll into it.
   const offsets = useRef<number[]>([]);
   if (windowed) {
-    let seen = 0;
-    for (const h of sizes.current.values()) seen += h;
-    const guess = sizes.current.size ? seen / sizes.current.size : estimate;
+    const guess = firstSeen.current.count ? firstSeen.current.sum / firstSeen.current.count : estimate;
     const out = new Array<number>(keys.length + 1);
     out[0] = 0;
     for (let i = 0; i < keys.length; i++) out[i + 1] = out[i] + (sizes.current.get(keys[i]) ?? guess) + gap;
@@ -118,16 +166,7 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
     const on = () => {
       // What the reader is looking at, so neither a re-measured guess above it nor a page of older
       // messages put in front of it moves the page under them.
-      let best: HTMLElement | null = null;
-      for (const slot of host.querySelectorAll<HTMLElement>("[data-slot]")) {
-        best = slot;
-        if (slot.offsetTop + slot.offsetHeight > host.scrollTop) break;
-      }
-      if (best) {
-        const key = best.dataset.slot!;
-        const i = keys.indexOf(key);
-        if (i >= 0) anchor.current = { key, offset: offsets.current[i] };
-      }
+      anchor.current = firstInView(host);
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
@@ -139,7 +178,7 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
       host.removeEventListener("scroll", on);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [keys, scroller, windowed, recompute]);
+  }, [scroller, windowed, recompute]);
 
   // Measure what is on screen, and hold the reader's place if the spacers moved under them.
   useLayoutEffect(() => {
@@ -151,6 +190,7 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
     const w = host.clientWidth;
     if (w && width.current && w !== width.current) {
       sizes.current.clear();
+      firstSeen.current = { sum: 0, count: 0 };
       anchor.current = null;
     }
     if (w) width.current = w;
@@ -159,6 +199,7 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
       const key = slot.dataset.slot!;
       const h = slot.offsetHeight;
       if (h > 0 && sizes.current.get(key) !== h) {
+        if (!sizes.current.has(key)) firstSeen.current = { sum: firstSeen.current.sum + h, count: firstSeen.current.count + 1 };
         sizes.current.set(key, h);
         dirty = true;
       }
@@ -167,11 +208,11 @@ export function Windowed({ keys, render, scroller, estimate = 260, overscan = 90
     // While a finger or a wheel is on the list the reader is driving it; adding to `scrollTop` under
     // them is felt as the list pulling back, and it is what kept a flick to the top from arriving.
     if (held && !pinned?.() && !dragging?.()) {
-      const i = keys.indexOf(held.key);
-      const now = i >= 0 ? offsets.current[i] : undefined;
-      if (now !== undefined && now !== held.offset) {
-        host.scrollTop += now - held.offset;
-        anchor.current = { key: held.key, offset: now };
+      const slot = host.querySelector<HTMLElement>(`[data-slot="${CSS.escape(held.key)}"]`);
+      if (slot) {
+        const moved = slot.getBoundingClientRect().top - host.getBoundingClientRect().top - held.top;
+        if (Math.abs(moved) >= 1) host.scrollTop += moved;
+        anchor.current = { key: held.key, top: slot.getBoundingClientRect().top - host.getBoundingClientRect().top };
       }
     }
     if (dirty) bump((n) => n + 1);
