@@ -309,3 +309,61 @@ async def test_a_compaction_between_runs_does_not_report_a_run(settings: Setting
     assert answer.status_code == 200
     assert answer.json()["status"] == "compacting", "the stream says compacting; the polled state must not say running"
     await manager.close()
+
+
+async def test_deleting_a_session_stops_the_compaction_its_last_run_left(settings: Settings, db: Database, caplog: Any) -> None:
+    """A session deleted while the check after its last run was summarising: the progress event and
+    the rewritten history both reference the session row, and the write failed on the foreign key."""
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.keep_recent_messages = 2
+    config.compaction.min_messages = 4
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("gone")
+    history = [_op("one"), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text="a")]), _op("two"), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text="b")]), _op("three"), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text="c")])]
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    await manager.sessions.append_transcript(state.session.id, history)
+    _, preset = manager.config.preset()
+    provider = manager.providers.get(preset.provider)
+    summarising = asyncio.Event()
+
+    async def slow_complete(request: Any) -> LLMResponse:
+        summarising.set()
+        await asyncio.sleep(3600)
+        raise AssertionError("unreachable")
+
+    provider.complete_text = slow_complete  # type: ignore[method-assign]
+    await manager.usage.record(UsageRecord(provider_id=provider.endpoint.id, model="m", purpose="stream", raw={}, normalized={"input_tokens": 120_000}, cost_usd=0.0, duration_ms=1, run_id="r1", session_id=state.session.id))
+    state.auto_compaction = manager._spawn_background(manager._maybe_auto_compact(state), "auto-compact:test")
+    await asyncio.wait_for(summarising.wait(), 5)
+    assert await manager.delete_session(state.session.id)
+    assert state.auto_compaction.done()
+    assert not [r for r in caplog.records if "auto-compaction failed" in r.getMessage()]
+    assert await db.fetchone("SELECT 1 FROM sessions WHERE id = ?", (state.session.id,)) is None
+    await manager.close()
+
+
+async def test_a_compaction_waiting_on_the_lock_leaves_a_deleted_session_alone(settings: Settings, db: Database) -> None:
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.min_messages = 2
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("gone-before")
+    history = [_op("one"), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text="a")]), _op("two"), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text="b")])]
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    calls: list[str] = []
+
+    async def record(st: Any, instructions: str, **kwargs: Any) -> str:
+        calls.append("compacted")
+        return "summary"
+
+    manager._compact_locked = record  # type: ignore[method-assign]
+    _, preset = manager.config.preset()
+    provider = manager.providers.get(preset.provider)
+    await manager.usage.record(UsageRecord(provider_id=provider.endpoint.id, model="m", purpose="stream", raw={}, normalized={"input_tokens": 120_000}, cost_usd=0.0, duration_ms=1, run_id="r1", session_id=state.session.id))
+    manager._states.pop(state.session.id)  # what delete_session does before the rows go
+    await manager._maybe_auto_compact(state)
+    assert calls == []
+    await manager.close()

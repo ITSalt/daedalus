@@ -254,6 +254,13 @@ class SessionState:
     compacting: dict[str, Any] | None = None
     """A compaction in flight: reason, stage (summarising/merging/writing), parts done of total, started_at.
     The Mini App and the list read it; ``None`` when none is running."""
+    auto_compaction: asyncio.Task[None] | None = None
+    """The compaction check a settled run left behind. Deleting the session cancels it: a summary finished
+    after the rows are gone writes into a session that no longer exists."""
+    compaction_hold: dict[str, Any] | None = None
+    """Why the automatic compaction stands down, and until when: the prompt size it last acted on, how
+    many attempts in a row came to nothing, and the monotonic time after which it may try regardless.
+    Set by a compaction that failed or freed almost nothing; cleared by one that worked."""
     run_active_since: float = 0.0
     """Monotonic time the current run (re)started driving the model: the time cap counts from here, not from
     the run's creation, so an hour waiting on the operator's answer is not an hour of run time."""
@@ -1397,6 +1404,12 @@ class SessionManager:
         if state.housekeeping is not None and not state.housekeeping.done():
             state.housekeeping.cancel()
             await asyncio.gather(state.housekeeping, return_exceptions=True)
+        # The same holds for a compaction the last run left running: its progress events and its
+        # rewritten history reference the session row, and a summary that finished after the delete
+        # failed on the foreign key instead of quietly having nothing to do.
+        if state.auto_compaction is not None and not state.auto_compaction.done():
+            state.auto_compaction.cancel()
+            await asyncio.gather(state.auto_compaction, return_exceptions=True)
         if state.provider_hold is not None:
             state.provider_hold.close()
             state.provider_hold = None
@@ -1575,6 +1588,8 @@ class SessionManager:
             # Asked again behind the lock: two callers that both saw a full window — a manual compaction
             # racing this one, or the check on the way into a run racing the one after a run — serialise
             # here, and the second would otherwise summarise a history the first has already replaced.
+            if self._states.get(state.session.id) is not state:
+                return  # deleted while this waited for the lock: there is no history left to rewrite
             status = await self.context_status(state)
             if below(status) or (state.running and state.task is not asyncio.current_task()):
                 return  # a run started while this waited: it compacts after that one instead
@@ -3571,7 +3586,7 @@ class SessionManager:
             # On a task of its own, and not awaited here: a summariser call is a minute or two,
             # and while this task is unfinished the session reads as running — which blocks the
             # next message in submit() and tells the app a run is in progress that is not one.
-            self._spawn_background(self._maybe_auto_compact(state), f"auto-compact:{session_id}")
+            state.auto_compaction = self._spawn_background(self._maybe_auto_compact(state), f"auto-compact:{session_id}")
         if status == "completed":
             state.overflow_streak = 0
             state.outage_streak = 0
@@ -4681,7 +4696,7 @@ class SessionManager:
                 logger.warning("model price refresh failed", exc_info=True)
             await asyncio.sleep(REFRESH_SECONDS)
 
-    def _spawn_background(self, coro: Any, name: str) -> None:
+    def _spawn_background(self, coro: Any, name: str) -> asyncio.Task[Any]:
         task = asyncio.create_task(coro, name=name)
         self._background.add(task)
 
@@ -4691,6 +4706,7 @@ class SessionManager:
                 logger.warning("%s failed: %s", name, t.exception())
 
         task.add_done_callback(_done)
+        return task
 
     def _consume_grant(self, state: SessionState, key: str) -> None:
         for meta in (state.metadata, state.session.metadata):
