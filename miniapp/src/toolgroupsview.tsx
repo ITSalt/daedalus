@@ -4,7 +4,7 @@
 // worth that line and sees which ones a session has actually loaded.
 
 import { useCallback, useEffect, useState } from "react";
-import { api, SessionToolGroup, ToolGroupCatalogue, ToolGroupLoad } from "./api";
+import { api, SessionToolGroup, Settings, ToolGroupCatalogue, ToolGroupLoad } from "./api";
 import { plural, t } from "./i18n";
 import { errorText, fmtTok } from "./ui";
 import { LOADS, groupAbout, groupName, loadWord, stateChip, usageLine, usageShare } from "./toolgroups";
@@ -21,8 +21,10 @@ function LoadPicker({ label, value, onPick, busy }: { label: string; value: Tool
   );
 }
 
-/** Settings → Tools: every group with what it costs and how often it was needed, and its mode. */
-export function ToolGroupsSettings({ toast }: { toast: (text: string) => void }) {
+/** Settings → Tools: every group with what it costs and how often it was needed, and its mode.
+ *  `revision` is the configuration the screen shows; a pick saves against it and hands the screen the
+ *  settings it produced, whose new revision the screen's next save must carry. */
+export function ToolGroupsSettings({ toast, revision, onSettings }: { toast: (text: string) => void; revision?: string; onSettings?: (next: Settings) => void }) {
   const [data, setData] = useState<ToolGroupCatalogue | null>(null);
   const [busy, setBusy] = useState("");
   useEffect(() => {
@@ -31,10 +33,16 @@ export function ToolGroupsSettings({ toast }: { toast: (text: string) => void })
   async function pick(name: string, load: ToolGroupLoad) {
     setBusy(name);
     try {
-      setData(await api.put<ToolGroupCatalogue>(`/api/tool-groups/${encodeURIComponent(name)}`, { load }));
+      const next = await api.put<ToolGroupCatalogue & { settings?: Settings }>(`/api/tool-groups/${encodeURIComponent(name)}`, { load, base_revision: revision });
+      const { settings, ...catalogue } = next;
+      setData(catalogue);
+      if (settings && onSettings) onSettings(settings);
       toast(t("tgroup.saved", { name: groupName(name), load: loadWord(load) }));
     } catch (e) {
       toast(errorText(e));
+      // Refused because the configuration moved under the screen: show what it is now, so the next
+      // pick or save starts from it rather than failing the same way.
+      if (onSettings) api.get<Settings>("/api/settings").then(onSettings).catch(() => {});
     } finally {
       setBusy("");
     }

@@ -27,6 +27,9 @@ describe("the words", () => {
   it("says what a session's group is and whether it is still coming", () => {
     expect(stateChip({ state: "loaded", pending: false }).word).toBe("Loaded");
     expect(stateChip({ state: "loaded", pending: true }).word).toBe("Loads next message");
+    // Loaded is the whole group: one tool of twelve a search brought in says so.
+    expect(stateChip({ state: "loaded", pending: false, loaded: 12, tools: 12 }).word).toBe("Loaded");
+    expect(stateChip({ state: "loaded", pending: false, loaded: 1, tools: 12 }).word).toBe("1 of 12 loaded");
     expect(stateChip({ state: "deferred", pending: false }).word).toBe("On demand");
     expect(stateChip({ state: "advertised", pending: false }).word).toBe("Always");
     expect(stateChip({ state: "off", pending: false }).word).toBe("Off");
@@ -104,10 +107,11 @@ describe("the panels", () => {
 
   it("shows each group's cost, use and mode in Settings, marks the changed default, and saves a pick", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
-      if (init?.method === "PUT") return respond({ ...CATALOGUE, groups: CATALOGUE.groups.map((g) => (g.name === "browser" ? { ...g, load: "eager" } : g)) });
+      if (init?.method === "PUT") return respond({ ...CATALOGUE, groups: CATALOGUE.groups.map((g) => (g.name === "browser" ? { ...g, load: "eager" } : g)), settings: { revision: "r2" } });
       return respond(CATALOGUE);
     });
-    await act(async () => root.render(<ToolGroupsSettings toast={() => {}} />));
+    const onSettings = vi.fn();
+    await act(async () => root.render(<ToolGroupsSettings toast={() => {}} revision="r1" onSettings={onSettings} />));
     const browser = host.querySelector('[data-group="browser"]')!;
     expect(browser.textContent).toContain("Browser");
     expect(browser.textContent).toContain("2 tools");
@@ -118,7 +122,10 @@ describe("the panels", () => {
     await act(async () => always.click());
     const put = fetcher.mock.calls.find(([, init]) => init?.method === "PUT")!;
     expect(String(put[0])).toContain("/api/tool-groups/browser");
-    expect(JSON.parse(String(put[1]!.body))).toEqual({ load: "eager" });
+    // Saved against the revision on screen, and the screen is handed the revision the save made, or
+    // its next save of anything would be refused as changed in another window.
+    expect(JSON.parse(String(put[1]!.body))).toEqual({ load: "eager", base_revision: "r1" });
+    expect(onSettings).toHaveBeenCalledWith({ revision: "r2" });
     expect(host.querySelector('[data-group="browser"] [aria-checked="true"]')!.textContent).toBe("Always");
   });
 

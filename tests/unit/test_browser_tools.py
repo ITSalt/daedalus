@@ -368,6 +368,16 @@ async def test_a_scripted_model_shops_to_the_payment_and_stops_there(settings: S
         assert "browser.scheme" in results and "needs the operator's approval" in results and "BrowserHandoff" in results
         assert not [e for e in daemon.events if e["type"] == "action" and e["data"]["name"] in ("Buy now", "Card number")]
         assert [e for e in daemon.events if e["type"] == "action" and e["data"]["name"] == "Add to cart"]
+        # The held first call never ran, so only the call made again is a timed use of the tool.
+        rows: list[Any] = []
+        for _ in range(100):
+            rows = await db.fetchall("SELECT name FROM tool_calls WHERE session_id = ?", (state.session.id,))
+            if any(row["name"] == "BrowserSnapshot" for row in rows):
+                break
+            await asyncio.sleep(0.02)
+        await asyncio.sleep(0.05)
+        rows = await db.fetchall("SELECT name FROM tool_calls WHERE session_id = ?", (state.session.id,))
+        assert [row["name"] for row in rows].count("BrowserOpen") == 1
     finally:
         for task in tasks:
             task.cancel()

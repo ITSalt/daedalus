@@ -2348,6 +2348,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "tgroup.load.auto.hint": { en: "In the tool list while there is room; loaded on demand when the list is too big for the model", ru: "В списке, пока хватает места; по запросу, когда список слишком велик для модели" },
   "tgroup.load.lazy.hint": { en: "One line in the prompt; the agent loads the group when a task needs it", ru: "Одна строка в промпте; агент загрузит группу, когда она понадобится" },
   "tgroup.state.loaded": { en: "Loaded", ru: "Загружена" },
+  "tgroup.state.partial": { en: "{n} of {total} loaded", ru: "Загружено {n} из {total}" },
   "tgroup.state.pending": { en: "Loads next message", ru: "Загрузится со следующего сообщения" },
   "tgroup.state.deferred": { en: "On demand", ru: "По запросу" },
   "tgroup.state.advertised": { en: "Always", ru: "Всегда" },

@@ -263,8 +263,9 @@ class SessionState:
     """Each group's state as this process's last ``tool_surface_advertised`` for the session said:
     ``advertised``, ``deferred`` or ``loaded``. Written into the metadata when the run ends, which is
     what the panel reads after a restart."""
-    tool_groups_loaded: set[str] = field(default_factory=set)
-    """Groups the current run loaded (``tool_group_loaded``), until the next run starts."""
+    tool_groups_loaded: dict[str, set[str]] = field(default_factory=dict)
+    """Groups the current run loaded (``tool_group_loaded``) and which of their tools, until the next
+    run starts. The tools, because a search that loaded one browser tool has not loaded the browser."""
     on_demand_groups: bool = True
     """Whether the model this session runs on holds the on-demand groups back: set when a run's engine is
     built and when the panel is read (:meth:`SessionManager.refresh_on_demand_groups`)."""
@@ -3257,7 +3258,7 @@ class SessionManager:
         if state.engine is None or not continue_turn:
             run_id = uuid.uuid4().hex[:12]
             engine = await self._build_engine(state, run_id)
-            state.tool_groups_loaded = set()
+            state.tool_groups_loaded = {}
             await self._clear_queued_group_loads(state)
             if state.engine is not None:
                 engine.history = list(state.engine.history)
@@ -3857,7 +3858,8 @@ class SessionManager:
             rows = event.payload.get("tool_groups") or ()
             state.tool_group_surface = {str(row.get("name")): str(row.get("state")) for row in rows if isinstance(row, dict) and row.get("name")}
         elif event.type.value == "tool_group_loaded" and event.payload.get("group"):
-            state.tool_groups_loaded.add(str(event.payload["group"]))
+            tools = state.tool_groups_loaded.setdefault(str(event.payload["group"]), set())
+            tools.update(str(name) for name in event.payload.get("tools") or ())
 
     def _time_tool(self, state: SessionState, event: TurnEvent) -> None:
         """One row per tool call: name, when, how long, whether it failed. The waterfall of a run is these rows."""
@@ -3867,6 +3869,11 @@ class SessionManager:
             return
         if event.type is EventType.TOOL_USE_START:
             state.tool_starts[call_id] = (time.monotonic(), str(p.get("tool_name") or ""))
+        elif event.type is EventType.TOOL_UNADVERTISED_CALL and p.get("executed") is False:
+            # A blind call held back to give its group's rules first: the core says so before the
+            # result. It never ran, so it is no call to time and no use of the tool; counted, the
+            # retry that does run made every such call two in the month of use a group is judged by.
+            state.tool_starts.pop(call_id, None)
         elif event.type is EventType.TOOL_RESULT:
             started = state.tool_starts.pop(call_id, None)
             if started is None:
@@ -4316,7 +4323,8 @@ class SessionManager:
 
         ``off`` — the session may call none of its tools (switched off, or the role or mode refuses them);
         ``loaded`` — loaded in this session (by a search, a call, the operator, or carried from an earlier
-        run), ``pending`` when that happens at the next run; ``deferred`` — only its catalogue line is
+        run), ``pending`` when that happens at the next run, with ``loaded`` counting the tools of it
+        that are (a search may load one tool of twelve); ``deferred`` — only its catalogue line is
         in the prompt; ``advertised`` — its tools are in every request. Without ToolSearch the core
         holds nothing back, so a lazy group is advertised then.
         """
@@ -4335,12 +4343,17 @@ class SessionManager:
             admitted = [n for n in names if registry.get(n) is not None and policy_admits(policy, n)]
             load = loads[name]
             pending = False
+            running_tools = state.tool_groups_loaded.get(name, set()) if state.running else set()
+            loaded_tools = set(admitted) & (carried | running_tools)
             if not admitted:
                 current = "off"
-            elif (state.running and name in state.tool_groups_loaded) or name in carried_groups or (carried & set(admitted)):
+            elif (state.running and name in state.tool_groups_loaded) or name in carried_groups or loaded_tools:
                 current = "loaded"
+                if name in carried_groups:
+                    loaded_tools = set(admitted)
             elif name in queued:
-                current, pending = "loaded", True
+                # "Load now" loads the group whole.
+                current, pending, loaded_tools = "loaded", True, set(admitted)
             elif not searches or load == "eager":
                 current = "advertised"
             elif load == "lazy":
@@ -4358,6 +4371,7 @@ class SessionManager:
                 "source": tool_groups.load_source(name, self.config, state.metadata, on_demand=state.on_demand_groups),
                 "state": current,
                 "pending": pending,
+                "loaded": len(loaded_tools) if current == "loaded" else 0,
             })
         return out
 

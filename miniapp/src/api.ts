@@ -584,6 +584,8 @@ export type SessionToolGroup = {
   /** ``undecided``: a group the core places by the window, in a session no run has placed it in yet. */
   state: "off" | "loaded" | "deferred" | "advertised" | "undecided";
   pending: boolean;
+  /** How many of its `tools` are loaded, for a `loaded` group: a search may load one tool of twelve. */
+  loaded?: number;
 };
 
 export type SubagentView = { session_id: string; name: string | null; running: boolean; status: string; model: string; kept?: boolean };

@@ -412,6 +412,10 @@ class ToolGroupLoadBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     load: Literal["eager", "auto", "lazy"] | None = None
     """``None`` goes back to the layer below: the default for the settings, the settings for a session."""
+    base_revision: str | None = None
+    """The configuration revision the Settings screen was showing, for the installation's mode: a
+    change made in another window since is refused rather than overwritten. A session's mode is not
+    configuration and ignores it."""
 
 
 class MemoryBody(BaseModel):
@@ -3507,8 +3511,14 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             chosen.pop(group, None)
         else:
             chosen[group] = {"load": body.load}
-        await app.save_config(type(app.config).model_validate(raw))
-        return await manager.tool_group_catalogue()
+        try:
+            await app.save_config(type(app.config).model_validate(raw), expected_revision=body.base_revision)
+        except ConfigConflict as exc:
+            raise HTTPException(409, {"message": str(exc), "current_revision": exc.current_revision}) from exc
+        # The whole settings view comes back with the catalogue: the save moved the configuration's
+        # revision, and a Settings screen still holding the old one refused its next save as "changed in
+        # another window" when the other window was this one.
+        return {**await manager.tool_group_catalogue(), "settings": _settings_view()}
 
     @api.get("/api/sessions/{session_id}/tool-groups")
     async def session_tool_groups(session_id: str, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:

@@ -11,6 +11,7 @@ Two layers, deliberately separate:
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import tomllib
@@ -21,6 +22,8 @@ from urllib.parse import urlsplit
 import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -664,15 +667,22 @@ class ToolsConfig(BaseModel):
     """Only the groups the operator changed; the rest keep the default their declaration carries
     (``daedalus.tools.TOOL_GROUPS``), so a better default reaches every installation that never chose."""
 
-    @field_validator("groups")
+    @field_validator("groups", mode="before")
     @classmethod
-    def _known_groups(cls, value: dict[str, ToolGroupConfig]) -> dict[str, ToolGroupConfig]:
+    def _known_groups(cls, value: Any) -> Any:
+        """Drop the entries for groups this version does not have, with a warning.
+
+        Refused, a group renamed or removed in an update failed the whole configuration: the
+        installation could not load its settings at all over a choice about something that no longer
+        exists. Dropped before the entry itself is read, so whatever it held cannot fail either."""
+        if not isinstance(value, dict):
+            return value
         from daedalus.tools import TOOL_GROUPS  # Lazy: config is a leaf the launcher reads without the core
 
-        unknown = sorted(set(value) - set(TOOL_GROUPS))
+        unknown = sorted(str(name) for name in value if name not in TOOL_GROUPS)
         if unknown:
-            raise ValueError(f"unknown tool group(s) {', '.join(unknown)}; known: {', '.join(sorted(TOOL_GROUPS))}")
-        return value
+            logger.warning("ignoring [tools.groups] for unknown tool group(s) %s; known: %s", ", ".join(unknown), ", ".join(sorted(TOOL_GROUPS)))
+        return {name: entry for name, entry in value.items() if name in TOOL_GROUPS}
 
 
 class McpOAuthConfig(BaseModel):

@@ -3,6 +3,7 @@ month of use the settings page shows, and the routes the app changes them throug
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 from daedalus.config import ON_DEMAND_GROUPS_OFF, ModelPresetConfig, RuntimeConfig, Settings, on_demand_tool_groups_for
 from daedalus.extensions.api import build_app
 from daedalus.host import tool_groups
+from daedalus.host.config_validation import ConfigConflict, config_revision
 from daedalus.host.session_runner import SessionManager
 from daedalus.stores.database import Database
 from daedalus.tools import TOOL_GROUPS, discover_tools
@@ -38,11 +40,15 @@ def test_the_rare_groups_wait_on_demand_and_the_everyday_ones_stay_while_they_fi
     assert "WebFetch" in TOOL_GROUPS["browser"].description and "JavaScript" in TOOL_GROUPS["browser"].description
 
 
-def test_the_settings_name_only_groups_that_exist() -> None:
+def test_the_settings_keep_only_groups_that_exist(caplog: pytest.LogCaptureFixture) -> None:
     config = RuntimeConfig.model_validate({"tools": {"groups": {"browser": {"load": "eager"}}}})
     assert config.tools.groups["browser"].load == "eager"
-    with pytest.raises(ValidationError, match="unknown tool group"):
-        RuntimeConfig.model_validate({"tools": {"groups": {"telepathy": {"load": "lazy"}}}})
+    # A group renamed in an update must not stop the installation loading its settings: the entry for
+    # it is dropped with a warning, whatever it held, and the rest are kept.
+    with caplog.at_level("WARNING", logger="daedalus.config"):
+        kept = RuntimeConfig.model_validate({"tools": {"groups": {"telepathy": {"load": "sometimes"}, "loop": {"load": "eager"}}}})
+    assert set(kept.tools.groups) == {"loop"}
+    assert "telepathy" in caplog.text
     with pytest.raises(ValidationError):
         RuntimeConfig.model_validate({"tools": {"groups": {"browser": {"load": "sometimes"}}}})
 
@@ -110,6 +116,9 @@ async def client(settings: Settings, db: Database, manager: SessionManager) -> A
     app = SimpleNamespace(settings=settings, config=manager.config, db=db, manager=manager, front=None, extensions={}, guard=None, create_session=manager.create_session)
 
     async def save_config(config: RuntimeConfig, *, expected_revision: str | None = None) -> None:
+        # The application's own check, so a save against a revision the screen no longer has is refused here too.
+        if expected_revision is not None and config_revision(app.config) != expected_revision:
+            raise ConfigConflict(config_revision(app.config))
         manager.reload_config(config)
         app.config = config
 
@@ -141,6 +150,21 @@ async def test_a_mode_set_in_settings_is_saved_and_the_default_is_never_written_
     assert (await client.put("/api/tool-groups/scheduling", json={"load": "sometimes"}, headers=H)).status_code == 422
 
 
+async def test_a_mode_set_in_settings_hands_the_screen_the_revision_it_made(client: httpx.AsyncClient) -> None:
+    shown = (await client.get("/api/settings", headers=H)).json()["revision"]
+    saved = await client.put("/api/tool-groups/scheduling", json={"load": "eager", "base_revision": shown}, headers=H)
+    assert saved.status_code == 200
+    settings = saved.json()["settings"]
+    assert settings["revision"] != shown and settings["revision"] == config_revision(client.app_state.config)  # type: ignore[attr-defined]
+    assert settings["tools"]["groups"]["scheduling"]["load"] == "eager"
+    # The screen saves its next change against the new revision, and that is accepted...
+    again = await client.put("/api/tool-groups/loop", json={"load": "eager", "base_revision": settings["revision"]}, headers=H)
+    assert again.status_code == 200
+    # ...while a window still holding the first one is told the configuration moved, and nothing is written.
+    stale = await client.put("/api/tool-groups/docs", json={"load": "eager", "base_revision": shown}, headers=H)
+    assert stale.status_code == 409 and "docs" not in client.app_state.config.tools.groups  # type: ignore[attr-defined]
+
+
 async def test_a_session_chooses_its_own_mode_and_loads_a_group_for_its_next_run(client: httpx.AsyncClient, manager: SessionManager) -> None:
     state = await manager.create_session("groups")
     sid = state.session.id
@@ -163,6 +187,28 @@ async def test_a_session_chooses_its_own_mode_and_loads_a_group_for_its_next_run
     assert manager.loaded_groups_for(state) == ("loop",)
     assert (await client.post("/api/sessions/nope/tool-groups/loop/load", headers=H)).status_code == 404
     assert (await client.post(f"/api/sessions/{sid}/tool-groups/telepathy/load", headers=H)).status_code == 404
+
+
+async def test_a_group_is_loaded_whole_or_says_how_much_of_it_is(manager: SessionManager) -> None:
+    state = await manager.create_session("partly")
+    # The last run called one scheduling tool a search had loaded, and used the loop group whole.
+    state.metadata["discovered_tools"] = ["ScheduleCreate"]
+    state.metadata[tool_groups.CARRIED_KEY] = ["loop"]
+    groups = {g["name"]: g for g in manager.tool_group_states(state)}
+    scheduling, loop = groups["scheduling"], groups["loop"]
+    assert scheduling["state"] == "loaded" and scheduling["loaded"] == 1 and scheduling["tools"] > 1
+    assert loop["state"] == "loaded" and loop["loaded"] == loop["tools"]
+    # A run under way counts what it loaded, tool by tool.
+    run = asyncio.get_running_loop().create_future()
+    state.task = run  # type: ignore[assignment]
+    state.tool_groups_loaded = {"docs": {"DocsRead"}}
+    try:
+        docs = {g["name"]: g for g in manager.tool_group_states(state)}["docs"]
+    finally:
+        run.cancel()
+        state.task = None
+    assert docs["state"] == "loaded" and docs["loaded"] == 1 and docs["tools"] == 2
+    assert groups["board"]["loaded"] == 0
 
 
 async def test_a_group_the_session_may_not_call_is_off(client: httpx.AsyncClient, manager: SessionManager) -> None:

@@ -576,12 +576,12 @@ function SearchBlock({ s, save }: { s: Settings; save: (patch: any) => Promise<v
   );
 }
 
-function ToolsTab({ s, save, toast }: { s: Settings; save: (patch: any) => Promise<void>; toast: (t: string) => void }) {
+function ToolsTab({ s, save, toast, onSettings }: { s: Settings; save: (patch: any) => Promise<void>; toast: (t: string) => void; onSettings: (next: Settings) => void }) {
   const web = s.tools.web;
   const asr = s.asr;
   return (
     <>
-      <ToolGroupsSettings toast={toast} />
+      <ToolGroupsSettings toast={toast} revision={s.revision} onSettings={onSettings} />
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>{t("settings.asr.title")}</div>
         <div className="sub">{t("settings.asr.sub")}</div>
@@ -1258,7 +1258,7 @@ export function SettingsScreen({ toast, section }: { toast: (t: string) => void;
       case "browser":
         return <BrowserSettingsTab s={s} save={save} toast={toast} />;
       case "tools":
-        return <ToolsTab s={s} save={save} toast={toast} />;
+        return <ToolsTab s={s} save={save} toast={toast} onSettings={(next) => setS({ ...next, providers_available: next.providers_available ?? (s?.providers_available ?? []) })} />;
       case "voice":
         return (
           <>

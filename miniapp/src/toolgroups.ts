@@ -44,9 +44,14 @@ export type Chip = { word: string; tone: "" | "accent" | "ok" | "attn" };
 /** The chip a session's group wears: what the model has in front of it right now. A group the core
  *  places by the window, before any run of the session has placed it, wears its mode instead of a
  *  guess at what the first run will do. */
-export function stateChip(group: Pick<SessionToolGroup, "state" | "pending"> & Partial<Pick<SessionToolGroup, "load">>): Chip {
+export function stateChip(group: Pick<SessionToolGroup, "state" | "pending"> & Partial<Pick<SessionToolGroup, "load" | "loaded" | "tools">>): Chip {
   if (group.state === "undecided") return { word: loadWord(group.load ?? "auto"), tone: "" };
-  if (group.state === "loaded") return group.pending ? { word: t("tgroup.state.pending"), tone: "attn" } : { word: t("tgroup.state.loaded"), tone: "ok" };
+  if (group.state === "loaded" && group.pending) return { word: t("tgroup.state.pending"), tone: "attn" };
+  // "Loaded" is the whole group; one tool a search brought in is not the browser loaded.
+  if (group.state === "loaded" && group.loaded !== undefined && group.tools !== undefined && group.loaded < group.tools) {
+    return { word: t("tgroup.state.partial", { n: group.loaded, total: group.tools }), tone: "ok" };
+  }
+  if (group.state === "loaded") return { word: t("tgroup.state.loaded"), tone: "ok" };
   if (group.state === "deferred") return { word: t("tgroup.state.deferred"), tone: "accent" };
   if (group.state === "off") return { word: t("tgroup.state.off"), tone: "" };
   return { word: t("tgroup.state.advertised"), tone: "" };
