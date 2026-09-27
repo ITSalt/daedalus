@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from protocore.contracts.memory import MemoryScope
+from protocore.contracts.tool_registry import policy_admits
 from protocore.contracts.tools import ToolContext
 
 from daedalus.config import (
@@ -135,12 +136,12 @@ async def test_child_effective_policy_tracks_parent_revocation_for_advertisement
         child = await manager.create_session("child", metadata={"subagent_of": leader.session.id})
         grandchild = await manager.create_session("grandchild", metadata={"subagent_of": child.session.id})
         advertised_before_revoke = manager.tool_policy_for(child)
-        assert "Exec" in advertised_before_revoke.pinned
+        assert policy_admits(advertised_before_revoke, "Exec")
 
         await manager.set_mode(leader.session.id, "plan")
         advertised = manager.tool_policy_for(child)
         assert {"Exec", "Verify", "ServiceStart"} <= advertised.blocked
-        assert not ({"Exec", "Verify", "ServiceStart"} & advertised.pinned)
+        assert not any(policy_admits(advertised, name) for name in ("Exec", "Verify", "ServiceStart"))
         assert "Exec" in manager.tool_policy_for(grandchild).blocked
         # The call was valid in the earlier advertisement, but dispatch reads the current policy.
         denied = manager.policy_gate(child.session.id, "run-child").decide("Exec", {"command": "true"})

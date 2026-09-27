@@ -164,10 +164,7 @@ async def test_the_prompt_never_names_a_tool_the_session_does_not_have(tmp_path:
             (
                 prompts.PERSONA,
                 prompts.rules_section(""),
-                prompts.self_development_section(mode),
-                prompts.HISTORY,
-                prompts.BOARD,
-                prompts.SCHEDULING,
+                *prompts.tool_sections(registered, selfdev_mode=mode),
                 prompts.environment_section(
                     workspace=tmp_path,
                     bot_repo=REPO_ROOT,

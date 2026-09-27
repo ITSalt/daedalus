@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 import pytest
+from protocore.contracts.tool_registry import policy_admits
 from protocore.contracts.types import MessageRole, TextBlock
 
 from daedalus.config import ORCHESTRATOR_ONLY_TOOLS, ORCHESTRATOR_TOOLS, ModelPresetConfig, Settings
@@ -103,7 +104,8 @@ async def test_the_orchestrator_is_given_its_allowlist_and_nobody_else_its_tools
         state = await r.manager.get_state(sid)
         assert state is not None and r.manager.is_orchestrator(state)
         known = {t.name for t in r.manager.tools.list_all()}
-        assert r.manager.tool_policy_for(state).pinned == known & set(ORCHESTRATOR_TOOLS)
+        policy = r.manager.tool_policy_for(state)
+        assert {name for name in known if policy_admits(policy, name)} == known & set(ORCHESTRATOR_TOOLS)
         assert {"Exec", "Write", "Read", "SubAgent", "AskUser", "BoardAdd"} <= r.manager.blocked_tools_for(state)
         ordinary = await r.manager.create_session("work", project_id=r.project.id)
         assert known & set(ORCHESTRATOR_ONLY_TOOLS) <= r.manager.blocked_tools_for(ordinary)

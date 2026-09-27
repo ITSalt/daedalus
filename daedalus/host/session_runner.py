@@ -41,8 +41,9 @@ from protocore.runtime.live_control import new_queued_prompt
 from protocore.runtime.loop_state import LoopState
 from protocore.runtime.query_engine import QueryEngine
 from protocore.runtime.soft_stop import CAUSE_MODEL_NO_PROGRESS, CAUSE_PROVIDER_ERROR
-from protocore.tests_support.adapters import InMemoryToolRegistry
+from protocore.runtime.tool_registry import ToolRegistry
 from protocore.tools.memory import build_memory_tools
+from protocore.tools.tool_search import ToolSearchTool
 
 from daedalus.config import (
     DISPATCHER_TOOLS,
@@ -58,6 +59,7 @@ from daedalus.config import (
     NoModelConfigured,
     RuntimeConfig,
     Settings,
+    max_advertised_tools_for,
 )
 from daedalus.host import capabilities, launcher_bridge, prompts
 from daedalus.host.checkpoint_retention import CheckpointRetention, RetentionBounds, RetentionReport
@@ -97,7 +99,7 @@ from daedalus.stores.sqlite import (
 )
 from daedalus.stores.staff import AsksStore, StaffStore
 from daedalus.terminals import endpoint as terminal_endpoint
-from daedalus.tools import discover_tools
+from daedalus.tools import TOOL_GROUPS, discover_tools
 from daedalus.tools.dispatcher import build as build_dispatcher_tools
 
 logger = logging.getLogger(__name__)
@@ -505,8 +507,9 @@ class SessionManager:
         result has been seen."""
         self._background: set[asyncio.Task[Any]] = set()
         self._jobs: dict[str, dict[str, Any]] = {}
-        self.tools = InMemoryToolRegistry()
-        self.dispatcher_tools = InMemoryToolRegistry()
+        self.tools = ToolRegistry()
+        """Every tool but the main orchestrator's, MCP proxies included; a session sees the part its policy admits."""
+        self.dispatcher_tools = ToolRegistry()
         """The main orchestrator's tools and the few shared ones it may call, and nothing else."""
         self.providers = ProviderRegistry(
             settings, config, usage_sink=self.usage, image_loader=self._load_image
@@ -588,6 +591,13 @@ class SessionManager:
             self.tools.register(tool)
         for tool in build_memory_tools(self.memory):
             self.tools.register(tool)
+        for group, description in TOOL_GROUPS.items():
+            self.tools.declare_group(group, description)
+        # The core advertises it only while it holds a group back, so on an ordinary window it costs
+        # nothing; without it registered the core holds nothing back at all, and a large MCP server
+        # would put every one of its tools on the surface. The main orchestrator's registry has no
+        # groups and a dozen tools, so it has nothing to find there.
+        self.tools.register(ToolSearchTool(self.tools))
         for tool in build_dispatcher_tools():
             self.dispatcher_tools.register(tool)
         for tool in self.tools.list_all():
@@ -2889,6 +2899,7 @@ class SessionManager:
             extra_notes=self.notes_for(state),
             tool_visibility_policy=self.tool_policy_for(state),
             role="voice" if self.is_voice(state) else "orchestrator" if self.is_orchestrator(state) else "dispatcher" if self.is_dispatcher(state) else "agent",
+            max_advertised_tools=self.advertised_tools_limit(rungs),
         )
         self._attach_hooks(engine, state)
         if chain is not None:
@@ -3933,7 +3944,7 @@ class SessionManager:
         other roles' tools, and a session is shown one registry or the other, never a mix."""
         return bool(state.metadata.get("dispatcher") or state.metadata.get("dispatcher_retired"))
 
-    def registry_for(self, state: SessionState) -> InMemoryToolRegistry:
+    def registry_for(self, state: SessionState) -> ToolRegistry:
         return self.dispatcher_tools if self.is_dispatcher(state) else self.tools
 
     def _local_blocked_tools_for(self, state: SessionState) -> set[str]:
@@ -3999,15 +4010,28 @@ class SessionManager:
             current = parent
 
     def tool_policy_for(self, state: SessionState) -> ToolVisibilityPolicy:
-        """The one effective tool policy used for catalogue advertisement and dispatch admission."""
+        """The one effective tool policy used for catalogue advertisement and dispatch admission.
+
+        Only refusals: what a session may call is its registry minus ``blocked``. Nothing is pinned,
+        because a pin is what the core never holds back — every tool used to be pinned here, which kept
+        the whole of a connected MCP server on the surface however large it was. The role allowlists
+        (voice, orchestrator, plan mode) arrive as refusals of everything outside them.
+        """
         if self.is_dispatcher(state):
             # Its own registry is its whole allowlist; the operator may still switch a tool off.
             own = {t.name for t in self.dispatcher_tools.list_all()}
             off = {str(n) for n in (state.metadata.get("tools_off") or ()) if str(n) in own}
-            return ToolVisibilityPolicy(pinned=own - off, blocked=off)
-        known = {t.name for t in self.tools.list_all()}
-        blocked = self.blocked_tools_for(state)
-        return ToolVisibilityPolicy(pinned=known - blocked, blocked=blocked)
+            return ToolVisibilityPolicy(blocked=off)
+        return ToolVisibilityPolicy(blocked=self.blocked_tools_for(state))
+
+    def advertised_tools_limit(self, rungs: Sequence[tuple[Any, str]]) -> int:
+        """The lowest cap on tools per request among the run's rungs, 0 when none has one.
+
+        The lowest and not the primary's: a fallback to a model that refuses more than 128 tools
+        would fail on its first request with a surface sized for the primary.
+        """
+        limits = [max_advertised_tools_for(self.config.providers.get(provider.endpoint.id), model) for provider, model in rungs]
+        return min((limit for limit in limits if limit > 0), default=0)
 
     def _apply_tool_visibility(self, state: SessionState) -> None:
         if state.engine is None:

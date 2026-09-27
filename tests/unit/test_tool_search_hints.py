@@ -12,7 +12,9 @@ import re
 
 import pytest
 from protocore.contracts.tools import Tool
+from protocore.runtime.tool_registry import ToolRegistry
 from protocore.tools.memory import build_memory_tools
+from protocore.tools.tool_search import ToolSearchTool
 
 from daedalus.tools import discover_tools
 from daedalus.tools.dispatcher import build as build_dispatcher_tools
@@ -55,8 +57,8 @@ def test_the_hint_never_reaches_the_schema_the_model_sees() -> None:
         assert _hint(tool) not in tool.definition.description
 
 
-def test_the_core_memory_tools_carry_both_languages_too() -> None:
+def test_the_core_tools_the_host_registers_carry_both_languages_too() -> None:
     # Registered by the host, written by the core: only the presence of both scripts is ours to check.
-    for tool in build_memory_tools(object()):  # type: ignore[arg-type]
+    for tool in (*build_memory_tools(object()), ToolSearchTool(ToolRegistry())):  # type: ignore[arg-type]
         hint = _hint(tool)
         assert LATIN_WORD.search(hint) and CYRILLIC_WORD.search(hint), tool.name

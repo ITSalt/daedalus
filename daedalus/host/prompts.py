@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -115,27 +115,33 @@ whole installation down with it, and the operator is the one who finds out.
 """
 
 
-HISTORY = """Memory of this conversation:
-- When the history grows, older turns are replaced by summaries. Every turn stays in the \
+HISTORY_HEADER = "Memory of this conversation:\n"
+
+HISTORY_SEARCH = """- When the history grows, older turns are replaced by summaries. Every turn stays in the \
 transcript: HistorySearch finds turns by words, HistoryExpand(from_seq, to_seq) reads them \
 verbatim. A summary that says "archived turns seq A–B" means HistoryExpand(A, B) returns the \
 originals. Before claiming that something was never discussed or that a detail is unknown, \
 search the transcript.
-- End every final reply to the operator (not tool narration) with one line in this exact form, \
+"""
+
+HISTORY_HEADLINE = """- End every final reply to the operator (not tool narration) with one line in this exact form, \
 on its own line: ⟦ task | status: outcome; next: action | anchors: exact identifiers, paths, names ⟧ \
 It is hidden from the operator and becomes the label under which this turn is found later. \
 Distinguish completed / attempted / failed / blocked / decided; never write vague phrases such as \
 "made progress"; anchors are the terms someone would search for.
 """
 
-BOARD = """Agents, board and peers:
-- Two ways to involve another agent. SubAgent(task, model?, name?, wait?, keep?) is a helper in YOUR \
+BOARD_HEADER = "Agents, board and peers:\n"
+
+BOARD_TWO_WAYS = """- Two ways to involve another agent. SubAgent(task, model?, name?, wait?, keep?) is a helper in YOUR \
 workspace for a bounded piece of THIS task (a parallel investigation, a review, a long sub-step): it \
 shares your files, reports back to you and is removed when done. SpawnAgent(title, brief, files, …) is \
 an independent agent: its own chat topic, workspace and standing brief, for a job that is somebody \
 else's from now on (one-off with a first_message, standing, or a loop agent with loop_instruction); \
 name it as a peer if you will ask it things. Both run on your model unless a preset is named.
-- SubAgent: write the task as a full hand-over. It runs on \
+"""
+
+BOARD_SUBAGENT = """- SubAgent: write the task as a full hand-over. It runs on \
 your model unless `model` names one of the presets in your environment; pick another only when the operator \
 asks or the task plainly suits it. With wait=false you may finish your turn: the report arrives later as a \
 message from subagent:<name>, and you continue from there. Never wait for it with sleep or a polling loop: \
@@ -150,25 +156,35 @@ subagent it starts in turn, so it cannot hand on what you withheld — and its r
 then names the tool and says you withheld it. SubAgent without a task (just \
 a name) raises an idle helper that runs nothing until you send it work — for a standing assistant you want \
 in place before you know the job. SubAgentList shows them.
-- A demo, a server or any process that must keep running after your turn ends is a service: \
+"""
+
+BOARD_SERVICES = """- A demo, a server or any process that must keep running after your turn ends is a service: \
 ServiceStart(name, command, port="auto") runs it detached in your workspace, on a port the operator can \
 open from their network (bind to 0.0.0.0 and use the $PORT the tool gives you); ServiceList shows them \
 with their URLs, ServiceLogs(name) reads the log, ServiceStop(name) ends one. Services survive a bot \
 restart; stop what is no longer needed.
-- The operator may open terminals in this session (the dock under the conversation). TerminalRead reads them — \
+"""
+
+BOARD_TERMINALS = """- The operator may open terminals in this session (the dock under the conversation). TerminalRead reads them — \
 the list, the screen, the recent output, the commands and their exit codes — and never types into them. When the \
 operator points at a terminal ("the tests are open below"), read it instead of asking them to paste it.
-- A report, a finished job or a service that died wakes you for one of them; act on all of them. On every such \
+"""
+
+BOARD_WAKES = """- A report, a finished job or a service that died wakes you for one of them; act on all of them. On every such \
 wake re-read the rosters — SubAgentList, JobList, ServiceList — and handle everything that has become terminal \
 since you last looked: a second job that finished while you were reading the first is already done and will \
 never announce itself. Stop when nothing is in flight any more.
-- Work with more than a few steps, or that must survive compaction and restarts, goes on the board: \
+"""
+
+BOARD_TASKS = """- Work with more than a few steps, or that must survive compaction and restarts, goes on the board: \
 BoardAdd with acceptance criteria and a checklist, BoardUpdate to claim (doing), annotate and finish. \
 Read BoardList at the start of a long task; the board, not your memory, is the plan of record. The board \
 is yours: it shows the tasks of this session and its subagents, and the ones the operator posted to nobody \
 in particular. Other agents keep their own; their work reaches you only as a hand-over (SubAgent, \
 SpawnAgent, AskPeer) or from the operator.
-- Other sessions can be named peers (the operator registers them with /peer here <name>). AskPeer sends \
+"""
+
+BOARD_PEERS = """- Other sessions can be named peers (the operator registers them with /peer here <name>). AskPeer sends \
 them a question or a task and returns their answer; use it to split work (research / implement / review) \
 instead of doing everything in one context.
 """
@@ -182,7 +198,9 @@ the next occurrence be a check-in, not the next step. Never write yourself a pro
 of actions or asks to keep the run short: a job rationed into one step per ping takes hours instead of \
 minutes. While a scheduled turn is still running its later occurrences are skipped, so a long turn costs \
 nothing but time.
-- A loop agent is a session with one standing task the scheduler wakes it up for (its loop is described \
+"""
+
+LOOP = """- A loop agent is a session with one standing task the scheduler wakes it up for (its loop is described \
 in your environment when you have one). Each wake-up is an iteration: do the work, then LoopStop when the \
 purpose is achieved, LoopPause when only the operator can unblock it, StaySilent when there is nothing to \
 report; a dynamically paced loop ends its turn with LoopNext(delay_seconds, reason) or LoopStop.
@@ -535,6 +553,48 @@ def self_development_section(selfdev_mode: str) -> str:
     return ""
 
 
+ToolParts = tuple[tuple[tuple[str, ...], str], ...]
+"""A section as its paragraphs, each with the tools it names; a paragraph is shown when all of them are."""
+
+HISTORY_PARTS: ToolParts = ((("HistorySearch", "HistoryExpand"), HISTORY_SEARCH), ((), HISTORY_HEADLINE))
+BOARD_PARTS: ToolParts = (
+    (("SubAgent", "SpawnAgent"), BOARD_TWO_WAYS),
+    (("SubAgent", "SubAgentSend", "SubAgentList"), BOARD_SUBAGENT),
+    (("ServiceStart", "ServiceList", "ServiceLogs", "ServiceStop"), BOARD_SERVICES),
+    (("TerminalRead",), BOARD_TERMINALS),
+    (("SubAgentList", "JobList", "ServiceList"), BOARD_WAKES),
+    (("BoardAdd", "BoardUpdate", "BoardList"), BOARD_TASKS),
+    (("AskPeer",), BOARD_PEERS),
+)
+SCHEDULING_PARTS: ToolParts = ((("ScheduleCreate",), SCHEDULING), (("LoopStop", "LoopPause", "LoopNext"), LOOP))
+
+
+def _parts(header: str, parts: ToolParts, advertised: Collection[str]) -> str:
+    shown = [text for names, text in parts if all(name in advertised for name in names)]
+    return header + "".join(shown) if shown else ""
+
+
+def tool_sections(advertised: Collection[str], *, selfdev_mode: str) -> tuple[str, ...]:
+    """The sections of an agent's prompt that teach its tools, each only where its tools are on the surface.
+
+    ``advertised`` is what the first request of the run puts in ``tools``: the tools the session may
+    call, less any group the core holds back behind ToolSearch. A paragraph that teaches a tool the
+    session may not call — the board and the schedules to a staff member, Notify to a subagent — is an
+    invitation the model accepts and a refusal it cannot understand. One whose tools are held back is
+    left to the core's catalogue, which names the group and its tools in a line; the long paragraph
+    costs its tokens on every request of the run for tools the model may never load, and teaches them
+    as if they were at hand.
+    """
+    return (
+        self_development_section(selfdev_mode) if "SelfWorkspace" in advertised else "",
+        _parts(HISTORY_HEADER, HISTORY_PARTS, advertised),
+        _parts(BOARD_HEADER, BOARD_PARTS, advertised),
+        _parts("", SCHEDULING_PARTS, advertised),
+        NOTIFY if "Notify" in advertised else "",
+        BROWSER if "BrowserOpen" in advertised else "",
+    )
+
+
 def rules_section(rules: str) -> str:
     text = rules.strip() or DEFAULT_RULES.strip()
     return text + "\n"
@@ -668,4 +728,4 @@ def governance_section(path: Path) -> str:
     return ""
 
 
-__all__ = ["BOARD", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "turn_context", "without_turn_context"]
+__all__ = ["BOARD_HEADER", "BOARD_PARTS", "BOARD_PEERS", "BOARD_SERVICES", "BOARD_SUBAGENT", "BOARD_TASKS", "BOARD_TERMINALS", "BOARD_TWO_WAYS", "BOARD_WAKES", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY_HEADER", "HISTORY_HEADLINE", "HISTORY_PARTS", "HISTORY_SEARCH", "LOOP", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SCHEDULING_PARTS", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "tool_sections", "turn_context", "without_turn_context"]

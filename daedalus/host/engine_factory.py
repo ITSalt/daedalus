@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Collection
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
 from protocore.contracts.llm import IProviderChain
-from protocore.contracts.tool_registry import IToolRegistry, ToolVisibilityPolicy
+from protocore.contracts.tool_registry import IToolRegistry, ToolVisibilityPolicy, policy_admits
 from protocore.runtime.query_engine import QueryEngine, QueryEngineConfig
 from protocore.runtime.runtime_constants import default_runtime_constants
+from protocore.runtime.tool_deferral import discovery_tool_names, ensure_tool_deferral
 from protocore.runtime.tool_dispatch import ToolDispatcher
 from protocore.runtime.tool_permission import (
     PermissionStage,
@@ -81,7 +82,8 @@ class PolicyAdapter:
         return ToolPermissionDecision(outcome=ToolPermissionOutcome.deny, reason=reason, stage=PermissionStage.safety_policy)
 
 
-def runtime_constants(config: RuntimeConfig, *, context_window: int, max_output_tokens: int, thinking: bool, mode: ModeConfig | None = None) -> Any:
+def runtime_constants(config: RuntimeConfig, *, context_window: int, max_output_tokens: int, thinking: bool, mode: ModeConfig | None = None, max_advertised_tools: int = 0) -> Any:
+    """``max_advertised_tools`` is the provider's cap on the number of tools in one request, 0 for none."""
     context_window = max(8_000, int(context_window))
     output_cap = max(1024, min(max_output_tokens, context_window))
     max_iterations = mode.max_iterations if mode is not None and mode.max_iterations else config.limits.max_iterations
@@ -97,8 +99,14 @@ def runtime_constants(config: RuntimeConfig, *, context_window: int, max_output_
         steer_default_mode="all",
         follow_up_default_mode="all",
         memory_enabled=True,
-        # Advertise every registered tool; the registry would otherwise clip the list.
-        tool_retrieval_top_k=200,
+        # No per-message clip (the core's default of 0 is spelled out because 200 used to be here): it
+        # re-ranks the surface on every message, which moves the cached prefix, and a Russian message
+        # against English descriptions finds too little. What does not fit is held back by group and
+        # loaded through ToolSearch instead.
+        tool_retrieval_top_k=0,
+        # A provider that refuses a request above a number of tools refuses the first one, so the
+        # core holds groups back until the surface is under it, MCP servers first.
+        max_advertised_tools=max(0, int(max_advertised_tools)),
         # The skill catalogue (name + when-to-use line per skill) must fit whole: past the budget the core
         # drops the descriptions, and a bare name is not a reason to load a skill.
         skill_index_budget_ratio=0.04,
@@ -141,18 +149,13 @@ def runtime_constants(config: RuntimeConfig, *, context_window: int, max_output_
 Role = Literal["agent", "voice", "orchestrator", "dispatcher"]
 
 
-def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig | None, workspace: Path, session_title: str, model: str, extra_notes: str, project: str, notify: bool, browser: bool = False) -> tuple[str, ...]:
+def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig | None, workspace: Path, session_title: str, model: str, extra_notes: str, project: str, advertised: Collection[str]) -> tuple[str, ...]:
     return (
         prompts.PERSONA,
         prompts.rules_section(config.prompt.rules),
         prompts.language_section(config.answer_language),
         prompts.governance_section(deps.governance_path),
-        prompts.self_development_section(deps.selfdev_mode),
-        prompts.HISTORY,
-        prompts.BOARD,
-        prompts.SCHEDULING,
-        prompts.NOTIFY if notify else "",
-        prompts.BROWSER if browser else "",
+        *prompts.tool_sections(advertised, selfdev_mode=deps.selfdev_mode),
         (mode.prompt.strip() + "\n") if mode is not None and mode.prompt.strip() else "",
         prompts.environment_section(
             workspace=workspace,
@@ -168,6 +171,24 @@ def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig
             project=project,
         ),
     )
+
+
+def advertised_tools(engine: QueryEngine) -> frozenset[str]:
+    """The tools the run's first request puts in ``tools``, as the core will decide them.
+
+    The session's admitted tools, less the groups the core holds back, plus what an earlier run of the
+    session loaded back onto the surface; ToolSearch only while something is held back. The decision is
+    the core's own (:func:`ensure_tool_deferral`), made here once and cached on the engine for the run,
+    so the prompt is written for the surface the model is actually shown.
+    """
+    decision = ensure_tool_deferral(engine)
+    policy = engine.effective_tool_policy
+    registry = engine.tools
+    admitted = {tool.name for tool in registry.list_all() if policy_admits(policy, tool.name)}
+    advertised = (admitted - decision.deferred_names) | (admitted & set(engine.context_manager.discovered_tool_names()))
+    if not decision.deferred_groups:
+        advertised -= discovery_tool_names(registry.list_all(), engine.config.tool_roles)
+    return frozenset(advertised)
 
 
 def build_engine(
@@ -190,13 +211,15 @@ def build_engine(
     mode: ModeConfig | None = None,
     role: Role = "agent",
     project: str = "",
+    max_advertised_tools: int = 0,
 ) -> QueryEngine:
     """``role`` picks the system prompt: an agent that works in a folder, the voice concierge that
     only talks and hands over, a project's orchestrator that only runs a team, or the main
-    orchestrator that only hands work to projects and follows it."""
+    orchestrator that only hands work to projects and follows it.
+
+    ``max_advertised_tools`` is the lowest cap on tools among the run's providers (0 for none)."""
     primary_provider, primary_model = rungs[0]
     model = model_name or primary_model
-    all_tools = {t.name for t in deps.tool_registry.list_all()}
     if role == "voice":
         sections: tuple[str, ...] = prompts.concierge_sections(answer_language=config.answer_language, agents=extra_notes)
     elif role == "orchestrator":
@@ -204,15 +227,7 @@ def build_engine(
     elif role == "dispatcher":
         sections = prompts.dispatcher_sections(answer_language=config.answer_language, governance=prompts.governance_section(deps.governance_path))
     else:
-        # Only where the tool can be called: a subagent or a staff member told how to notify the
-        # operator would try, be refused, and spend a turn learning that its leader speaks for it.
-        notify = "Notify" in all_tools and (tool_visibility_policy is None or "Notify" not in tool_visibility_policy.blocked)
-        # The browser's rules only where its tools are: a static section, so the prompt's cache holds
-        # for every session of an installation that has a browser.
-        browser = "BrowserOpen" in all_tools and (tool_visibility_policy is None or "BrowserOpen" not in tool_visibility_policy.blocked)
-        sections = _agent_sections(
-            deps, config, mode=mode, workspace=workspace, session_title=session_title, model=model, extra_notes=extra_notes, project=project, notify=notify, browser=browser,
-        )
+        sections = ()  # written below, once the surface the run advertises is known
     engine_config = QueryEngineConfig(
         run_id=run_id,
         tenant_id=TENANT,
@@ -221,8 +236,10 @@ def build_engine(
         root_run_id=run_id,
         model_name=model,
         system_prompt_sections=tuple(s for s in sections if s),
-        tool_visibility_policy=tool_visibility_policy or ToolVisibilityPolicy(pinned=all_tools),
-        rc=runtime_constants(config, context_window=context_window, max_output_tokens=max_output_tokens, thinking=thinking, mode=mode),
+        tool_visibility_policy=tool_visibility_policy or ToolVisibilityPolicy(),
+        rc=runtime_constants(
+            config, context_window=context_window, max_output_tokens=max_output_tokens, thinking=thinking, mode=mode, max_advertised_tools=max_advertised_tools,
+        ),
         thinking_enabled=thinking,
         reasoning_effort=reasoning_effort,
         request_manifest_sink=deps.request_manifest_sink,
@@ -243,8 +260,16 @@ def build_engine(
         permission_gate=ToolPermissionGate(policies=[deps.policy_gate(session_id, run_id)] if deps.policy_gate is not None else []),
         hook_manager=deps.hook_manager,
     )
+    if role == "agent":
+        # Only where the tool is on the surface: a subagent or a staff member told how to notify the
+        # operator, or a session told about a board it cannot see, would try, be refused or find
+        # nothing, and spend a turn learning why.
+        sections = _agent_sections(
+            deps, config, mode=mode, workspace=workspace, session_title=session_title, model=model, extra_notes=extra_notes, project=project, advertised=advertised_tools(engine),
+        )
+        engine.config = replace(engine.config, system_prompt_sections=tuple(s for s in sections if s))
     deps.event_stream.bind_run(run_id, session_id)
     return engine
 
 
-__all__ = ["TENANT", "EngineDeps", "Role", "build_engine", "runtime_constants"]
+__all__ = ["TENANT", "EngineDeps", "Role", "advertised_tools", "build_engine", "runtime_constants"]

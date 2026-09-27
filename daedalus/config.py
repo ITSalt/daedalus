@@ -444,10 +444,28 @@ class ProviderConfig(BaseModel):
     timeout_seconds: float = 600.0
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     """Sampling temperature sent with every request to this endpoint; ``None`` leaves the core's default. Pin it for benchmarks."""
+    max_advertised_tools: int | None = Field(default=None, ge=0)
+    """The most tools this endpoint accepts in one request; ``None`` takes the known limit of the model
+    (:func:`max_advertised_tools_for`), 0 means no limit. Past it the core holds tool groups back behind
+    ToolSearch, MCP servers first, rather than send a request the endpoint refuses."""
     pricing: dict[str, dict[str, Any]] = Field(default_factory=dict)
     """Per-model USD per 1M tokens overriding the built-in table (``daedalus.providers.pricing``):
     ``{"model": {"input", "output", "cache_hit"[, "*_off_peak", "peak_utc", "peak_weekdays_only"]}}``.
     A model with no price anywhere is recorded with an unknown cost."""
+
+
+KNOWN_TOOL_LIMITS: tuple[tuple[str, int], ...] = (("grok", 350), ("gemini", 128))
+"""Models whose API refuses a request with more tools than this, by a word of the model id. Grok answers
+"Maximum tools limit reached" above 350; Gemini accepts at most 128 function declarations. Reached through
+any endpoint (a router, a key proxy), so it is the model that decides, not the provider's kind."""
+
+
+def max_advertised_tools_for(provider: ProviderConfig | None, model: str) -> int:
+    """The most tools one request to ``model`` on ``provider`` may carry, 0 for no limit."""
+    if provider is not None and provider.max_advertised_tools is not None:
+        return provider.max_advertised_tools
+    lowered = model.lower()
+    return min((limit for word, limit in KNOWN_TOOL_LIMITS if word in lowered), default=0)
 
 
 class PromptConfig(BaseModel):
@@ -999,7 +1017,7 @@ class ModeConfig(BaseModel):
     description: str = ""
 
 
-PLAN_MODE_TOOLS_ONLY = ["Read", "Find", "Search", "WebFetch", "WebSearch", "HistorySearch", "HistoryExpand", "Recall", "Remember", "Skill", "ImageView", "BoardList", "BoardGet", "ScheduleList", "LoopStatus", "JobOutput", "JobList", "ServiceList", "ServiceLogs", "TerminalRead", "McpList", "PeerList", "SubAgentList", "IntentList", "LearningReport", "AskUser", "StaySilent"]
+PLAN_MODE_TOOLS_ONLY = ["Read", "Find", "Search", "WebFetch", "WebSearch", "HistorySearch", "HistoryExpand", "Recall", "Remember", "Skill", "ImageView", "BoardList", "BoardGet", "ScheduleList", "LoopStatus", "JobOutput", "JobList", "ServiceList", "ServiceLogs", "TerminalRead", "McpList", "PeerList", "SubAgentList", "IntentList", "LearningReport", "AskUser", "StaySilent", "ToolSearch"]
 """What a plan may do: read, search, look, remember and ask. Everything else — files, commands, Verify, sending,
 starting, peers, MCP tools — is off until the operator switches the mode."""
 
@@ -1971,6 +1989,7 @@ __all__ = [
     "ModelConfig",
     "NotificationsConfig",
     "ModelPresetConfig",
+    "KNOWN_TOOL_LIMITS",
     "PROVIDER_KINDS",
     "PromptConfig",
     "ProviderConfig",
@@ -2009,4 +2028,5 @@ __all__ = [
     "SUBAGENT_BLOCKED_TOOLS",
     "ORCHESTRATOR_TOOLS",
     "ORCHESTRATOR_ONLY_TOOLS",
+    "max_advertised_tools_for",
 ]

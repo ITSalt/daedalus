@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 import pytest
+from protocore.contracts.tool_registry import policy_admits
 from protocore.contracts.types import Message, MessageRole, TextBlock
 
 from daedalus.config import DISPATCHER_TOOLS, ModelPresetConfig, RuntimeConfig, Settings
@@ -65,7 +66,8 @@ async def test_the_main_orchestrator_sees_its_own_tools_and_nobody_else_sees_the
         own = {t.name for t in m.r.manager.dispatcher_tools.list_all()}
         assert own == set(DISPATCHER_TOOLS) - {"CreateProject"} | ({"CreateProject"} & own)
         assert "CreateProject" in own and "AskUser" not in own and "Exec" not in own
-        assert m.r.manager.tool_policy_for(state).pinned == own
+        policy = m.r.manager.tool_policy_for(state)
+        assert {name for name in own if policy_admits(policy, name)} == own and not policy.pinned
 
         await m.r.manager.submit(sid, "What is going on?")
         await until_await(lambda: _idle(m.r.manager, sid), "the main orchestrator answered")
@@ -79,7 +81,8 @@ async def test_the_main_orchestrator_sees_its_own_tools_and_nobody_else_sees_the
         assert "Open dispatches: none" in text_of([msg for msg in request.messages if msg.role is MessageRole.user][-1])
 
         ordinary = await m.r.manager.create_session("work", project_id=m.r.project.id)
-        ordinary_tools = m.r.manager.tool_policy_for(ordinary).pinned
+        ordinary_policy = m.r.manager.tool_policy_for(ordinary)
+        ordinary_tools = {t.name for t in m.r.manager.tools.list_all() if policy_admits(ordinary_policy, t.name)}
         assert "Progress" not in ordinary_tools and "Cancel" not in ordinary_tools and "CreateProject" not in ordinary_tools
         with pytest.raises(NotCurrent, match="not the main orchestrator"):
             await m.call(ordinary.session.id, "projects")
