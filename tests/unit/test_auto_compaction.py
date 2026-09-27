@@ -146,7 +146,10 @@ async def test_a_stalled_summariser_call_is_retried_then_given_up(settings: Sett
     manager.config.compaction.call_timeout_seconds = 10
     orig = asyncio.wait_for
 
+    limits: list[float] = []
+
     async def fast_wait_for(coro: Any, timeout: float) -> Any:  # the test cannot wait ten real seconds twice
+        limits.append(timeout)
         return await orig(coro, timeout=0.05)
 
     import daedalus.host.session_runner as sr
@@ -158,6 +161,7 @@ async def test_a_stalled_summariser_call_is_retried_then_given_up(settings: Sett
     finally:
         sr.asyncio.wait_for = orig  # type: ignore[assignment]
     assert calls == 2
+    assert limits == [10, 20]  # the retry is not the same request under the same limit
     await manager.close()
 
 
@@ -366,4 +370,168 @@ async def test_a_compaction_waiting_on_the_lock_leaves_a_deleted_session_alone(s
     manager._states.pop(state.session.id)  # what delete_session does before the rows go
     await manager._maybe_auto_compact(state)
     assert calls == []
+    await manager.close()
+
+
+def _long_history(turns: int = 12) -> list[Message]:
+    return [m for i in range(turns) for m in (_op(f"ask {i}: " + "detail " * 400), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text=f"answer {i}: " + "words " * 400)]))]
+
+
+async def _measured(manager: SessionManager, state: Any, tokens: int, run_id: str) -> None:
+    _, preset = manager.config.preset()
+    provider = manager.providers.get(preset.provider)
+    await manager.usage.record(UsageRecord(provider_id=provider.endpoint.id, model="m", purpose="stream", raw={}, normalized={"input_tokens": tokens}, cost_usd=0.0, duration_ms=1, run_id=run_id, session_id=state.session.id))
+
+
+async def test_a_failing_summariser_is_not_tried_again_after_every_turn(settings: Settings, db: Database) -> None:
+    """An orchestrator on Grok: every part of the summary ran out of time, the compaction failed, and the
+    next settled run tried again — four times in eleven minutes, each holding the session for three,
+    while the history went on growing past the trigger. It now waits for real growth, or for time."""
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.keep_recent_messages = 2
+    config.compaction.min_messages = 2
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("orchestrator")
+    state.context_window = 490_000
+    history = _long_history()
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    await manager.sessions.append_transcript(state.session.id, history)
+    _, preset = manager.config.preset()
+    provider = manager.providers.get(preset.provider)
+    calls = 0
+    failing = True
+
+    async def summarise(request: Any) -> LLMResponse:
+        nonlocal calls
+        calls += 1
+        if failing:
+            raise RuntimeError("the summariser gave up")
+        return LLMResponse(message=Message(role=MessageRole.assistant, content_blocks=[TextBlock(text=SECTIONED)]), stop_reason=StopReason.end_turn)
+
+    provider.complete_text = summarise  # type: ignore[method-assign]
+    await _measured(manager, state, 246_702, "r1")  # the prompt that first crossed 0.5 x 490k
+    await manager._maybe_auto_compact(state)
+    assert calls == 1 and state.compaction_hold is not None and state.compaction_hold["reason"] == "failed"
+    for turn, tokens in enumerate((248_968, 250_808, 252_580)):  # the next three turns, ~2k each
+        await _measured(manager, state, tokens, f"r{turn + 2}")
+        await manager._maybe_auto_compact(state)
+    assert calls == 1, "a compaction that failed was tried again on the next turn"
+    await _measured(manager, state, 246_702 + 49_000, "r9")  # a tenth of the window more
+    await manager._maybe_auto_compact(state)
+    assert calls == 2 and state.compaction_hold["failures"] == 2
+    await _measured(manager, state, 296_000, "r10")
+    await manager._maybe_auto_compact(state)
+    assert calls == 2
+    state.compaction_hold["until"] = 0.0  # the wait after the second failure has passed
+    failing = False
+    await manager._maybe_auto_compact(state)
+    assert calls == 3 and state.compaction_hold is None  # it worked: the next crossing compacts at once
+    messages = await manager.sessions.list_messages(state.session.id, "daedalus", limit=100)
+    assert messages[0].metadata["daedalus.compaction"]["reason"] == "auto"
+    await manager.close()
+
+
+async def test_a_history_that_does_not_fit_is_compacted_even_while_the_retry_waits(settings: Settings, db: Database) -> None:
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.min_messages = 2
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("full")
+    state.context_window = 100_000
+    history = _long_history(2)
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    calls: list[str] = []
+
+    async def record(st: Any, instructions: str, **kwargs: Any) -> str:
+        calls.append("compacted")
+        return "summary"
+
+    manager._compact_locked = record  # type: ignore[method-assign]
+    state.compaction_hold = {"tokens": 60_000, "failures": 1, "until": float("inf"), "reason": "failed"}
+    await _measured(manager, state, 101_000, "r1")
+    await manager._maybe_auto_compact(state, required_only=True)
+    assert calls == ["compacted"]  # without it the provider refuses the prompt outright
+    await manager.close()
+
+
+async def test_a_compaction_that_frees_nothing_is_reported_and_not_repeated(settings: Settings, db: Database, caplog: Any) -> None:
+    """When what is left after a compaction is still over the trigger — the kept tail or the fixed part
+    of the prompt is that large — the next turn would summarise again and change nothing."""
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.min_messages = 2
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("fixed")
+    state.context_window = 100_000
+    history = _long_history(2)
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    calls: list[str] = []
+
+    async def compacts_nothing(st: Any, instructions: str, **kwargs: Any) -> str:
+        calls.append("compacted")  # the history is rewritten, the prompt stays as large
+        return "summary"
+
+    manager._compact_locked = compacts_nothing  # type: ignore[method-assign]
+    await _measured(manager, state, 60_000, "r1")
+    await manager._maybe_auto_compact(state)
+    assert calls == ["compacted"]
+    assert state.compaction_hold is not None and state.compaction_hold["reason"] == "freed_little"
+    assert any("freed only 0 of 60000" in r.getMessage() for r in caplog.records)
+    await _measured(manager, state, 62_000, "r2")
+    await manager._maybe_auto_compact(state)
+    assert calls == ["compacted"], "a compaction that freed nothing ran again on the next turn"
+    assert state.compaction_hold["until"] == float("inf")  # no clock lets it retry: only growth does
+    await _measured(manager, state, 70_000, "r3")
+    await manager._maybe_auto_compact(state)
+    assert calls == ["compacted", "compacted"]
+    await manager.close()
+
+
+async def test_a_slow_summariser_finishes_on_its_retry(settings: Settings, db: Database) -> None:
+    """The part that took longer than the limit is given twice the time on its retry, and the compaction
+    succeeds instead of throwing away the parts that did finish."""
+    import daedalus.host.session_runner as sr
+
+    config = model_config()
+    config.compaction.auto_ratio = 0.5
+    config.compaction.keep_recent_messages = 2
+    config.compaction.min_messages = 2
+    config.compaction.chunk_tokens = 5_000  # several parts, summarised side by side
+    manager = SessionManager(settings, config, db=db)
+    await manager.start()
+    state = await manager.create_session("slow")
+    state.context_window = 100_000
+    history = _long_history()
+    await manager.sessions.replace_messages(state.session.id, "daedalus", history)
+    await manager.sessions.append_transcript(state.session.id, history)
+    _, preset = manager.config.preset()
+    provider = manager.providers.get(preset.provider)
+    attempts = 0
+
+    async def slow(request: Any) -> LLMResponse:
+        nonlocal attempts
+        attempts += 1
+        await asyncio.sleep(0.03)  # longer than one limit, shorter than two
+        return LLMResponse(message=Message(role=MessageRole.assistant, content_blocks=[TextBlock(text=SECTIONED)]), stop_reason=StopReason.end_turn)
+
+    provider.complete_text = slow  # type: ignore[method-assign]
+    orig = asyncio.wait_for
+
+    async def scaled_wait_for(coro: Any, timeout: float) -> Any:  # 90 s becomes 0.02 s, the retry's 180 s 0.04 s
+        return await orig(coro, timeout=timeout * 0.02 / config.compaction.call_timeout_seconds)
+
+    await _measured(manager, state, 60_000, "r1")
+    sr.asyncio.wait_for = scaled_wait_for  # type: ignore[assignment]
+    try:
+        await manager._maybe_auto_compact(state)
+    finally:
+        sr.asyncio.wait_for = orig  # type: ignore[assignment]
+    assert state.compaction_hold is None
+    messages = await manager.sessions.list_messages(state.session.id, "daedalus", limit=100)
+    assert messages[0].metadata["daedalus.compaction"]["reason"] == "auto"
+    assert attempts > 2  # every part timed out once and finished on its retry, then the merge did the same
     await manager.close()

@@ -1564,7 +1564,9 @@ class SessionManager:
         async with state.lock:
             # A summary replaces the history of the turn whose snapshot may still be being written.
             await self._wait_until_quiet(state)
-            return await self._compact_locked(state, instructions, keep_recent=keep_recent)
+            summary = await self._compact_locked(state, instructions, keep_recent=keep_recent)
+            state.compaction_hold = None  # the operator's own compaction starts the automatic one afresh
+            return summary
 
     async def _maybe_auto_compact(self, state: SessionState, *, required_only: bool = False) -> None:
         """When the last prompt filled ``compaction.auto_ratio`` of the window, compact the history.
@@ -1582,7 +1584,19 @@ class SessionManager:
         def below(status: dict[str, Any]) -> bool:
             return not status["window"] or status["tokens"] < ratio * status["window"] or status["messages"] < cfg.min_messages
 
-        if below(await self.context_status(state)):
+        def held(status: dict[str, Any]) -> bool:
+            # A compaction that failed, or one that left the prompt about as large as it found it,
+            # tried again after every turn: in an orchestrator whose summariser timed out each time
+            # it held the session for three minutes per message and never shrank anything. It waits
+            # now until the history has really grown, or (after a failure) until some time has passed.
+            hold = state.compaction_hold
+            if hold is None or required_only:
+                return False
+            grown = status["tokens"] >= hold["tokens"] + COMPACTION_RETRY_GROWTH * status["window"]
+            return not grown and time.monotonic() < hold["until"]
+
+        status = await self.context_status(state)
+        if below(status) or held(status):
             return
         async with state.lock:
             # Asked again behind the lock: two callers that both saw a full window — a manual compaction
@@ -1591,20 +1605,40 @@ class SessionManager:
             if self._states.get(state.session.id) is not state:
                 return  # deleted while this waited for the lock: there is no history left to rewrite
             status = await self.context_status(state)
-            if below(status) or (state.running and state.task is not asyncio.current_task()):
+            if below(status) or held(status) or (state.running and state.task is not asyncio.current_task()):
                 return  # a run started while this waited: it compacts after that one instead
+            started = time.monotonic()
+            failures = int((state.compaction_hold or {}).get("failures", 0))
             try:
-                started = time.monotonic()
                 await self._compact_locked(state, "", keep_recent=cfg.keep_recent_messages, reason="auto", own_task_ok=True)  # own_task_ok: the required_only call runs inside the run's own task
-                after = await self.context_status(state)
-                logger.warning("session %s: auto-compacted %d → %d messages in %.0fs (prompt was %d of %d tokens)", state.session.id, status["messages"], after["messages"], time.monotonic() - started, status["tokens"], status["window"])
-                for hook in self.compaction_hooks:
-                    try:
-                        await hook(state.session.id, {"before_messages": status["messages"], "after_messages": after["messages"], "before_tokens": status["tokens"], "window": status["window"], "seconds": round(time.monotonic() - started)})
-                    except Exception:  # noqa: BLE001
-                        logger.exception("compaction hook failed")
             except Exception:  # noqa: BLE001 — the next run must start even when the summary could not be made
-                logger.exception("auto-compaction failed for session %s", state.session.id)
+                failures += 1
+                wait = min(COMPACTION_RETRY_SECONDS * 2 ** (failures - 1), COMPACTION_RETRY_MAX_SECONDS)
+                state.compaction_hold = {"tokens": status["tokens"], "failures": failures, "until": time.monotonic() + wait, "reason": "failed"}
+                logger.exception(
+                    "auto-compaction failed for session %s after %.0fs (attempt %d in a row; prompt %d of %d tokens); the next try waits for %d more tokens or %.0f min",
+                    state.session.id, time.monotonic() - started, failures, status["tokens"], status["window"], int(COMPACTION_RETRY_GROWTH * status["window"]), wait / 60,
+                )
+                return
+            after = await self.context_status(state)
+            logger.warning("session %s: auto-compacted %d → %d messages in %.0fs (prompt was %d of %d tokens)", state.session.id, status["messages"], after["messages"], time.monotonic() - started, status["tokens"], status["window"])
+            freed = status["tokens"] - after["tokens"]
+            if after["tokens"] >= ratio * status["window"] or freed < COMPACTION_MIN_FREED * status["tokens"]:
+                # What is left is still over the trigger — the kept tail, or whatever the host puts in
+                # front of every prompt, is itself that large — so the next turn would compact again and
+                # free the same nothing. Only growth of the history can make another pass worth paying for.
+                state.compaction_hold = {"tokens": after["tokens"], "failures": failures + 1, "until": float("inf"), "reason": "freed_little"}
+                logger.warning(
+                    "session %s: auto-compaction freed only %d of %d prompt tokens (%d left, trigger %d); not compacting again until the prompt grows by %d",
+                    state.session.id, freed, status["tokens"], after["tokens"], int(ratio * status["window"]), int(COMPACTION_RETRY_GROWTH * status["window"]),
+                )
+            else:
+                state.compaction_hold = None
+            for hook in self.compaction_hooks:
+                try:
+                    await hook(state.session.id, {"before_messages": status["messages"], "after_messages": after["messages"], "before_tokens": status["tokens"], "window": status["window"], "seconds": round(time.monotonic() - started)})
+                except Exception:  # noqa: BLE001
+                    logger.exception("compaction hook failed")
 
     async def _compact_locked(self, state: SessionState, instructions: str, *, keep_recent: int = 0, reason: str = "manual", own_task_ok: bool = False) -> str:
         session_id = state.session.id
@@ -1811,9 +1845,12 @@ class SessionManager:
             try:
                 response = await asyncio.wait_for(provider.complete_text(request), timeout=timeout)
             except TimeoutError:
-                # A provider stall must not hold the session: one more try, then the compaction waits for the next run.
-                logger.warning("compaction summariser call exceeded %.0fs; retrying once", timeout)
-                response = await asyncio.wait_for(provider.complete_text(request), timeout=timeout)
+                # A provider stall must not hold the session: one more try, then the compaction gives up.
+                # The retry gets twice the time. A model that reasons whether or not it is asked to (Grok
+                # spends four to six thousand reasoning tokens on a part) takes 70 to 90 s over a 30k-token
+                # part, and the same request under the same limit failed the same way every time.
+                logger.warning("compaction summariser call exceeded %.0fs; retrying once with %.0fs", timeout, 2 * timeout)
+                response = await asyncio.wait_for(provider.complete_text(request), timeout=2 * timeout)
             candidate = "".join(b.text for b in response.message.content_blocks if isinstance(b, TextBlock)).strip()
             problem = validate_summary_sections(candidate)
             if not problem:
@@ -5009,6 +5046,15 @@ keep every quoted operator rule; an item still unknown stays under Unknowns. At 
 words. No commentary outside the sections."""
 
 VERBATIM_TAIL_MESSAGES = 3
+COMPACTION_RETRY_GROWTH = 0.1
+"""After an automatic compaction that failed or freed almost nothing, the prompt must grow by this share of
+the window before the next one is tried: about twenty turns of an orchestrator on a 490k window."""
+COMPACTION_RETRY_SECONDS = 1800.0
+"""A failed compaction is also retried after this long without that growth, doubling with each failure in a
+row: a provider that stalled for a while should not leave a long session uncompacted for good."""
+COMPACTION_RETRY_MAX_SECONDS = 6 * 3600.0
+COMPACTION_MIN_FREED = 0.1
+"""A compaction that took less than this share off the prompt counts as having freed nothing."""
 OPERATOR_QUOTE_CHARS = 400
 """Older operator messages are quoted by code, each clipped to this many characters, so a rule never depends on the summariser."""
 

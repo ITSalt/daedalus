@@ -825,7 +825,7 @@ class CompactionConfig(BaseModel):
     min_messages: int = Field(default=12, ge=2)
     """Fewer messages than this are never compacted automatically."""
     call_timeout_seconds: float = Field(default=90.0, ge=10)
-    """One summariser call may take this long; a stalled call is retried once, then the compaction waits for the next run."""
+    """One summariser call may take this long; one that runs out is retried once with twice the time, then the automatic compaction stands down until the history has grown."""
     core_trigger_ratio: float = Field(default=0.85, gt=0.0, lt=1.0)
     """Where the core's own mid-run compaction starts; above the host's ratio so runs boundaries compact first."""
     preset: str = ""
