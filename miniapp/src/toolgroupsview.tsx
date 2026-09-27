@@ -122,7 +122,7 @@ export function SessionToolGroups({ sessionId, toast }: { sessionId: string; toa
                 {g.source === "session" ? (
                   <button className="linkbtn" onClick={() => setMode(g.name, null)}>{t("tgroup.session.follow")}</button>
                 ) : (
-                  <span className="sub">{t(g.source === "settings" ? "tgroup.session.fromsettings" : "tgroup.session.fromdefault")}</span>
+                  <span className="sub">{t(g.source === "settings" ? "tgroup.session.fromsettings" : g.source === "model" ? "tgroup.session.frommodel" : "tgroup.session.fromdefault")}</span>
                 )}
               </div>
             )}

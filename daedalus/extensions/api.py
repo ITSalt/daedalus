@@ -59,6 +59,7 @@ from daedalus.config import (
     keyproxy_base,
     keyproxy_unresolved,
     keyproxy_upstream,
+    on_demand_tool_groups_for,
 )
 from daedalus.doctor import DoctorContext, render_text, run_checks, summarize
 from daedalus.extensions import api_browsers, api_files, api_harnesses, api_projects, api_staff
@@ -739,6 +740,8 @@ class PresetPatch(BaseModel):
     images: bool | None = None
     context_window: int | None = None
     max_output_tokens: int | None = None
+    on_demand_tool_groups: bool | None = None
+    """Sent as null, it goes back to what the model is known for; the one field where null is a value."""
 
 
 PRESET_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -3512,6 +3515,7 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         state = await manager.get_state(session_id)
         if state is None:
             raise HTTPException(404, "no such session")
+        await manager.refresh_on_demand_groups(state)
         return {"groups": manager.tool_group_states(state)}
 
     @api.put("/api/sessions/{session_id}/tool-groups/{group}")
@@ -5289,6 +5293,8 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         data["orchestrator"]["strongest"] = app.config.strongest_preset() or ""
         # And what an empty main orchestrator preset means: a mid-tier one.
         data["dispatcher"]["middle"] = app.config.middle_preset() or ""
+        # What a preset left to its model does with the on-demand tool groups, so the switch can say it.
+        data["on_demand_defaults"] = {pid: on_demand_tool_groups_for(None, preset.model) for pid, preset in app.config.presets.items()}
         return mask_provider_keys(data)
 
     def _keyproxy_origin() -> str:
@@ -5586,7 +5592,7 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         raw = app.config.model_dump(mode="json")
         entry = dict(raw.setdefault("presets", {}).get(preset_id) or ModelPresetConfig().model_dump(mode="json"))
         for key, value in body.model_dump(exclude_unset=True).items():
-            if value is not None:
+            if value is not None or key == "on_demand_tool_groups":
                 entry[key] = value.strip() if isinstance(value, str) else value
         if entry["provider"] not in raw.get("providers", {}):
             raise HTTPException(400, f"provider {entry['provider']!r} is not a configured client")

@@ -51,6 +51,19 @@ export function prefilled(entry: ModelEntry, current: Preset): Preset {
   };
 }
 
+/**
+ * Whether runs on a preset hold the tool groups on demand back: its own switch, else the model's
+ * known behaviour as the host reported it, else on — the host's own default for a model it knows
+ * nothing about.
+ */
+export function onDemandGroups(preset: Pick<Preset, "on_demand_tool_groups">, byModel: boolean | undefined): boolean {
+  if (preset.on_demand_tool_groups === true || preset.on_demand_tool_groups === false) return preset.on_demand_tool_groups;
+  return byModel ?? true;
+}
+
+/** The three positions of the switch, in the order they are offered: the model's own first. */
+export const ON_DEMAND_CHOICES: readonly (boolean | null)[] = [null, true, false];
+
 /** A model id turned into a preset id: the same rule the server accepts (letters, digits, . _ -). */
 export function presetIdFor(provider: string, model: string): string {
   const slug = model.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "");

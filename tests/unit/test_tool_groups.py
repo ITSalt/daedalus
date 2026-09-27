@@ -11,12 +11,13 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from daedalus.config import RuntimeConfig, Settings
+from daedalus.config import ON_DEMAND_GROUPS_OFF, ModelPresetConfig, RuntimeConfig, Settings, on_demand_tool_groups_for
 from daedalus.extensions.api import build_app
 from daedalus.host import tool_groups
 from daedalus.host.session_runner import SessionManager
 from daedalus.stores.database import Database
 from daedalus.tools import TOOL_GROUPS, discover_tools
+from tests.support.models import DEFAULT_PRESET, model_config
 
 H = {"X-Daedalus-Token": "tok"}
 
@@ -172,3 +173,85 @@ async def test_a_group_the_session_may_not_call_is_off(client: httpx.AsyncClient
     # Loading it is asked for and yet brings nothing: the session's policy decides, as for anything carried.
     await manager.load_tool_group_now(state.session.id, "loop")
     assert manager.loaded_groups_for(state) == ()
+
+
+# -- the model's switch --------------------------------------------------------------------------
+
+
+def test_a_model_that_does_not_load_groups_gets_them_while_they_fit_unless_the_session_chose() -> None:
+    config = RuntimeConfig.model_validate({"tools": {"groups": {"docs": {"load": "eager"}, "board": {"load": "lazy"}}}})
+    metadata = {tool_groups.SESSION_LOADS_KEY: {"loop": "lazy"}}
+    loads = tool_groups.resolved_loads(config, metadata, on_demand=False)
+    # Every group on demand, by default or by the settings, goes by the window instead.
+    assert loads["browser"] == loads["scheduling"] == loads["board"] == "auto"
+    assert tool_groups.load_source("browser", config, metadata, on_demand=False) == "model"
+    assert tool_groups.load_source("board", config, metadata, on_demand=False) == "model"
+    # What was never on demand is left as it was, and the session's own choice still wins.
+    assert loads["docs"] == "eager" and tool_groups.load_source("docs", config, metadata, on_demand=False) == "settings"
+    assert loads["agents"] == "auto" and tool_groups.load_source("agents", config, metadata, on_demand=False) == "default"
+    assert loads["loop"] == "lazy" and tool_groups.load_source("loop", config, metadata, on_demand=False) == "session"
+    assert tool_groups.resolved_loads(config, metadata)["browser"] == "lazy"
+
+
+def test_the_presets_switch_counts_for_its_own_model_and_the_models_known_behaviour_otherwise() -> None:
+    assert ON_DEMAND_GROUPS_OFF, "a model measured to do worse with groups on demand is named here"
+    for word in ON_DEMAND_GROUPS_OFF:
+        assert not on_demand_tool_groups_for(None, f"vendor/{word.upper()}-9-large")
+    assert on_demand_tool_groups_for(None, "some-new-model")
+    off_by_model = f"{ON_DEMAND_GROUPS_OFF[0]}-9"
+    assert on_demand_tool_groups_for(ModelPresetConfig(model=off_by_model, on_demand_tool_groups=True), off_by_model)
+    assert not on_demand_tool_groups_for(ModelPresetConfig(model="some-new-model", on_demand_tool_groups=False), "some-new-model")
+    # A provider and model picked by hand run with the default preset, whose switch is about another model.
+    assert on_demand_tool_groups_for(ModelPresetConfig(model=off_by_model, on_demand_tool_groups=False), "some-new-model")
+
+
+async def test_a_run_on_a_model_with_the_switch_off_gets_the_groups_up_front(settings: Settings, db: Database) -> None:
+    off_by_model = f"{ON_DEMAND_GROUPS_OFF[0]}-9"
+    config = model_config()
+    config.presets[DEFAULT_PRESET].model = off_by_model
+    made = SessionManager(settings, config, db=db)
+    await made.start()
+    try:
+        state = await made.create_session("switch", metadata={tool_groups.SESSION_LOADS_KEY: {"loop": "lazy"}})
+        engine = await made._build_engine(state, "run-off")
+        assert engine.config.tool_group_loads["scheduling"] == "auto"
+        assert engine.config.tool_group_loads["loop"] == "lazy"
+        groups = {g["name"]: g for g in made.tool_group_states(state)}
+        assert groups["scheduling"]["source"] == "model" and groups["scheduling"]["load"] == "auto"
+
+        # The operator turns the switch on for this preset: the groups wait on demand again, and the
+        # panel reads the switch before the next run does.
+        config.presets[DEFAULT_PRESET].on_demand_tool_groups = True
+        await made.refresh_on_demand_groups(state)
+        assert made.tool_group_loads_for(state)["scheduling"] == "lazy"
+        engine = await made._build_engine(state, "run-on")
+        assert engine.config.tool_group_loads["scheduling"] == "lazy"
+    finally:
+        await made.close()
+
+
+async def test_a_preset_saves_its_switch_and_null_gives_it_back_to_the_model(settings: Settings, db: Database) -> None:
+    made = SessionManager(settings, model_config(), db=db)
+    await made.start()
+    app = SimpleNamespace(settings=settings, config=made.config, db=db, manager=made, front=None, extensions={}, guard=None, create_session=made.create_session)
+
+    async def save_config(config: RuntimeConfig, *, expected_revision: str | None = None) -> None:
+        made.reload_config(config)
+        app.config = config
+
+    app.save_config = save_config
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=build_app(app, "tok")), base_url="http://test") as client:  # type: ignore[arg-type]
+            body = (await client.put(f"/api/presets/{DEFAULT_PRESET}", json={"on_demand_tool_groups": True}, headers=H)).json()
+            assert body["presets"][DEFAULT_PRESET]["on_demand_tool_groups"] is True
+            assert app.config.presets[DEFAULT_PRESET].on_demand_tool_groups is True
+            # Another field sent alone leaves the switch as it was.
+            await client.put(f"/api/presets/{DEFAULT_PRESET}", json={"label": "Flash"}, headers=H)
+            assert app.config.presets[DEFAULT_PRESET].on_demand_tool_groups is True
+            await client.put(f"/api/presets/{DEFAULT_PRESET}", json={"on_demand_tool_groups": None}, headers=H)
+            assert app.config.presets[DEFAULT_PRESET].on_demand_tool_groups is None
+            view = (await client.get("/api/settings", headers=H)).json()
+            model = app.config.presets[DEFAULT_PRESET].model
+            assert view["on_demand_defaults"][DEFAULT_PRESET] is on_demand_tool_groups_for(None, model)
+    finally:
+        await made.close()

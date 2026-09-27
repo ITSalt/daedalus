@@ -423,6 +423,12 @@ class ModelPresetConfig(BaseModel):
     """Tokens of history a run may hold before compaction; set below the model's real window to keep runs cheap."""
     max_output_tokens: int = Field(default=32_000, ge=1_024, le=1_000_000)
     """Cap on one reply (``max_tokens``); thinking tokens count against it."""
+    on_demand_tool_groups: bool | None = None
+    """Whether the tool groups set to load on demand are held back for runs on this model. ``False`` gives
+    every such group its tools up front ("when it fits"), except where a session chose on demand for a
+    group itself; ``None`` takes the model's known behaviour (:func:`on_demand_tool_groups_for`). Some
+    models load a held-back group when a task needs it; others never look, and do the job with a shell,
+    git or another server's tools instead, which costs more than the definitions saved."""
 
     def display(self, preset_id: str = "") -> str:
         if self.label:
@@ -466,6 +472,27 @@ def max_advertised_tools_for(provider: ProviderConfig | None, model: str) -> int
         return provider.max_advertised_tools
     lowered = model.lower()
     return min((limit for word, limit in KNOWN_TOOL_LIMITS if word in lowered), default=0)
+
+
+ON_DEMAND_GROUPS_OFF: tuple[str, ...] = ("qwen",)
+"""Models that do worse with tool groups held back until asked for, by a word of the model id, as
+``KNOWN_TOOL_LIMITS`` names models by one. Given the choice, Qwen did the job the long way — git in a
+shell for a pull request against itself, a list of subagents for "pause the loop", another server's
+browser — often enough to lose more tasks than the saved definitions are worth, where with the tools in
+front of it it used them. Grok and DeepSeek load the group and do as well either way, for half the input."""
+
+
+def on_demand_tool_groups_for(preset: ModelPresetConfig | None, model: str) -> bool:
+    """Whether runs on ``model`` hold the on-demand groups back: the preset's own choice, else the model's.
+
+    ``preset`` is the one the run was configured from, and its choice counts only while it describes the
+    model that runs — a provider and model picked by hand run with the default preset's settings, and that
+    preset's switch is about another model.
+    """
+    if preset is not None and preset.on_demand_tool_groups is not None and preset.model == model:
+        return preset.on_demand_tool_groups
+    lowered = model.lower()
+    return not any(word in lowered for word in ON_DEMAND_GROUPS_OFF)
 
 
 class PromptConfig(BaseModel):
@@ -2013,6 +2040,7 @@ __all__ = [
     "NotificationsConfig",
     "ModelPresetConfig",
     "KNOWN_TOOL_LIMITS",
+    "ON_DEMAND_GROUPS_OFF",
     "PROVIDER_KINDS",
     "PromptConfig",
     "ProviderConfig",
@@ -2052,4 +2080,5 @@ __all__ = [
     "ORCHESTRATOR_TOOLS",
     "ORCHESTRATOR_ONLY_TOOLS",
     "max_advertised_tools_for",
+    "on_demand_tool_groups_for",
 ]

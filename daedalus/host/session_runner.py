@@ -61,6 +61,7 @@ from daedalus.config import (
     RuntimeConfig,
     Settings,
     max_advertised_tools_for,
+    on_demand_tool_groups_for,
 )
 from daedalus.host import capabilities, launcher_bridge, prompts, tool_groups
 from daedalus.host.checkpoint_retention import CheckpointRetention, RetentionBounds, RetentionReport
@@ -264,6 +265,9 @@ class SessionState:
     what the panel reads after a restart."""
     tool_groups_loaded: set[str] = field(default_factory=set)
     """Groups the current run loaded (``tool_group_loaded``), until the next run starts."""
+    on_demand_groups: bool = True
+    """Whether the model this session runs on holds the on-demand groups back: set when a run's engine is
+    built and when the panel is read (:meth:`SessionManager.refresh_on_demand_groups`)."""
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     """Serialises run starts against history rewrites (compaction)."""
     submit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -2942,6 +2946,9 @@ class SessionManager:
         # so it is read once here, from the same rungs the chain is built on, and not re-derived later
         # from a configuration the operator may have changed while the run was going.
         state.configured_model = self._rung_label(rungs[0][0], rungs[0][1])
+        # The primary's switch: a fallback runs on the surface the primary was given, as the tool limit
+        # is not, because a surface too big is refused and one decided for another model is only worse.
+        state.on_demand_groups = on_demand_tool_groups_for(preset, rungs[0][1]) if rungs else True
         state.effective_model = ""
         state.model_change_reason = ""
         state.model_stamps.clear()
@@ -4253,8 +4260,23 @@ class SessionManager:
         return chosen
 
     def tool_group_loads_for(self, state: SessionState) -> dict[str, str]:
-        """How each host group reaches this session's next run: the settings, then its own choice."""
-        return tool_groups.resolved_loads(self.config, state.metadata)
+        """How each host group reaches this session's next run: the settings, its model, then its own choice."""
+        return tool_groups.resolved_loads(self.config, state.metadata, on_demand=state.on_demand_groups)
+
+    async def refresh_on_demand_groups(self, state: SessionState) -> None:
+        """Read the session's model's switch for on-demand groups, as its next run would.
+
+        The panel is read between runs, after a restart or a change of model, when the flag the last
+        engine build left behind describes another model or none.
+        """
+        try:
+            rungs, preset = self.resolve_model(await self.live.load(state.session.id))
+        except RuntimeError:
+            # No model configured (NoModelConfigured is a RuntimeError, and a test that reloads the
+            # config module makes a second class of it), so no switch to read; the panel still answers.
+            return
+        if rungs:
+            state.on_demand_groups = on_demand_tool_groups_for(preset, rungs[0][1])
 
     @staticmethod
     def _stored_surface(state: SessionState) -> dict[str, str]:
@@ -4333,7 +4355,7 @@ class SessionManager:
                 "description": TOOL_GROUPS[name].description,
                 "tools": len(admitted),
                 "load": load,
-                "source": tool_groups.load_source(name, self.config, state.metadata),
+                "source": tool_groups.load_source(name, self.config, state.metadata, on_demand=state.on_demand_groups),
                 "state": current,
                 "pending": pending,
             })
@@ -4357,6 +4379,7 @@ class SessionManager:
             else:
                 meta.pop(tool_groups.SESSION_LOADS_KEY, None)
         await self.sessions.update_metadata(session_id, state.session.metadata)
+        await self.refresh_on_demand_groups(state)
         return self.tool_group_states(state)
 
     async def load_tool_group_now(self, session_id: str, group: str) -> list[dict[str, Any]]:
@@ -4378,6 +4401,7 @@ class SessionManager:
             for meta in (state.metadata, state.session.metadata):
                 meta[tool_groups.LOAD_NOW_KEY] = list(queued)
             await self.sessions.update_metadata(session_id, state.session.metadata)
+        await self.refresh_on_demand_groups(state)
         return self.tool_group_states(state)
 
     def notes_for(self, state: SessionState) -> str:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Preset } from "./api";
-import { BLANK, orchestratorPreset, prefilled, presetIdFor, priceFor, retyped } from "./models";
+import { BLANK, ON_DEMAND_CHOICES, onDemandGroups, orchestratorPreset, prefilled, presetIdFor, priceFor, retyped } from "./models";
 
 const OPUS: Preset = {
   provider: "openrouter",
@@ -82,5 +82,18 @@ describe("the project orchestrator's default model in Settings", () => {
     expect(orchestratorPreset(presets, "gone", "opus")).toBe("opus");
     expect(orchestratorPreset(presets, undefined, undefined)).toBe("fast");
     expect(orchestratorPreset({}, "", "")).toBe("");
+  });
+});
+
+describe("tool groups on demand for a preset", () => {
+  it("follows the preset's own switch, else what the host knows of the model, else on", () => {
+    expect(onDemandGroups({ on_demand_tool_groups: false }, true)).toBe(false);
+    expect(onDemandGroups({ on_demand_tool_groups: true }, false)).toBe(true);
+    expect(onDemandGroups({ on_demand_tool_groups: null }, false)).toBe(false);
+    expect(onDemandGroups({}, undefined)).toBe(true);
+  });
+
+  it("offers the model's own behaviour first, then the two explicit answers", () => {
+    expect(ON_DEMAND_CHOICES).toEqual([null, true, false]);
   });
 });

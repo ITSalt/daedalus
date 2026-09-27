@@ -15,7 +15,7 @@ import { ComponentsTab } from "./Components";
 import { DependenciesTab } from "./Dependencies";
 import { PromptChange } from "./PromptChange";
 import { AddModel } from "./AddModel";
-import { REASONING_EFFORTS, orchestratorPreset } from "../models";
+import { ON_DEMAND_CHOICES, REASONING_EFFORTS, onDemandGroups, orchestratorPreset } from "../models";
 import { mainPreset } from "../main/model";
 import { Sheet } from "../dialogs";
 import { t } from "../i18n";
@@ -114,9 +114,10 @@ function Toggle({ on, onClick, children, title, disabled }: { on: boolean; onCli
 }
 
 /** One model: a compact line to scan, an expanded panel to edit. */
-function PresetRow({ id, p, isDefault, inChain, providers, onDefault, onChain, onPatch, onDelete, onLookup }: {
+function PresetRow({ id, p, onDemandByModel, isDefault, inChain, providers, onDefault, onChain, onPatch, onDelete, onLookup }: {
   id: string;
   p: Preset;
+  onDemandByModel?: boolean;
   isDefault: boolean;
   inChain: boolean;
   providers: string[];
@@ -144,6 +145,7 @@ function PresetRow({ id, p, isDefault, inChain, providers, onDefault, onChain, o
           {!isDefault && inChain && <span className="pill">{t("settings.preset.fallback")}</span>}
           <span className="pill">{p.thinking ? t("settings.preset.think", { effort: t(`add.effort.${p.reasoning_effort}`) }) : t("settings.preset.nothink")}</span>
           {p.images && <span className="pill">{t("settings.preset.images")}</span>}
+          {!onDemandGroups(p, onDemandByModel) && <span className="pill" title={t("settings.preset.ondemand.title")}>{t("settings.preset.ondemand.offpill")}</span>}
           <span className="pill">{Math.round(p.context_window / 1000)}k</span>
         </div>
         <div className="mactions">
@@ -190,6 +192,14 @@ function PresetRow({ id, p, isDefault, inChain, providers, onDefault, onChain, o
               ))}
             </div>
             <Toggle on={p.images} onClick={() => onPatch({ images: !p.images })} title={t("settings.preset.images.title")}>{t("settings.preset.imagestoggle", { state: t(p.images ? "common.on" : "common.off") })}</Toggle>
+            <span className="sub" title={t("settings.preset.ondemand.title")}>{t("settings.preset.ondemand")}</span>
+            <div className="segmented inline" role="group" aria-label={t("settings.preset.ondemand")} title={t("settings.preset.ondemand.title")}>
+              {ON_DEMAND_CHOICES.map((choice) => (
+                <button key={String(choice)} className={(p.on_demand_tool_groups ?? null) === choice ? "on" : ""} onClick={() => onPatch({ on_demand_tool_groups: choice })}>
+                  {choice === null ? t("settings.preset.ondemand.bymodel", { state: t(onDemandByModel ?? true ? "common.on" : "common.off") }) : t(choice ? "common.on" : "common.off")}
+                </button>
+              ))}
+            </div>
             {!isDefault && <Toggle on={inChain} onClick={onChain} title={t("settings.preset.fallback.title")}>{t(inChain ? "settings.preset.isfallback" : "settings.preset.usefallback")}</Toggle>}
             <span className="sub mono mid">{id}</span>
           </div>
@@ -1120,6 +1130,7 @@ export function SettingsScreen({ toast, section }: { toast: (t: string) => void;
                     key={id}
                     id={id}
                     p={p}
+                    onDemandByModel={s.on_demand_defaults?.[id]}
                     isDefault={s.model.preset === id}
                     inChain={(s.model.chain ?? []).includes(id)}
                     providers={providerIds}

@@ -1,9 +1,13 @@
 """The host's tool groups as the operator sees them: how each reaches a run, what it costs, who uses it.
 
-A group's load mode comes from three places, the later winning: the default its declaration carries
-(:data:`daedalus.tools.TOOL_GROUPS`), the operator's ``[tools.groups.<name>] load``, and a session's own
-choice in its metadata (``tool_group_loads``). The resolved mapping is handed to the core per run as
-``tool_group_loads``; the core alone decides from it what the first request advertises.
+A group's load mode comes from four places, the later winning: the default its declaration carries
+(:data:`daedalus.tools.TOOL_GROUPS`), the operator's ``[tools.groups.<name>] load``, the model the run is
+on (a model with on-demand groups off turns every ``lazy`` into ``auto``;
+:func:`daedalus.config.on_demand_tool_groups_for`), and a session's own choice in its metadata
+(``tool_group_loads``). The model comes after the settings because the settings speak for every model
+and the switch for one; the session comes last because it is the operator's choice for this chat, made
+knowing which model it runs. The resolved mapping is handed to the core per run as ``tool_group_loads``;
+the core alone decides from it what the first request advertises.
 """
 
 from __future__ import annotations
@@ -56,17 +60,24 @@ def session_loads(metadata: Mapping[str, Any]) -> dict[str, str]:
     return {str(name): str(load) for name, load in raw.items() if str(name) in TOOL_GROUPS and load in GROUP_LOADS}
 
 
-def resolved_loads(config: RuntimeConfig, metadata: Mapping[str, Any]) -> dict[str, str]:
-    """What a run of this session is given as ``tool_group_loads``: settings, then the session's own."""
+def resolved_loads(config: RuntimeConfig, metadata: Mapping[str, Any], *, on_demand: bool = True) -> dict[str, str]:
+    """What a run of this session is given as ``tool_group_loads``: settings, the model, the session's own.
+
+    ``on_demand`` is the model's switch; off, a group on demand is advertised while it fits instead.
+    """
     loads = configured_loads(config)
+    if not on_demand:
+        loads = {name: "auto" if load == "lazy" else load for name, load in loads.items()}
     loads.update(session_loads(metadata))
     return loads
 
 
-def load_source(name: str, config: RuntimeConfig, metadata: Mapping[str, Any]) -> str:
-    """Which layer decided a group's mode: ``session``, ``settings`` or ``default``."""
+def load_source(name: str, config: RuntimeConfig, metadata: Mapping[str, Any], *, on_demand: bool = True) -> str:
+    """Which layer decided a group's mode: ``session``, ``model``, ``settings`` or ``default``."""
     if name in session_loads(metadata):
         return "session"
+    if not on_demand and configured_loads(config).get(name) == "lazy":
+        return "model"
     if name in config.tools.groups:
         return "settings"
     return "default"

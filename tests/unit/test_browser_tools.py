@@ -359,7 +359,7 @@ async def test_a_scripted_model_shops_to_the_payment_and_stops_there(settings: S
 
         first = said(provider.requests[0])
         # Held back: one catalogue line, and neither the tools nor their rules on the first request.
-        assert "- browser: Drive a real browser" in first and "The browser: BrowserOpen" not in first
+        assert "- browser: A real browser you drive" in first and "The browser: BrowserOpen" not in first
         assert "BrowserOpen" not in {t.name for t in provider.requests[0].tools or ()}
         second = said(provider.requests[1])
         assert "Not run yet" in second and "The browser: BrowserOpen" in second and "never type passwords" in second

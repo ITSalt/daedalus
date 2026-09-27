@@ -81,8 +81,11 @@ GROUP_LOADS: tuple[GroupLoad, ...] = ("eager", "auto", "lazy")
 @dataclass(frozen=True, slots=True)
 class ToolGroupSpec:
     description: str
-    """The line the core's catalogue shows while the group is held back: what the group is FOR, and
-    the tool a model would otherwise replace with a workaround."""
+    """The line the core's catalogue shows while the group is held back: what the group is FOR, in the
+    words the operator asks for it with, the tool a model would otherwise replace with a workaround, and
+    that workaround named as the thing not to do. A description that only said what the tools do was
+    not matched to "pause the loop" or "open a PR against yourself", and the model did the job with git,
+    cron or another server's browser instead."""
     load: GroupLoad
     """The default the operator's ``[tools.groups.<name>] load`` and a session's own choice override."""
 
@@ -99,8 +102,10 @@ TOOL_GROUPS: dict[str, ToolGroupSpec] = {
         "auto",
     ),
     "browser": ToolGroupSpec(
-        "Drive a real browser: open pages, click and type, screenshots, downloads, hand-over to the operator for a "
-        "sign-in or a payment; for sites that need JavaScript or a login. Use WebFetch for plain pages",
+        "A real browser you drive, for sites that need JavaScript or a login: open pages, click and type, look at "
+        "how a page looks (BrowserLook), downloads (BrowserDownload), hand-over to the operator for a sign-in or a "
+        "payment. Not a Puppeteer or Playwright MCP server, not a headless browser in the shell; WebFetch for plain "
+        "pages",
         "lazy",
     ),
     "docs": ToolGroupSpec(
@@ -114,7 +119,8 @@ TOOL_GROUPS: dict[str, ToolGroupSpec] = {
         "lazy",
     ),
     "loop": ToolGroupSpec(
-        "The standing task of a loop agent: set the next wake-up, pause, resume, stop, read its status",
+        "THIS session's loop, whenever the operator says 'the loop' or 'цикл': its status, the next wake-up, pause, "
+        "resume, stop (LoopStatus, LoopNext, LoopPause, LoopResume, LoopStop)",
         "lazy",
     ),
     "mcp": ToolGroupSpec(
@@ -126,13 +132,15 @@ TOOL_GROUPS: dict[str, ToolGroupSpec] = {
         "lazy",
     ),
     "scheduling": ToolGroupSpec(
-        "Work that runs later or on an event: one-shot and recurring schedules (ScheduleCreate) and standing intents "
-        "that fire on an inbound webhook or message (IntentCreate)",
+        "Anything that must happen later, on a timer, or when something arrives ('remind me', 'every Monday', "
+        "'when a webhook comes in'): one-shot and recurring schedules (ScheduleCreate), standing intents that fire "
+        "on an inbound webhook or message (IntentCreate). Not cron, sleep or a service",
         "lazy",
     ),
     "self_development": ToolGroupSpec(
-        "Change your own code: a worktree of your repositories, then a pull request or an applied change, a "
-        "rebuild or a rollback",
+        "Any change to yourself, your code, prompts or skills (repositories 'bot' and 'core'): a worktree "
+        "(SelfWorkspace), then a pull request (SelfPropose) or an applied change, a rebuild, a rollback. Never git "
+        "clone or push, or gh pr, for your own repositories yourself",
         "lazy",
     ),
     "services": ToolGroupSpec(
