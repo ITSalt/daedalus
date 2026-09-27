@@ -26,7 +26,7 @@ import { SessionDetails } from "../details";
 import { JobsTab } from "../jobs";
 import { navigate, pathFor, projectHome, projectSessionPath, useRoute } from "../router";
 import { useMedia } from "../shell";
-import { Windowed } from "../virtual";
+import { Windowed, stillAtEnd } from "../virtual";
 import { DICT, plural, t } from "../i18n";
 import { groupDetail, groupName, searchedGroup } from "../toolgroups";
 import { usePresenceScope } from "../presence";
@@ -158,6 +158,8 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const userScrolling = useRef(false);
+  /** Where the list was at the last scroll event: a move up from here is the reader leaving the end. */
+  const lastTop = useRef(0);
   const [atBottom, setAtBottom] = useState(true);
   const [preview, setPreview] = useState<PreviewSource | null>(null);
   const [filesGeneration, setFilesGeneration] = useState(0);
@@ -793,7 +795,10 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
     const el = scroller.current;
     if (!el) return;
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    stick.current = gap < 48;
+    stick.current = stillAtEnd({ pinned: stick.current, gap, top: el.scrollTop, lastTop: lastTop.current, hand: userScrolling.current });
+    lastTop.current = el.scrollTop;
+    // Still pinned with a gap: the history grew under the pin before this event came. Take the end again.
+    if (stick.current && gap >= 48) el.scrollTop = el.scrollHeight;
     setAtBottom(gap < 160);
     // Near the top of what was loaded: ask for the page before it, if the API has one. A history
     // short enough to have arrived whole has no page before it and is never asked for one.

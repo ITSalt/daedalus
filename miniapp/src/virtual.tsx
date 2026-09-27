@@ -30,6 +30,18 @@ export function scrollParent(el: HTMLElement | null): HTMLElement | null {
   return candidate ?? ((document.scrollingElement as HTMLElement | null) ?? null);
 }
 
+/** Whether a conversation stays pinned to its end after a scroll event.
+ *
+ *  The end is taken again whenever the reader is near it. It is let go only when the reader moved up,
+ *  or has a finger or a wheel on the list. A scroll that went down or nowhere is the pin's own: the
+ *  event arrives after the assignment, and a long history that was still taking its height in between
+ *  — an orchestrator's chat, windowed, measuring its turns — read as the reader leaving the end, so it
+ *  opened in the middle, every time, with nothing left pinning it. */
+export function stillAtEnd({ pinned, gap, top, lastTop, hand }: { pinned: boolean; gap: number; top: number; lastTop: number; hand: boolean }): boolean {
+  if (gap < 48) return true;
+  return pinned && !hand && top >= lastTop - 1;
+}
+
 export type WindowedProps = {
   /** One stable key per item, in order. */
   keys: string[];
