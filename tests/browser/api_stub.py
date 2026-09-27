@@ -594,7 +594,9 @@ class BoardStub:
             launch = {"state": "queued", "position": 1} if row["assignee_staff_id"] else None
             return 201, {**row, "launch": launch}
         if path == "/api/board" and method == "GET":
-            return 200, [t for t in self.tasks if "include_done=1" in query or t["status"] not in ("done", "dropped")]
+            # The host names a project's task's project on this listing, as the Board screen's card reads it.
+            listed = [t for t in self.tasks if "include_done=1" in query or t["status"] not in ("done", "dropped")]
+            return 200, [{**t, "project_name": self.project["name"] if t.get("project_id") else None} for t in listed]
         if path.startswith("/api/board/"):
             parts = path.split("/")
             row = next((t for t in self.tasks if t["id"] == parts[3]), None)

@@ -27,7 +27,15 @@ type Task = {
   notes: string;
   created_at: string;
   updated_at: string;
+  // A project's task: its four-part brief, and the names the host adds so the card can say whose
+  // project it is and who does it. A task outside every project has none of them.
+  brief?: Partial<Record<BriefField, string>>;
+  project_id?: string | null;
+  project_name?: string | null;
+  assignee?: { id: string; name: string; color: string } | null;
 };
+type BriefField = "objective" | "deliverable" | "boundaries" | "done_when";
+const BRIEF_FIELDS: BriefField[] = ["objective", "deliverable", "boundaries", "done_when"];
 
 const COLUMNS: Status[] = ["todo", "doing", "review", "blocked"];
 const FINISHED: Status[] = ["done", "dropped"];
@@ -187,8 +195,10 @@ function TaskRow({ t, owner, onOpen, onDragStart, onDragEnd, dragging }: { t: Ta
         {next && <div className="erow-meta"><span className="faint">{t2("board.next")}</span><span>{next.text}</span></div>}
         <div className="erow-meta">
           {t.priority <= 2 && <span className={`chip ${t.priority === 1 ? "bad" : "attn"}`}>P{t.priority}</span>}
+          {t.assignee && <span>{t.assignee.name}</span>}
+          {t.assignee && owner && <span className="sep">·</span>}
           {owner && <span>{owner}</span>}
-          {t.depends_on.length > 0 && owner && <span className="sep">·</span>}
+          {t.depends_on.length > 0 && (owner || t.assignee) && <span className="sep">·</span>}
           {t.depends_on.length > 0 && <span>{plural("board.after", t.depends_on.length)}</span>}
         </div>
       </div>
@@ -226,6 +236,23 @@ function TaskSheet({ t, owner, board, onClose, onMove, onCheck, onRemove, onOpen
       <div className="sub" style={{ marginBottom: 10 }}>
         {t.origin_session_id ? <>{t2("board.of")} <button className="linkbtn" onClick={() => onOpenSession(t.origin_session_id!)}>{board ?? t2("board.of.gone")}</button></> : t2("board.everyone")}
       </div>
+      {(t.project_id || t.assignee) && (
+        <div className="erow-meta board-task-where" style={{ marginBottom: 10 }}>
+          {t.assignee && <span>{t2("board.assignee", { name: t.assignee.name })}</span>}
+          {t.assignee && t.project_id && <span className="sep">·</span>}
+          {t.project_id && (
+            <button className="linkbtn" onClick={() => navigate(projectPagePath(t.project_id!, "board", { task: t.id }))}>
+              {t2("board.on.project", { name: t.project_name ?? t.project_id })}
+            </button>
+          )}
+        </div>
+      )}
+      {BRIEF_FIELDS.filter((field) => (t.brief?.[field] ?? "").trim()).map((field) => (
+        <section key={field} className="sheet-section board-task-brief">
+          <div className="sheet-section-title">{t2(`pboard.brief.${field}`)}</div>
+          <div className="proposal-text">{t.brief![field]}</div>
+        </section>
+      ))}
       {t.acceptance && (
         <section className="sheet-section">
           <div className="sheet-section-title">{t2("board.acceptance")}</div>
@@ -251,7 +278,7 @@ function TaskSheet({ t, owner, board, onClose, onMove, onCheck, onRemove, onOpen
       )}
       {t.notes && (
         <section className="sheet-section">
-          <div className="sheet-section-title">{t2("board.notes")}</div>
+          <div className="sheet-section-title">{t2(t.project_id ? "board.history" : "board.notes")}</div>
           <pre className="inbox-text">{t.notes}</pre>
         </section>
       )}

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, cast
 from protocore.runtime.events.envelope import TurnEvent
 from protocore.runtime.events.types import EventType
 
+from daedalus.extensions.board import NOTES_MAX_CHARS
 from daedalus.extensions.notifications import ActionConflict, ActionOutcome, ActionRefused, Draft
 from daedalus.harness.capabilities import CAPABILITIES
 from daedalus.harness.contract import mcp_server, standing_rule
@@ -79,6 +80,8 @@ FIRST_PUMP_SECONDS = 20.0
 """After a start, the queue waits this long before launching what was assigned before the restart:
 the host first continues the runs it left behind and refuses new ones meanwhile."""
 NOTE_MAX = 2000
+RESULT_MAX = 1500
+"""How much of a done report is kept on its card: the summary, not the whole transcript of the work."""
 BASIS_MIN = 12
 """The least a quoted allowance may be: a line of the brief, not a word that happens to occur in it."""
 
@@ -374,6 +377,30 @@ class Team:
                 payload["assignee_staff_id"] = moved.assignee_staff_id
             await self.publish("task.moved", payload, project_id=moved.project_id)
         return moved
+
+    async def hand_in_to(self, task: BoardTask, worktree: Worktree | None) -> str:
+        """Where a task goes when its member reports it done: review, or straight to done.
+
+        Review is the operator's column: it is for what they have to look at — a branch to merge, or
+        a task they posted themselves. A task the orchestrator wrote and handed out without a branch
+        is the orchestrator's to judge, and it reads the report in any case; parking it in review made
+        the column a heap of every round of every conversation with a member, none of which the
+        operator was ever asked about, and nothing ever took them out. A revision reopens the same
+        card (``Assign(task_id=…)``), so going to done loses nothing.
+        """
+        if worktree is not None or task.branch:
+            return "review"
+        row = await self.manager.db.fetchone("SELECT origin_session_id FROM board_tasks WHERE id = ?", (task.id,))
+        return "done" if row is not None and row["origin_session_id"] else "review"
+
+    async def record_result(self, task: BoardTask, member: Staff, note: str) -> None:
+        """Keep what a member reported on its card, so the card says what came of the work and not only
+        what was asked. The latest result is enough to read; the event log keeps every one."""
+        line = f"[{_now()[:16].replace('T', ' ')}] result from {member.name}: " + " ".join(note.split())[:RESULT_MAX]
+        await self.manager.db.execute(
+            "UPDATE board_tasks SET notes = substr(CASE WHEN notes = '' THEN ? ELSE notes || char(10) || ? END, ?), updated_at = ? WHERE id = ?",
+            (line, line, -NOTES_MAX_CHARS, _now(), task.id),
+        )
 
     async def _set_assignee(self, task: BoardTask, staff_id: str | None, *, actor: str, error: str = "") -> None:
         await self.manager.db.execute("UPDATE board_tasks SET assignee_staff_id = ?, updated_at = ? WHERE id = ?", (staff_id, _now(), task.id))
@@ -1262,6 +1289,8 @@ class Team:
         elif event.type in ("staff.status", "terminal.exited"):
             if event.type == "terminal.exited" or event.payload.get("status") in ("exited", "idle", "turn_done_unseen", "error"):
                 self.queue.pump_soon(event.project_id if event.type == "staff.status" else None)
+            if event.type == "staff.status" and event.staff_id and event.payload.get("status") in ("idle", "turn_done_unseen", "error"):
+                await self._one_off_done(event.staff_id)
 
     async def _task_finished(self, task_id: str) -> None:
         """A task done or dropped: nobody waits to start it, and a one-off helper goes with it."""
@@ -1277,6 +1306,11 @@ class Team:
             return
         live = await self.live_of(member)
         if live is not None and live.session.task_id == task.id:
+            if live.session.status == "working":
+                # A helper's own Report(done) finishes its task in the middle of its turn; stopping
+                # it there cuts off the answer to that very call. It goes when the turn ends. Only a
+                # turn in progress waits: one starting, asking or silent has nothing to finish.
+                return
             await self._end(live, f"its task was {task.status}", stop=True)
         try:
             await self.manager.staff.archive(member.id, by="system")
@@ -1284,6 +1318,18 @@ class Team:
         except StaffBusy:
             logger.info("one-off %s still has a session; left on the team", member.name)
         self.queue.pump_soon(task.project_id)
+
+    async def _one_off_done(self, staff_id: str) -> None:
+        """A one-off helper whose turn ended on a task already finished goes now (see ``_task_finished``)."""
+        member = await self.manager.staff.get(staff_id)
+        if member is None or not member.one_off or not member.active:
+            return
+        live = await self.live_of(member)
+        if live is None or not live.session.task_id:
+            return
+        task = await self.task(live.session.task_id)
+        if task is not None and task.status in FINISHED_TASK:
+            await self._task_finished(task.id)
 
     # -- the clock -----------------------------------------------------------------------------------
 
@@ -1618,9 +1664,17 @@ class Ingress:
                     raise RuntimeError(f"the worktree could not be checked: {exc}") from exc
                 if status.dirty:
                     raise ValueError(f"{worktree.path} has uncommitted changes; commit them on {worktree.branch} and report again")
+            if task is not None:
+                await self.team.record_result(task, live.staff, note)
             if task is not None and task.status in ("doing", "todo", "blocked"):
-                await self.team._move_task(task, "review", actor="staff", merge_state="proposed" if worktree is not None else "")
-                told += f"; task {task.id} is in review"
+                to = await self.team.hand_in_to(task, worktree)
+                await self.team._move_task(task, to, actor="staff", merge_state="proposed" if worktree is not None else "")
+                board = self.team.app.extensions.get("board")
+                if to == "done" and board is not None:
+                    # The board's own moves promote what waited on a finished task; this move is the
+                    # team's, and without this the tasks after it would wait for a move nobody makes.
+                    await board._promote_dependents()
+                told += f"; task {task.id} is in review" if to == "review" else f"; task {task.id} is done, and the orchestrator reads your report"
         if remember and remember.strip():
             await self.manager.staff.append_notes(live.staff.id, remember.strip())
             told += "; noted for your next sessions"

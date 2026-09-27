@@ -127,8 +127,8 @@ async def team(context: ToolContext, staff: str | None = None, concurrency: int 
         "The project's board. op='list' (open tasks; status narrows it), 'get' (task_id: brief, branch, notes), "
         "'create' (title and the four brief parts: objective, deliverable, boundaries, done_when; priority 1-5, "
         "depends_on, assignee to hand it over at once), 'update' (task_id and what changes, assignee='' unassigns), "
-        "'move' (task_id, status: todo|doing|review|blocked|dropped). A task with an unmerged branch reaches done only "
-        "through the operator's review."
+        "'move' (task_id, status: todo|doing|review|done|blocked|dropped). A task with an unmerged branch reaches done "
+        "only through the operator's review; review is for what the operator has to look at."
     ),
 )
 async def tasks(
@@ -369,7 +369,9 @@ async def dismiss(context: ToolContext, staff: str, release: bool = False, keep_
 @tool(
     name="Assign",
     description=(
-        "Hand a member a task: task_id of a task on the board, or title plus the brief for a new one. The brief has "
+        "Hand a member a task: task_id of a task on the board, or title plus the brief for a new one. A revision or "
+        "the next step of work a member just handed in is the same task: pass its task_id (it is reopened, its history "
+        "kept), and a new title given right after a hand-in continues that member's card too. The brief has "
         "four parts, each a real sentence, on the task or given here: objective (what and why), deliverable (what "
         "exists when done), boundaries (where to work, what not to touch), done_when (a check anyone can run). "
         "folder, priority (1 first … 5) and depends_on are optional. files: handles (att:…) or paths in the project's "

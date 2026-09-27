@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from daedalus.extensions.orchestrator_ops import Refused, _folder
@@ -29,6 +31,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+HANDED_IN = ("review", "done", "dropped")
+"""A task whose member is finished with it: another Assign of it opens its next round."""
+FOLLOW_UP_WINDOW = timedelta(hours=2)
+"""How soon after a member handed a card in a new assignment to them counts as the next round of it."""
+ROUND_RE = re.compile(r"\] round \d+ begins")
+"""A round's line in a card's notes, as ``_round_note`` writes it after the board's timestamp."""
 CONTRACT_FIELDS = ("objective", "deliverable", "boundaries", "done_when")
 CONTRACT_MIN = 8
 """The least each part of a task's brief may be: enough to be a sentence, so "tbd" is not a contract."""
@@ -275,13 +283,22 @@ async def assign(
     given = {k: v.strip() for k, v in (("objective", objective), ("deliverable", deliverable), ("boundaries", boundaries), ("done_when", done_when)) if v is not None and v.strip()}
     target = _folder(project, folder) if folder else None
     existing: dict[str, Any] | None = None
+    continued = False
     if task_id:
         try:
             existing = await board.get(task_id, actor=session_id)
         except KeyError as exc:
             raise Refused(f"no task {task_id} on {project.name}'s board; Tasks() lists them") from exc
+        if existing["status"] in HANDED_IN and existing.get("branch"):
+            raise Refused(
+                f"task {task_id} has work on branch {existing['branch']}, which the operator reviews and merges; "
+                "for more work on it, create a new task"
+            )
     elif not (title or "").strip():
         raise Refused("Assign needs a task_id, or a title and the four parts of a brief for a new task")
+    else:
+        existing = await _follow_up_of(orch, project, member, session_id, depends_on=depends_on, folder=target)
+        continued = existing is not None
     # Checked before anything is written, so a refused hand-over leaves no half-briefed task behind.
     merged = {k: str((existing or {}).get("brief", {}).get(k) or "").strip() for k in CONTRACT_FIELDS}
     merged.update(given)
@@ -294,6 +311,14 @@ async def assign(
     try:
         if existing is None:
             task = await board.add(title=str(title).strip(), session_id=session_id, brief=merged, depends_on=depends_on, priority=int(priority or 3))
+        elif existing["status"] in HANDED_IN:
+            # The next round of work already on the board: the same card is reopened with the new brief,
+            # and the round it replaces is kept in its notes, rather than a new card per round.
+            renamed = (title or "").strip()
+            renamed = renamed if renamed and renamed != existing["title"] else None
+            task = await board.update(
+                existing["id"], actor=session_id, status="todo", note=_round_note(existing), title=renamed, brief=given or None, depends_on=depends_on, priority=priority,
+            )
         else:
             task = existing
             if given or depends_on is not None or priority is not None:
@@ -317,10 +342,57 @@ async def assign(
         raise Refused(f"no task {task['id']} on {project.name}'s board") from exc
     except StaffError as exc:
         raise Refused(f"task {task['id']} stays on the board, unstarted: {exc}") from exc
+    lead = ""
+    if continued:
+        lead = (
+            f"This continues {member.name}'s task {task['id']}, which they handed in a moment ago, as its next round on the same card. "
+            "For unrelated work, create the task with Tasks(op='create') and Assign its task_id. "
+        )
     if launched.get("state") == "started":
-        return f"{member.name} started on {task['id']} \"{task['title']}\"" + await _delivered_note(orch, task["id"], handed)
+        return lead + f"{member.name} started on {task['id']} \"{task['title']}\"" + await _delivered_note(orch, task["id"], handed)
     waits = " The files are copied to them when they start." if handed else ""
-    return f"{member.name} will start {task['id']} \"{task['title']}\" when it is their turn: queue position {launched.get('position')} — {launched.get('detail')}{waits}"
+    return lead + f"{member.name} will start {task['id']} \"{task['title']}\" when it is their turn: queue position {launched.get('position')} — {launched.get('detail')}{waits}"
+
+
+async def _follow_up_of(orch: Orchestrators, project: Project, member: Staff, session_id: str, *, depends_on: list[str] | None, folder: ProjectFolder | None) -> dict[str, Any] | None:
+    """The card a new assignment continues, when it is plainly the next round of the same work.
+
+    An orchestrator talks to a member in rounds — assess, plan, revise the plan, fold in the
+    operator's answers, implement — and gave every round a title and so a card of its own: one member
+    left thirteen cards in two days, each a step of the same two pieces of work. A new assignment is
+    taken as the next round when the member's latest card is one the orchestrator wrote, has no branch,
+    was handed in within ``FOLLOW_UP_WINDOW``, and nothing waits on it; the call itself waits on
+    nothing and names no other folder. Anything else gets a card of its own.
+    """
+    row = await orch.manager.db.fetchone(
+        "SELECT id, status, branch, origin_session_id, folder_id, updated_at FROM board_tasks WHERE project_id = ? AND assignee_staff_id = ? ORDER BY created_at DESC LIMIT 1",
+        (project.id, member.id),
+    )
+    if row is None or depends_on or row["status"] not in HANDED_IN or row["branch"] or not row["origin_session_id"]:
+        return None
+    if folder is not None and row["folder_id"] and row["folder_id"] != folder.id:
+        return None
+    try:
+        handed_in = datetime.fromisoformat(row["updated_at"])
+    except (TypeError, ValueError):
+        return None
+    handed_in = handed_in if handed_in.tzinfo else handed_in.replace(tzinfo=UTC)
+    if datetime.now(UTC) - handed_in > FOLLOW_UP_WINDOW:
+        return None
+    if await orch.manager.db.fetchone("SELECT 1 FROM board_tasks WHERE depends_on LIKE ?", (f'%"{row["id"]}"%',)) is not None:
+        return None
+    try:
+        return await orch.board.get(row["id"], actor=session_id)  # type: ignore[no-any-return]
+    except KeyError:
+        return None
+
+
+def _round_note(task: dict[str, Any]) -> str:
+    """The history line a reopened card keeps: which round begins and what the one before it asked,
+    since the new brief replaces the old one on the card."""
+    rounds = len(ROUND_RE.findall(str(task.get("notes") or ""))) + 2
+    before = " ".join(str(task.get("brief", {}).get("objective") or "").split())[:300]
+    return f"round {rounds} begins, reopened from {task['status']} by the orchestrator; round {rounds - 1} was \"{task['title']}\"" + (f": {before}" if before else "")
 
 
 async def _files(orch: Orchestrators, project: Project, session_id: str, refs: list[str] | None) -> list[StoredFile]:

@@ -4037,8 +4037,18 @@ def build_app(app: Application, api_token: str) -> FastAPI:
 
     @api.get("/api/board")
     async def board_list(include_done: int = 0, project: str | None = None, _: dict[str, Any] = Depends(auth)) -> list[dict[str, Any]]:
-        """Every task, or with ``project`` one project's board: the shell's project lens over the Board screen."""
-        return await _board().list(None, include_done=bool(include_done), project_id=project or None)
+        """Every task, or with ``project`` one project's board: the shell's project lens over the Board screen.
+
+        A project's task carries its project's and its assignee's names: the screen's card is the only
+        place it is read there, and a card that names neither the work's project nor who did it read as
+        an empty title."""
+        tasks = await _board().list(None, include_done=bool(include_done), project_id=project or None)
+        projects = {r["id"]: r["name"] for r in await manager.db.fetchall("SELECT id, name FROM projects")}
+        staff = {r["id"]: {"id": r["id"], "name": r["name"], "color": r["color"]} for r in await manager.db.fetchall("SELECT id, name, color FROM staff")}
+        for task in tasks:
+            task["project_name"] = projects.get(task.get("project_id") or "")
+            task["assignee"] = staff.get(task.get("assignee_staff_id") or "")
+        return tasks
 
     async def launch(task: dict[str, Any]) -> dict[str, Any] | None:
         """Hand a newly assigned task to the staff runtime, when one is installed, and say what it did.

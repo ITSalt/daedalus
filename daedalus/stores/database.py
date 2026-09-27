@@ -1517,6 +1517,35 @@ CREATE TABLE staff_allow_rules (
 """)
 
 
+# Review used to collect every task a member reported done, and a task the orchestrator wrote and
+# handed out without a branch never left it: the orchestrator read the report and moved on, and the
+# operator found a column of rounds nobody had asked them about. Such a task now goes to done when
+# its member reports it; the ones already parked are closed the same way, with the member's last
+# done report kept on the card. The operator's own tasks (no origin session) and every task with a
+# branch to merge stay in review.
+MIGRATIONS.append("""
+UPDATE board_tasks
+SET notes = substr(ltrim(
+        notes
+        || COALESCE(char(10) || (
+            SELECT '[' || replace(substr(e.at, 1, 16), 'T', ' ') || '] result: '
+                || substr(replace(json_extract(e.payload_json, '$.text'), char(10), ' '), 1, 1500)
+            FROM app_events e
+            WHERE e.type = 'staff.report' AND json_extract(e.payload_json, '$.kind') = 'done'
+              AND json_extract(e.payload_json, '$.task_id') = board_tasks.id
+            ORDER BY e.seq DESC LIMIT 1
+        ), '')
+        || char(10) || '[' || strftime('%Y-%m-%d %H:%M', 'now') || '] closed: handed in by its member and read by the orchestrator; review is for what the operator must look at',
+        char(10)), -8000),
+    status = 'done', session_id = NULL, run_id = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now')
+WHERE status = 'review'
+  AND project_id IS NOT NULL
+  AND assignee_staff_id IS NOT NULL
+  AND origin_session_id IS NOT NULL
+  AND COALESCE(branch, '') = '';
+""")
+
+
 CACHE_PAGES = -65536
 """Page cache, as negative kibibytes: 64 MiB. The default is two megabytes, which a session
 open walks straight through."""
