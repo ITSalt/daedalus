@@ -3,7 +3,8 @@
 The core decides the surface; the host decides what it has to decide from. These tests hold the host's
 side of it: a registry that ranks (the core's, not its test double), a policy that refuses and never
 pins (a pin is what the core never holds back), a tool group for every family worth holding back and
-one per connected MCP server, a cap per provider, and a prompt that teaches only the tools on the surface.
+one per connected MCP server, a cap per provider, a prompt that teaches only the tools on the surface,
+and the tools a run loaded carried to the next run of the session.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from protocore.contracts.tool_registry import TOOL_VISIBILITY_POLICY_METADATA_KEY, policy_admits
 from protocore.contracts.tools import ToolContext
 from protocore.runtime.tool_deferral import build_tool_surface, tool_catalogue_block
@@ -32,6 +34,9 @@ from daedalus.mcp.manager import McpConnection, mcp_group_name, mcp_tool_name
 from daedalus.stores.database import Database
 from daedalus.tools import TOOL_GROUPS, discover_tools
 from tests.support.models import model_config
+from tests.support.waiting import until_await
+from tests.unit.test_orchestrator import _idle
+from tests.unit.test_session_runner import ScriptedProvider
 
 VERBS = ("create", "list", "get", "update", "delete", "search", "archive", "assign", "comment", "export")
 OBJECTS = (
@@ -257,5 +262,69 @@ async def test_a_group_held_back_on_a_small_window_leaves_the_prompt_to_the_cata
         assert "- browser: " in catalogue and "BrowserOpen" in catalogue and "ScheduleCreate" in catalogue
         # What never leaves the surface is still taught.
         assert "Exec" in surface and "Notify" in surface and prompts.NOTIFY in system
+    finally:
+        await manager.close()
+
+
+# -- what a run loaded, carried to the next ----------------------------------------------------------
+
+
+async def test_the_tools_a_run_loaded_are_loaded_in_the_next_run_of_the_session(settings: Settings, db: Database) -> None:
+    tool = mcp_tool_name("tracker", "create_issue")
+    provider = ScriptedProvider([
+        {"tool": "ToolSearch", "args": {"query": f"select:{tool}"}},
+        {"text": "loaded"},
+        {"text": "second"},
+    ])
+    manager = await _manager(settings, db)
+    manager.providers.rungs_for = lambda config, preset=None: [(provider, "scripted-model")]  # type: ignore[method-assign]
+    try:
+        _connect(manager, "tracker", _catalogue(20))
+        state = await manager.create_session("carry", metadata={"mcp_enabled": ["tracker"]})
+        sid = state.session.id
+        await manager.submit(sid, "load the tracker")
+        await until_await(lambda: _idle(manager, sid), "the first run ended")
+        assert [t.name for t in provider.requests[1].tools or []][-1] == tool
+        assert state.metadata["discovered_tools"] == [tool]
+        await until_await(lambda: _stored(manager, sid, [tool]), "the loaded tools were stored")
+
+        await manager.submit(sid, "again")
+        await until_await(lambda: _answered_twice(manager, sid), "the second run ended")
+        # Loaded from the first request of the second run, after the base surface.
+        assert [t.name for t in provider.requests[2].tools or []][-1] == tool
+
+        # What the session may no longer call is not carried back.
+        state.metadata["tools_off"] = [tool]
+        assert manager.discovered_tools_for(state) == ()
+        state.metadata.pop("tools_off")
+        state.metadata["mcp_enabled"] = []
+        assert manager.discovered_tools_for(state) == ()
+    finally:
+        await manager.close()
+
+
+async def _stored(manager: SessionManager, session_id: str, names: list[str]) -> bool:
+    session = await manager.sessions.get(session_id, "daedalus")
+    return session is not None and session.metadata.get("discovered_tools") == names
+
+
+async def _answered_twice(manager: SessionManager, session_id: str) -> bool:
+    state = manager.live_state(session_id)
+    if state is None or state.running or not state.settled.is_set():
+        return False
+    from protocore.contracts.types import MessageRole
+
+    answers = [m for m in await manager.sessions.list_transcript(session_id) if m.role is MessageRole.assistant]
+    return len(answers) >= 3
+
+
+@pytest.mark.parametrize("names", [["BoardAdd", "Nope", "Exec"], []])
+async def test_only_registered_admitted_names_are_carried(settings: Settings, db: Database, names: list[str]) -> None:
+    manager = await _manager(settings, db)
+    try:
+        state = await manager.create_session("s", metadata={"tools_off": ["Exec"]})
+        state.metadata["discovered_tools"] = names
+        engine = await manager._build_engine(state, "run-s")
+        assert engine.config.discovered_tools == (("BoardAdd",) if names else ())
     finally:
         await manager.close()

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from protocore.contracts.llm import LLMObservabilityContext, LLMRequest
-from protocore.contracts.tool_registry import ToolVisibilityPolicy
+from protocore.contracts.tool_registry import ToolVisibilityPolicy, policy_admits
 from protocore.contracts.types import (
     COMPACTION_SUMMARY_METADATA_KEY,
     Message,
@@ -2900,6 +2900,7 @@ class SessionManager:
             tool_visibility_policy=self.tool_policy_for(state),
             role="voice" if self.is_voice(state) else "orchestrator" if self.is_orchestrator(state) else "dispatcher" if self.is_dispatcher(state) else "agent",
             max_advertised_tools=self.advertised_tools_limit(rungs),
+            discovered_tools=self.discovered_tools_for(state),
         )
         self._attach_hooks(engine, state)
         if chain is not None:
@@ -3273,6 +3274,9 @@ class SessionManager:
             # the run ended — happens here; the rest is handed to a task nobody watches.
             await self._persist_history(state, list(engine.history), state.history_keys)
             state.history_keys = [self.sessions.transcript_key(m) for m in engine.history]
+            # Here and not in the settling task: the next message may start a run before that task
+            # has done anything, and it reads what this run loaded. The store is written there.
+            carried = self._keep_discovered_tools(state, engine)
             try:
                 if status == "interrupted":
                     pass  # snapshot stays; resume_unfinished() continues the run after restart
@@ -3306,7 +3310,7 @@ class SessionManager:
                     # cannot publish its "running" ahead of this "waiting".
                     await self._publish_status(state, "waiting")
                 state.settled.clear()
-                state.housekeeping = asyncio.create_task(self._settle_run(state, run_id, status), name=f"settle:{run_id}")
+                state.housekeeping = asyncio.create_task(self._settle_run(state, run_id, status, carried=carried), name=f"settle:{run_id}")
                 state.housekeeping.add_done_callback(_log_task_failure)
 
     PROVIDER_REFUSED_NOTE = "⚠️ the model provider refused this run's requests, so it was closed early — {detail}"
@@ -3363,7 +3367,7 @@ class SessionManager:
         except Exception:  # noqa: BLE001 — the run is over either way; a front that missed the event polls
             logger.warning("could not announce the end of run %s", run_id, exc_info=True)
 
-    async def _settle_run(self, state: SessionState, run_id: str, status: str) -> None:
+    async def _settle_run(self, state: SessionState, run_id: str, status: str, *, carried: bool = False) -> None:
         """What a finished run still owes, off the path the operator is watching.
 
         Order is the contract. The snapshot comes first and raises ``state.settled``, because that is
@@ -3383,6 +3387,11 @@ class SessionManager:
             logger.exception("run %s snapshot failed", run_id)
         finally:
             state.settled.set()  # the next run may start: the history is written and the files are snapshotted
+        if carried:
+            try:
+                await self.sessions.update_metadata(session_id, state.session.metadata)
+            except Exception:  # noqa: BLE001 — the tools are loaded again by a search if this is lost
+                logger.warning("could not store the loaded tools of session %s", session_id, exc_info=True)
         if status in ("completed", "failed", "cancelled"):
             # Before anything announces the end: the closing line is part of the turn the app redraws.
             await self._close_without_answer(state, run_id, status)
@@ -4032,6 +4041,31 @@ class SessionManager:
         """
         limits = [max_advertised_tools_for(self.config.providers.get(provider.endpoint.id), model) for provider, model in rungs]
         return min((limit for limit in limits if limit > 0), default=0)
+
+    def discovered_tools_for(self, state: SessionState) -> tuple[str, ...]:
+        """The tools the session's last run loaded through ToolSearch that this session may still call.
+
+        Handed to the next run so it starts with them loaded rather than searching again, in the order
+        they were loaded, so the tail of the tool list a prefix cache keys on comes back the same. The
+        session's current policy decides, not the one they were loaded under: a tool switched off or
+        refused to the role since then is not carried back.
+        """
+        registry = self.registry_for(state)
+        policy = self.tool_policy_for(state)
+        names = [str(name) for name in (state.metadata.get("discovered_tools") or ()) if isinstance(name, str)]
+        return tuple(name for name in names if registry.get(name) is not None and policy_admits(policy, name))
+
+    def _keep_discovered_tools(self, state: SessionState, engine: QueryEngine) -> bool:
+        """Remember what the finished run had loaded; ``True`` when that changed what is stored."""
+        loaded = list(engine.context_manager.discovered_tool_names())
+        if loaded == list(state.metadata.get("discovered_tools") or ()):
+            return False
+        for meta in (state.metadata, state.session.metadata):
+            if loaded:
+                meta["discovered_tools"] = list(loaded)
+            else:
+                meta.pop("discovered_tools", None)
+        return True
 
     def _apply_tool_visibility(self, state: SessionState) -> None:
         if state.engine is None:

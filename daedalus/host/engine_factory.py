@@ -212,12 +212,15 @@ def build_engine(
     role: Role = "agent",
     project: str = "",
     max_advertised_tools: int = 0,
+    discovered_tools: Collection[str] = (),
 ) -> QueryEngine:
     """``role`` picks the system prompt: an agent that works in a folder, the voice concierge that
     only talks and hands over, a project's orchestrator that only runs a team, or the main
     orchestrator that only hands work to projects and follows it.
 
-    ``max_advertised_tools`` is the lowest cap on tools among the run's providers (0 for none)."""
+    ``max_advertised_tools`` is the lowest cap on tools among the run's providers (0 for none);
+    ``discovered_tools`` are the tools an earlier run of the session loaded through ToolSearch, oldest
+    first, which this run starts with loaded."""
     primary_provider, primary_model = rungs[0]
     model = model_name or primary_model
     if role == "voice":
@@ -243,6 +246,7 @@ def build_engine(
         thinking_enabled=thinking,
         reasoning_effort=reasoning_effort,
         request_manifest_sink=deps.request_manifest_sink,
+        discovered_tools=tuple(discovered_tools),
     )
     engine = QueryEngine(
         config=engine_config,
