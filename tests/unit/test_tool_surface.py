@@ -257,13 +257,33 @@ async def test_a_group_held_back_on_a_small_window_leaves_the_prompt_to_the_cata
         assert "ToolSearch" in surface and "BrowserOpen" not in surface and "ScheduleCreate" not in surface
         assert advertised_tools(engine) == surface
         system = _system(engine)
-        assert prompts.BROWSER not in system and prompts.SCHEDULING not in system
+        assert prompts.SCHEDULING not in system and prompts.BOARD_TWO_WAYS not in system
+        # The browser's rules are not teaching: a model that loads BrowserOpen mid-run must meet a
+        # page that asks for a password with the rule that it never types one. Gated on the surface,
+        # they left the prompt exactly when the group was held back.
+        assert prompts.BROWSER in system
         catalogue = tool_catalogue_block(engine)
         assert "- browser: " in catalogue and "BrowserOpen" in catalogue and "ScheduleCreate" in catalogue
         # What never leaves the surface is still taught.
         assert "Exec" in surface and "Notify" in surface and prompts.NOTIFY in system
     finally:
         await manager.close()
+
+
+def test_sections_that_carry_rules_follow_the_policy_and_the_rest_follow_the_surface() -> None:
+    """Every gated section, classified. Rules are where the tool is admitted; teaching is where it is shown."""
+    held_back = {"SelfWorkspace", "SelfPropose", "BrowserOpen", "Notify", "ScheduleCreate", "BoardAdd", "BoardUpdate", "BoardList"}
+    shown = {"HistorySearch", "HistoryExpand"}
+    text = "".join(prompts.tool_sections(shown, admitted=shown | held_back, selfdev_mode="server"))
+    for rules in (prompts.SELF_DEVELOPMENT, prompts.BROWSER, prompts.NOTIFY):
+        assert rules in text
+    for teaching in (prompts.SCHEDULING, prompts.BOARD_TASKS):
+        assert teaching not in text
+    assert prompts.HISTORY_SEARCH in text
+    local = "".join(prompts.tool_sections(set(), admitted={"SelfWorkspace"}, selfdev_mode="local"))
+    assert prompts.SELF_DEVELOPMENT_LOCAL in local
+    # Refused by the policy, a rule is not taught either: it would name a tool the session cannot call.
+    assert prompts.BROWSER not in "".join(prompts.tool_sections(set(), admitted=set(), selfdev_mode="off"))
 
 
 # -- what a run loaded, carried to the next ----------------------------------------------------------

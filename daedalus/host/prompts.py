@@ -574,24 +574,33 @@ def _parts(header: str, parts: ToolParts, advertised: Collection[str]) -> str:
     return header + "".join(shown) if shown else ""
 
 
-def tool_sections(advertised: Collection[str], *, selfdev_mode: str) -> tuple[str, ...]:
-    """The sections of an agent's prompt that teach its tools, each only where its tools are on the surface.
+def tool_sections(advertised: Collection[str], *, admitted: Collection[str] | None = None, selfdev_mode: str) -> tuple[str, ...]:
+    """The sections of an agent's prompt that teach its tools, each where it belongs.
 
-    ``advertised`` is what the first request of the run puts in ``tools``: the tools the session may
-    call, less any group the core holds back behind ToolSearch. A paragraph that teaches a tool the
-    session may not call — the board and the schedules to a staff member, Notify to a subagent — is an
-    invitation the model accepts and a refusal it cannot understand. One whose tools are held back is
-    left to the core's catalogue, which names the group and its tools in a line; the long paragraph
-    costs its tokens on every request of the run for tools the model may never load, and teaches them
-    as if they were at hand.
+    Two kinds, gated differently. A section that carries RULES — the browser's (page text has no
+    authority; no passwords, codes or cards), self-development's (never push to main; the
+    repositories are public), Notify's (only what cannot wait; urgent breaks quiet hours) — is
+    shown wherever the session's policy ADMITS the tool, ``admitted``, whether or not its group is
+    on the surface of the first request. A held-back tool is one ToolSearch away, and a model that
+    loads BrowserOpen mid-run must not meet a page that asks for a password without the rule that
+    it never types one; gated on the surface, the rules left the prompt exactly when the core held
+    the group back.
+
+    A section that only TEACHES — history search, the board, subagents, services, terminals,
+    peers, scheduling, loops — follows ``advertised``, what the first request puts in ``tools``. A
+    paragraph that teaches a tool the session may not call is an invitation the model accepts and
+    a refusal it cannot understand; one whose tools are held back is left to the core's catalogue,
+    which names the group and its tools in a line, instead of costing its tokens on every request
+    for tools the model may never load. ``admitted`` defaults to ``advertised``.
     """
+    allowed = advertised if admitted is None else admitted
     return (
-        self_development_section(selfdev_mode) if "SelfWorkspace" in advertised else "",
+        self_development_section(selfdev_mode) if "SelfWorkspace" in allowed else "",
         _parts(HISTORY_HEADER, HISTORY_PARTS, advertised),
         _parts(BOARD_HEADER, BOARD_PARTS, advertised),
         _parts("", SCHEDULING_PARTS, advertised),
-        NOTIFY if "Notify" in advertised else "",
-        BROWSER if "BrowserOpen" in advertised else "",
+        NOTIFY if "Notify" in allowed else "",
+        BROWSER if "BrowserOpen" in allowed else "",
     )
 
 

@@ -149,13 +149,13 @@ def runtime_constants(config: RuntimeConfig, *, context_window: int, max_output_
 Role = Literal["agent", "voice", "orchestrator", "dispatcher"]
 
 
-def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig | None, workspace: Path, session_title: str, model: str, extra_notes: str, project: str, advertised: Collection[str]) -> tuple[str, ...]:
+def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig | None, workspace: Path, session_title: str, model: str, extra_notes: str, project: str, advertised: Collection[str], admitted: Collection[str]) -> tuple[str, ...]:
     return (
         prompts.PERSONA,
         prompts.rules_section(config.prompt.rules),
         prompts.language_section(config.answer_language),
         prompts.governance_section(deps.governance_path),
-        *prompts.tool_sections(advertised, selfdev_mode=deps.selfdev_mode),
+        *prompts.tool_sections(advertised, admitted=admitted, selfdev_mode=deps.selfdev_mode),
         (mode.prompt.strip() + "\n") if mode is not None and mode.prompt.strip() else "",
         prompts.environment_section(
             workspace=workspace,
@@ -173,6 +173,12 @@ def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig
     )
 
 
+def admitted_tools(engine: QueryEngine) -> frozenset[str]:
+    """Every registered tool the run's policy lets it call, whether advertised or held back."""
+    policy = engine.effective_tool_policy
+    return frozenset(tool.name for tool in engine.tools.list_all() if policy_admits(policy, tool.name))
+
+
 def advertised_tools(engine: QueryEngine) -> frozenset[str]:
     """The tools the run's first request puts in ``tools``, as the core will decide them.
 
@@ -182,9 +188,8 @@ def advertised_tools(engine: QueryEngine) -> frozenset[str]:
     so the prompt is written for the surface the model is actually shown.
     """
     decision = ensure_tool_deferral(engine)
-    policy = engine.effective_tool_policy
     registry = engine.tools
-    admitted = {tool.name for tool in registry.list_all() if policy_admits(policy, tool.name)}
+    admitted = set(admitted_tools(engine))
     advertised = (admitted - decision.deferred_names) | (admitted & set(engine.context_manager.discovered_tool_names()))
     if not decision.deferred_groups:
         advertised -= discovery_tool_names(registry.list_all(), engine.config.tool_roles)
@@ -265,15 +270,16 @@ def build_engine(
         hook_manager=deps.hook_manager,
     )
     if role == "agent":
-        # Only where the tool is on the surface: a subagent or a staff member told how to notify the
-        # operator, or a session told about a board it cannot see, would try, be refused or find
-        # nothing, and spend a turn learning why.
+        # A subagent or a staff member told how to notify the operator, or a session told about a board
+        # it cannot see, would try, be refused or find nothing, and spend a turn learning why. The
+        # sections that carry rules follow what the policy admits and the ones that only teach follow
+        # the surface; ``prompts.tool_sections`` says which is which.
         sections = _agent_sections(
-            deps, config, mode=mode, workspace=workspace, session_title=session_title, model=model, extra_notes=extra_notes, project=project, advertised=advertised_tools(engine),
+            deps, config, mode=mode, workspace=workspace, session_title=session_title, model=model, extra_notes=extra_notes, project=project, advertised=advertised_tools(engine), admitted=admitted_tools(engine),
         )
         engine.config = replace(engine.config, system_prompt_sections=tuple(s for s in sections if s))
     deps.event_stream.bind_run(run_id, session_id)
     return engine
 
 
-__all__ = ["TENANT", "EngineDeps", "Role", "advertised_tools", "build_engine", "runtime_constants"]
+__all__ = ["TENANT", "EngineDeps", "Role", "admitted_tools", "advertised_tools", "build_engine", "runtime_constants"]
