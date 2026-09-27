@@ -198,6 +198,16 @@ class UsageSnapshot:
     cost_usd: float | None
     window_used_pct: float | None
     source: Literal["metered", "subscription"]
+    context_tokens: int | None = None
+    """How full the context was at the end of the last turn, where the CLI's transcript says."""
+    context_window: int | None = None
+    """The model's window, only when the CLI reported it."""
+    windows: tuple[tuple[int, float], ...] = ()
+    """The subscription's rate-limit windows (minutes, percent used) the CLI last reported."""
+    replies: int = 0
+    """The member's replies counted in its transcript."""
+    at: str = ""
+    """When the turn the snapshot was read after ended: the numbers are as of then, not live."""
 
     def view(self) -> dict[str, Any]:
         return {
@@ -206,6 +216,11 @@ class UsageSnapshot:
             "cost_usd": self.cost_usd,
             "window_used_pct": self.window_used_pct,
             "source": self.source,
+            "context_tokens": self.context_tokens,
+            "context_window": self.context_window,
+            "windows": [{"minutes": minutes, "used_pct": used} for minutes, used in self.windows],
+            "replies": self.replies,
+            "at": self.at,
         }
 
 

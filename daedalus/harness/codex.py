@@ -736,7 +736,8 @@ def parse_rollout(text: str) -> list[Turn]:
         if current is not None:
             usage = current["usage"]
             if current["text"] or current["tools"]:
-                turns.append(Turn(len(turns), "assistant", "\n".join(current["text"]).strip(), tuple(current["tools"]), current["at"], current["end"], TurnUsage(*usage) if any(usage) else None))
+                spent = TurnUsage(*usage, context_tokens=current.get("context", 0), context_window=current.get("window", 0), windows=current.get("windows", ())) if any(usage) else None
+                turns.append(Turn(len(turns), "assistant", "\n".join(current["text"]).strip(), tuple(current["tools"]), current["at"], current["end"], spent))
             current = None
 
     for line in text.splitlines():
@@ -785,6 +786,13 @@ def parse_rollout(text: str) -> list[Turn]:
             current["usage"][0] += max(0, int(last.get("input_tokens") or 0) - cached)
             current["usage"][1] += int(last.get("output_tokens") or 0)
             current["usage"][2] += cached
+            # The call's input already includes its cached part: it is the whole prompt, the fill.
+            current["context"] = int(last.get("input_tokens") or 0)
+            current["window"] = int(info.get("model_context_window") or 0)
+            limits = payload.get("rate_limits") if isinstance(payload.get("rate_limits"), dict) else {}
+            assert isinstance(limits, dict)
+            windows = [limits.get(name) for name in ("primary", "secondary")]
+            current["windows"] = tuple((int(w.get("window_minutes") or 0), float(w.get("used_percent") or 0.0)) for w in windows if isinstance(w, dict) and w.get("used_percent") is not None)
             continue
         if kind == "event_msg" and payload.get("type") in ("task_complete", "turn_aborted"):
             close()

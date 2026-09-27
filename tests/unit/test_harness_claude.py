@@ -177,6 +177,12 @@ def test_the_real_transcript_is_read_as_turns() -> None:
     records = [json.loads(line) for line in (RECORDED / "transcript.jsonl").read_text().splitlines()]
     by_message = {r["message"]["id"]: r["message"]["usage"] for r in records if r.get("type") == "assistant"}
     assert sum(t.usage.output_tokens for t in turns if t.usage) == sum(u["output_tokens"] for u in by_message.values())
+    # The context's fill is the last call's whole prompt, cache included, not the turn's sum.
+    last_turn = [t for t in turns if t.usage][-1]
+    last_id = [r["message"]["id"] for r in records if r.get("type") == "assistant" and r["timestamp"] <= last_turn.ended_at][-1]
+    last = by_message[last_id]
+    assert last_turn.usage is not None and last_turn.usage.context_tokens == last["input_tokens"] + last.get("cache_creation_input_tokens", 0) + last.get("cache_read_input_tokens", 0) > 0
+    assert last_turn.usage.context_window == 0  # Claude's transcript does not say it, and it is not guessed
 
 
 # A brief of four lines as Claude Code 2.1.282 submitted it after collapsing its paste, byte for byte
@@ -1001,6 +1007,17 @@ async def test_the_staff_views_routes(settings: Settings, db: Database, config: 
                 return (await s.statuses(ada)).count("turn_done_unseen") == 2
 
             await eventually(second_turn_ended, "the second turn ended")
+
+            async def usage_read() -> bool:
+                spent = (await client.get(f"/api/staff/{ada.id}/session", headers=headers)).json()["usage"] or {}
+                return spent.get("replies", 0) >= 2
+
+            # The spend the Details tab shows is read from the transcript after each turn, with how
+            # full the context was and nothing Claude does not report (its window, its rate limits).
+            await eventually(usage_read, "the usage was read after the turn")
+            spent = (await client.get(f"/api/staff/{ada.id}/session", headers=headers)).json()["usage"]
+            assert spent["output_tokens"] > 0 and spent["context_tokens"] > 0 and spent["at"], spent
+            assert spent["context_window"] is None and spent["windows"] == [] and spent["source"] == "subscription"
             turns = (await client.get(f"/api/staff/{ada.id}/transcript", headers=headers)).json()["turns"]
             assert turns[0]["role"] == "user" and any(t["text"] == "and a footer" for t in turns if t["role"] == "assistant"), turns
             events = (await client.get(f"/api/staff/{ada.id}/events?limit=50", headers=headers)).json()["events"]

@@ -152,13 +152,18 @@ def test_a_rollout_is_read_as_turns() -> None:
         {"timestamp": "2026-09-25T00:00:02Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": json.dumps({"command": ["ls", "-la"]})}},
         {"timestamp": "2026-09-25T00:00:03Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "The menu is written."}]}},
         {"type": "event_msg", "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": 1200, "cached_input_tokens": 800, "output_tokens": 90}}}},
+        {"type": "event_msg", "payload": {"type": "token_count", "info": {"last_token_usage": {"input_tokens": 1500, "cached_input_tokens": 1100, "output_tokens": 10}, "model_context_window": 258400}, "rate_limits": {"primary": {"used_percent": 12.0, "window_minutes": 300}, "secondary": {"used_percent": 55.5, "window_minutes": 10080}}}},
         {"type": "event_msg", "payload": {"type": "task_complete"}},
         "not json",
     ]
     turns = parse_rollout("\n".join(line if isinstance(line, str) else json.dumps(line) for line in lines))
     assert [(t.role, t.text) for t in turns] == [("orchestrator", "[orchestrator] write the menu"), ("assistant", "The menu is written.")]
     assert turns[1].tools[0].summary == "ls -la" and turns[1].usage is not None
-    assert (turns[1].usage.input_tokens, turns[1].usage.output_tokens, turns[1].usage.cache_read_tokens) == (400, 90, 800)
+    assert (turns[1].usage.input_tokens, turns[1].usage.output_tokens, turns[1].usage.cache_read_tokens) == (800, 100, 1900)
+    # The fill is the last call's whole prompt, not the sum of the turn's calls; the window and the
+    # rate limits are what Codex reported beside it.
+    assert (turns[1].usage.context_tokens, turns[1].usage.context_window) == (1500, 258400)
+    assert turns[1].usage.windows == ((300, 12.0), (10080, 55.5))
 
 
 # -- whole sessions through the runtime -------------------------------------------------------------

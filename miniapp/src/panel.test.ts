@@ -218,7 +218,13 @@ describe("the Browser tab", () => {
     expect(tabsFor("session", { browser: true })).toEqual(["details", "files", "preview", "jobs", "browser"]);
     expect(tabsFor("member", { browser: true })).toEqual(["details", "files", "preview", "jobs", "browser", "board", "brief", "wakeups", "folders"]);
     expect(tabsFor("main", { browser: true })).toEqual(["questions", "details", "files", "preview", "jobs", "browser"]);
-    expect(tabsFor("orchestrator", { browser: true })).toEqual(["questions", "browser", "board", "brief", "wakeups", "folders"]);
+    expect(tabsFor("orchestrator", { browser: true })).toEqual(["questions", "details", "browser", "board", "brief", "wakeups", "folders"]);
+  });
+
+  it("gives the orchestrator its Details, and neither files nor jobs it does not have", () => {
+    expect(tabsFor("orchestrator")).toEqual(["questions", "details", "board", "brief", "wakeups", "folders"]);
+    expect(tabsFor("orchestrator")).not.toContain("files");
+    expect(tabsFor("orchestrator")).not.toContain("jobs");
   });
 
   it("opens from a link before the listing says there is a browser", () => {

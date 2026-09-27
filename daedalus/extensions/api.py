@@ -2023,9 +2023,14 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         # answer, and without this the failure has no other trace on the screen. The kind is cleared
         # when the next run starts, so this describes the last run and only until there is another.
         status = "compacting" if state.compacting else "running" if state.running else "waiting" if state.pending else "failed" if state.last_error_kind else "idle"
+        # The day's share beside the total, from the same rows: an orchestrator lives for weeks, and
+        # its total alone does not say what it is costing now. The day is UTC's, as on Usage.
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         usage = await app.db.fetchone(
-            "SELECT count(*) c, sum(input_tokens) i, sum(output_tokens) o, sum(cache_read_tokens) ch, sum(cost_usd) usd FROM usage_events WHERE session_id = ?",
-            (session_id,),
+            "SELECT count(*) c, sum(input_tokens) i, sum(output_tokens) o, sum(cache_read_tokens) ch, sum(cost_usd) usd,"
+            " sum(at >= ?) c_today, sum(CASE WHEN at >= ? THEN input_tokens END) i_today, sum(CASE WHEN at >= ? THEN output_tokens END) o_today,"
+            " sum(CASE WHEN at >= ? THEN cost_usd END) usd_today FROM usage_events WHERE session_id = ?",
+            (today, today, today, today, session_id),
         )
         context = await manager.context_status(state)
         leader = await manager.get_state(str(state.metadata["subagent_of"])) if state.metadata.get("subagent_of") else None

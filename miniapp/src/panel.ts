@@ -17,7 +17,9 @@ export type PanelContext = "session" | "orchestrator" | "member" | "main";
 
 /**
  * The tabs a panel offers, in order. The orchestrator writes no file and runs no job, so its panel
- * is the project's alone, with what waits for the operator first; a session inside a project keeps
+ * is the project's, with what waits for the operator first and then its own Details: it is a session
+ * like any other in what it costs, how full its context is and which model runs it, and a panel
+ * without that tab left the operator no way to see any of it. A session inside a project keeps
  * its own tabs and gains the project's, so the board is one click away from whoever is working on
  * it; the main chat keeps a session's tabs behind the questions of every project.
  *
@@ -26,7 +28,7 @@ export type PanelContext = "session" | "orchestrator" | "member" | "main";
  */
 export function tabsFor(context: PanelContext, opts: { browser?: boolean } = {}): PanelTab[] {
   const browser: PanelTab[] = opts.browser ? ["browser"] : [];
-  if (context === "orchestrator") return ["questions", ...browser, ...PROJECT_TABS];
+  if (context === "orchestrator") return ["questions", "details", ...browser, ...PROJECT_TABS];
   if (context === "member") return [...PANEL_TABS, ...browser, ...PROJECT_TABS];
   if (context === "main") return ["questions", ...PANEL_TABS, ...browser];
   return [...PANEL_TABS, ...browser];
@@ -195,7 +197,7 @@ export function defaultPanelTab(stored: string | null, viewportWidth: number, ta
 }
 
 /** Where the last open tab is kept. A project's focus mode keeps its own: the board it left open
- *  beside the orchestrator is not a tab an ordinary session has, and Details is not the
+ *  beside the orchestrator is not a tab an ordinary session has, and Files is not the
  *  orchestrator's. */
 export function panelTabKey(context: PanelContext): string {
   return context === "session" ? TAB_KEY : context === "main" ? `${TAB_KEY}.main` : `${TAB_KEY}.project`;

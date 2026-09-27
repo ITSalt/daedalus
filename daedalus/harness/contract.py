@@ -413,6 +413,16 @@ class TurnUsage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cost_usd: float | None = None
+    context_tokens: int = 0
+    """The prompt of the turn's last model call, cached part included: how full the context was
+    when the turn ended. The sums above cannot say it, since a turn of ten calls counts its history
+    ten times. Zero where the CLI's transcript does not give each call's own count."""
+    context_window: int = 0
+    """The window the CLI itself reported for its model; zero when it did not. Never guessed from
+    the model's name: a wrong denominator makes a meter that lies."""
+    windows: tuple[tuple[int, float], ...] = ()
+    """The subscription's rate-limit windows as the CLI last reported them, each as its length in
+    minutes and the share used in percent (Codex writes them beside every token count)."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -1319,17 +1319,24 @@ class CliStaffRuntime:
     async def usage(self, live: LiveSession) -> UsageSnapshot | None:
         """What the session's turns cost, from the CLI's own transcript. A CLI on a subscription
         reports tokens; the cost, when it gives one, is what the same use would cost metered."""
-        turns = [t for t in await self._turns(live) if t.usage is not None]
+        every = await self._turns(live)
+        turns = [t for t in every if t.usage is not None]
         if not turns:
             return None
         spent = [t.usage for t in turns if t.usage is not None]
         costs = [u.cost_usd for u in spent if u.cost_usd is not None]
+        last = spent[-1]
         return UsageSnapshot(
             input_tokens=sum(u.input_tokens + u.cache_read_tokens for u in spent),
             output_tokens=sum(u.output_tokens for u in spent),
             cost_usd=sum(costs) if costs else None,
             window_used_pct=None,
             source="subscription",
+            context_tokens=last.context_tokens or None,
+            context_window=last.context_window or None,
+            windows=next((u.windows for u in reversed(spent) if u.windows), ()),
+            replies=sum(1 for t in every if t.role == "assistant"),
+            at=turns[-1].ended_at,
         )
 
     # -- stopping --------------------------------------------------------------------------------

@@ -288,6 +288,14 @@ def answer_shared(method: str, path: str) -> tuple[int, str, str] | None:
         return 200, "application/json", json.dumps(session_tool_groups())
     if method.upper() == "PUT" and len(parts) == 4 and parts[2] == "tool-groups":
         return 200, "application/json", json.dumps(TOOL_GROUP_CATALOGUE)
+    if method.upper() == "GET" and len(parts) == 6 and parts[2] == "sessions" and parts[4:] == ["tools", "timing"]:
+        # A session's Details reads the time its tools took; nobody here timed any.
+        return 200, "application/json", json.dumps({"items": []})
+    if method.upper() == "GET" and len(parts) == 5 and parts[2] == "sessions" and parts[4] == "mcp":
+        return 200, "application/json", json.dumps({"enabled": [], "servers": []})
+    if method.upper() == "GET" and len(parts) == 5 and parts[3] == "provider" and parts[2] == "usage":
+        # The provider card in Details: a day with nothing spent, no subscription read.
+        return 200, "application/json", json.dumps({"provider": parts[4], "today": {}, "subscription": None, "balance": None})
     if method.upper() == "GET" and path == "/api/files":
         # Handles a harness did not invent name no file: the chat draws no card for them.
         return 200, "application/json", json.dumps({"files": []})
@@ -1058,7 +1066,8 @@ class FocusStub:
         self.staff_views["st-ira"] = {
             "session": {"staff": {"id": "st-ira", "name": "Ira", "harness": "claude", "project_id": pid}, "session": {**ira["live"], "cli_session_id": "7c1e2f4a-claude-session"},
                         "capabilities": CAPABILITIES["claude"], "launch": launch, "channel": {"team_tools": "connected"}, "health": ira["health"], "requests": [permission],
-                        "usage": {"input_tokens": 412000, "output_tokens": 31000, "cost_usd": None, "window_used_pct": 23, "source": "subscription"}},
+                        "usage": {"input_tokens": 412000, "output_tokens": 31000, "cost_usd": None, "window_used_pct": None, "source": "subscription",
+                                  "context_tokens": 386000, "context_window": None, "windows": [], "replies": 3, "at": at(minutes=20)}},
             "turns": turns, "events": events, "changes": changes,
         }
         naya_launch = {**launch, "harness": "opencode", "model": "", "permission_mode": "", "version": "1.18.23", "launch_id": "l-naya", "worktree": None, "branch": None, "task_id": "t-bot"}
@@ -1144,8 +1153,8 @@ class FocusStub:
             "messages": messages, "mode": "", "usd_cap": None, "brief": "", "spawned_by": None, "tools_off": [], "loop": None, "services": [], "subagents": [],
             "subagent_of": None, "subagent_name": None, "leader_title": None, "orchestrator_of": orchestrator_of, "staff": staff, "telegram_linked": False,
             "verifications": {}, "first_seq": messages[0]["seq"] if messages else 0, "has_older": False,
-            "context": {"tokens": 18400, "window": 200000, "messages": len(messages), "summaries": 0, "operator_turns": 1},
-            "usage": {"c": 12, "i": 184000, "o": 9100, "ch": 150000, "usd": 0.84},
+            "context": {"tokens": 18400, "window": 200000, "messages": len(messages), "summaries": 1, "operator_turns": 1, "last_compaction": {"at": "2026-09-24T08:10:00Z", "reason": "auto"}},
+            "usage": {"c": 12, "i": 184000, "o": 9100, "ch": 150000, "usd": 0.84, "c_today": 5, "i_today": 61000, "o_today": 2900, "usd_today": 0.31},
         }
 
     @classmethod

@@ -699,12 +699,15 @@ export type SessionDetail = {
     window: number;
     messages: number;
     summaries: number;
+    /** When and why the host last compacted the history; absent when no summary of its own is kept. */
+    last_compaction?: { at: string; reason: string } | null;
     operator_turns: number;
     breakdown?: { instructions: number; tools: number; conversation: number; attachments: number; reserved_response: number; source: string } | null;
     recent_cache?: { read_tokens: number; prompt_tokens: number; hit_percent: number } | null;
     prefix_changed?: string[];
   };
-  usage: { c?: number; i?: number; o?: number; ch?: number; usd?: number | null };
+  /** The whole session's spend, and today's (UTC) share of it in the `_today` fields. */
+  usage: { c?: number; i?: number; o?: number; ch?: number; usd?: number | null; c_today?: number | null; i_today?: number | null; o_today?: number | null; usd_today?: number | null };
 };
 
 /**
@@ -947,7 +950,25 @@ export type StaffSessionView = {
   requests?: Ask[];
   /** The operator's standing grants to the member ("Always"), as its CLI's allow rules. */
   rules?: StandingRule[];
-  usage?: { input_tokens?: number; output_tokens?: number; cache_read_tokens?: number; cost_usd?: number | null; window_used_pct?: number | null; transcript_ref?: string; [k: string]: unknown } | null;
+  usage?: StaffUsage | null;
+};
+
+/** What a command-line member's turns cost, read from its CLI's transcript after each turn. A field
+ *  the CLI does not report is null or empty, never a guess. */
+export type StaffUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cost_usd?: number | null;
+  window_used_pct?: number | null;
+  source?: "metered" | "subscription";
+  context_tokens?: number | null;
+  context_window?: number | null;
+  windows?: { minutes: number; used_pct: number }[];
+  replies?: number;
+  at?: string;
+  transcript_ref?: string;
+  [k: string]: unknown;
 };
 
 /** One standing grant: `mcp__<server>__<tool>` for one tool, `mcp__<server>` for every tool of a server. */

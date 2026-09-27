@@ -4110,6 +4110,10 @@ class SessionManager:
         except Exception:  # noqa: BLE001 — no usable model is reported elsewhere
             window = int(state.context_window or 0)
         summaries = sum(1 for m in history if m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY))
+        # The newest summary the host wrote says when and why the history was last compacted; the
+        # core's own summaries carry no such record, and then there is none to show rather than a guess.
+        stamps = [m.metadata.get("daedalus.compaction") for m in history if m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY)]
+        last_compaction = next(({"at": str(c.get("at") or ""), "reason": str(c.get("reason") or "")} for c in reversed(stamps) if isinstance(c, dict)), None)
         operator = sum(1 for m in history if m.role is MessageRole.user and m.metadata.get("daedalus.origin") not in (None, "core") and not m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY))
         manifests = await self.request_manifests.recent_for_session(state.session.id)
         breakdown = None
@@ -4159,6 +4163,7 @@ class SessionManager:
             "window": window,
             "messages": len(history),
             "summaries": summaries,
+            "last_compaction": last_compaction,
             "operator_turns": operator,
             "breakdown": breakdown,
             "recent_cache": cache,

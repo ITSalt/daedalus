@@ -196,6 +196,7 @@ async def test_a_compaction_does_not_fire_again_on_the_next_turn(settings: Setti
     assert len(calls) == 1  # and the summariser is not paid a second time to compact nothing
     status = await manager.context_status(state)
     assert status["tokens"] == state.observed_prompt_tokens < 300_000  # what is reported describes the history that is left
+    assert status["summaries"] == 1 and status["last_compaction"]["at"] and status["last_compaction"]["reason"]  # the Details tab says when it was
     manager._states.pop(state.session.id)
     restored = await manager.get_state(state.session.id)
     assert restored is not None

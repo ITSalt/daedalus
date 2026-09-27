@@ -1156,8 +1156,8 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
               ...(hasDetails
                 ? [
                     { label: t("panel.tab.details"), icon: "settings" as IconName, onSelect: () => { setDetailsFocus("session"); panel.open("details"); } },
-                    { label: t("session.files"), icon: "folder" as IconName, onSelect: () => panel.open("files") },
-                    { label: t("panel.tab.jobs"), icon: "terminal" as IconName, onSelect: () => panel.open("jobs") },
+                    ...(panelTabs.includes("files") ? [{ label: t("session.files"), icon: "folder" as IconName, onSelect: () => panel.open("files") }] : []),
+                    ...(panelTabs.includes("jobs") ? [{ label: t("panel.tab.jobs"), icon: "terminal" as IconName, onSelect: () => panel.open("jobs") }] : []),
                     { label: t("session.mcp"), icon: "plug" as IconName, onSelect: () => { setDetailsFocus("mcp"); panel.open("details"); } },
                   ]
                 : []),
@@ -1289,6 +1289,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
               <SessionDetails
                 ids={ids}
                 id={id}
+                role={orchestrating ? "orchestrator" : main ? "main" : "session"}
                 detail={detail}
                 busy={busy}
                 modes={modes.map((m) => m.name)}

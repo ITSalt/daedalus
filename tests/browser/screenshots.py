@@ -1553,6 +1553,43 @@ def run_main() -> int:
     return UNHANDLED.report()
 
 
+def run_details() -> int:
+    """The Details of a project's orchestrator and of a command-line member, on a desktop and on a
+    phone (``ONLY=details``): the spend in total and today, the context with its last compaction, and
+    the member's launch, state and what its CLI did and did not report."""
+    OUT.mkdir(parents=True, exist_ok=True)
+
+    def member_details(scope: str):  # type: ignore[no-untyped-def]
+        def before(page: Page) -> None:
+            if scope == ".sheet":
+                page.locator(".staff-cli .chat-head .head-actions .iconbtn").last.tap()
+            page.locator(f"{scope} .panel-tab[data-tab='details']").click()
+            page.wait_for_selector(f"{scope} [data-staff-details]", timeout=5000)
+        return before
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(executable_path=CHROMIUM)
+        desk = browser.new_context(viewport=DESK, device_scale_factor=2, color_scheme="dark")
+        focus = FocusStub.bakery(LANG)
+        page = desk.new_page()
+        page.route("**/api/**", focus_stub(focus))
+        pid = focus.projects[0]["id"]
+        shot(page, "orchestrator-details", f"project/{pid}?panel=details", wait=".panel .details [data-usage-today]", settle=700)
+        page, pid = staff_stand(desk)
+        shot(page, "staff-details", f"project/{pid}/staff/st-ira", wait=".staff-aside .panel-tab[data-tab='details']", before=member_details(".staff-aside"), settle=900)
+        desk.close()
+        phone = browser.new_context(viewport=PHONE, device_scale_factor=3, color_scheme="dark", is_mobile=True, has_touch=True)
+        focus = FocusStub.bakery(LANG)
+        page = phone.new_page()
+        page.route("**/api/**", focus_stub(focus))
+        shot(page, "phone-orchestrator-details", f"project/{pid}?panel=details", wait=".panel-sheet .details [data-usage-today]", settle=900)
+        page, pid = staff_stand(phone)
+        shot(page, "phone-staff-details", f"project/{pid}/staff/st-ira", wait=".staff-cli .chat-head", before=member_details(".sheet"), settle=900)
+        phone.close()
+        browser.close()
+    return UNHANDLED.report()
+
+
 IRA_SCREEN = (
     f"{ESC}1m⏺{ESC}0m Update(src/lib/cart.ts)\r\n"
     f"  {ESC}2m⎿{ESC}0m  Updated with {ESC}32m6 additions{ESC}0m\r\n\r\n"
@@ -1965,4 +2002,4 @@ if __name__ == "__main__":
     # Before anything is driven: is the address the built app, or whatever else holds the port?
     expect_app(BASE)
     only = os.environ.get("ONLY")
-    sys.exit(run_modes() if only == "modes" else run_browser() if only == "browser" else run_harnesses() if only == "harnesses" else run_staff() if only == "staff" else run_terminals() if only == "terminals" else run_focus() if only == "focus" else run_phone() if only == "phone" else run_main() if only == "main" else run_notifications() if only == "notifications" else run_composer() if only == "composer" else run_voice() if only == "voice" else agents_shots() if only == "agents" else run_workspace() if only == "workspace" else run())
+    sys.exit(run_modes() if only == "modes" else run_browser() if only == "browser" else run_harnesses() if only == "harnesses" else run_staff() if only == "staff" else run_details() if only == "details" else run_terminals() if only == "terminals" else run_focus() if only == "focus" else run_phone() if only == "phone" else run_main() if only == "main" else run_notifications() if only == "notifications" else run_composer() if only == "composer" else run_voice() if only == "voice" else agents_shots() if only == "agents" else run_workspace() if only == "workspace" else run())

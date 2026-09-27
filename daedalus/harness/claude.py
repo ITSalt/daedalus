@@ -627,7 +627,7 @@ def parse_transcript(text: str) -> list[Turn]:
         nonlocal current
         if current is not None:
             usage = current["usage"]
-            turns.append(Turn(len(turns), "assistant", "\n".join(current["text"]).strip(), tuple(current["tools"]), current["at"], current["end"], TurnUsage(*usage) if any(usage) else None))
+            turns.append(Turn(len(turns), "assistant", "\n".join(current["text"]).strip(), tuple(current["tools"]), current["at"], current["end"], TurnUsage(*usage, context_tokens=current["context"]) if any(usage) else None))
             current = None
 
     for line in text.splitlines():
@@ -645,7 +645,7 @@ def parse_transcript(text: str) -> list[Turn]:
         if kind == "assistant":
             ident = str(message.get("id") or "")
             if current is None:
-                current = {"text": [], "tools": [], "at": at, "end": at, "usage": [0, 0, 0]}
+                current = {"text": [], "tools": [], "at": at, "end": at, "usage": [0, 0, 0], "context": 0}
             current["end"] = at
             raw_usage = message.get("usage")
             usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
@@ -654,6 +654,8 @@ def parse_transcript(text: str) -> list[Turn]:
                 current["usage"][0] += int(usage.get("input_tokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0)
                 current["usage"][1] += int(usage.get("output_tokens") or 0)
                 current["usage"][2] += int(usage.get("cache_read_input_tokens") or 0)
+                # Each call's prompt is the whole context it was sent, so the last one is the fill.
+                current["context"] = int(usage.get("input_tokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
             for block in content if isinstance(content, list) else []:
                 if not isinstance(block, dict):
                     continue

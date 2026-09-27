@@ -7,7 +7,7 @@ import { api, LoopView, ProviderUsage, Schedule, SessionDetail } from "./api";
 import { projectPath } from "./folders";
 import { Dot, ServiceRow, ToolPicker, copyText, fmtInt, fmtUsd, loopLabel, statusWord, timeAgo } from "./components";
 import { readLayout, writeLayout } from "./layout";
-import { clock, shortDateTime, untilShort } from "./format";
+import { clock, relTimeLong, shortDateTime, untilShort } from "./format";
 import { Icon } from "./icons";
 import { confirmAsync, errorText, fmtTok } from "./ui";
 import { plural, t } from "./i18n";
@@ -31,6 +31,11 @@ export type DetailsActions = {
 export type SessionDetailsProps = {
   ids: string;
   id: string;
+  /** What the session is: an ordinary one, a project's orchestrator, or the main orchestrator. The
+   *  two orchestrators are the same Details less what would break them or has no place beside
+   *  them: a loop, the tool switches their role fixes, moving or deleting the session from here,
+   *  and (for a project's, whose panel has no Files tab) the workspace row that opens one. */
+  role?: "session" | "orchestrator" | "main";
   detail: SessionDetail;
   busy: boolean;
   modes: string[];
@@ -45,7 +50,7 @@ export type SessionDetailsProps = {
   focus?: string | null;
 };
 
-function Section({ ids, id, label, children, className, aside }: { ids: string; id: string; label: string; children: React.ReactNode; className?: string; aside?: React.ReactNode }) {
+export function Section({ ids, id, label, children, className, aside }: { ids: string; id: string; label: string; children: React.ReactNode; className?: string; aside?: React.ReactNode }) {
   const [open, setOpen] = useState(() => readLayout(`details.${id}`) !== "closed");
   return (
     <details className={`dt-section ${className ?? ""}`} id={`${ids}-info-${id}`} open={open} onToggle={(e) => { const next = e.currentTarget.open; setOpen(next); writeLayout(`details.${id}`, next ? "open" : "closed"); }}>
@@ -63,8 +68,10 @@ function Section({ ids, id, label, children, className, aside }: { ids: string; 
   );
 }
 
-export function SessionDetails({ ids, id, detail, busy, modes, schedules, provider, providerUsage, onOpen, toast, reload, on, focus }: SessionDetailsProps) {
+export function SessionDetails({ ids, id, role = "session", detail, busy, modes, schedules, provider, providerUsage, onOpen, toast, reload, on, focus }: SessionDetailsProps) {
   const container = useRef<HTMLDivElement>(null);
+  const conductor = role !== "session";
+  const usage = detail.usage;
   const ctxPct = detail.context && detail.context.window > 0 ? Math.round((100 * detail.context.tokens) / detail.context.window) : null;
   useEffect(() => {
     if (!focus || focus === "session") return;
@@ -101,6 +108,9 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
             <span>{t(detail.context.estimated ? "session.context.estimated" : "session.context.measured")}</span>
           </div>
           <p className="sub">{t("session.context.messages", { n: detail.context.messages, s: detail.context.summaries, o: detail.context.operator_turns })}</p>
+          {detail.context.last_compaction?.at && (
+            <p className="sub" data-last-compaction>{t("session.context.lastcompaction", { when: relTimeLong(detail.context.last_compaction.at), reason: detail.context.last_compaction.reason || "—" })}</p>
+          )}
           {detail.context.breakdown && (
             <div className="context-breakdown">
               {(["instructions", "tools", "conversation", "attachments", "reserved_response"] as const).map((key) => (
@@ -135,10 +145,16 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
           <span className="dt-sep">·</span>
           <span>{plural("usage.calls", detail.usage.c ?? 0)}</span>
         </div>
+        {usage.c_today != null && (
+          <div className="dt-row sub" data-usage-today>
+            <span className="dt-key">{t("session.usage.today")}</span>
+            <span className="grow">{t("session.usage.today.line", { usd: fmtUsd(usage.usd_today ?? 0), in: fmtTok(usage.i_today ?? 0), out: fmtTok(usage.o_today ?? 0), calls: plural("usage.calls", usage.c_today ?? 0) })}</span>
+          </div>
+        )}
         <ToolTiming sessionId={id} />
       </Section>
 
-      <Section ids={ids} id="workspace" label={t("session.workspace")}>
+      {role !== "orchestrator" && <Section ids={ids} id="workspace" label={t("session.workspace")}>
         <button className="aside-row link" onClick={on.openFiles} title={detail.project ? projectPath(detail.project) : detail.workspace}>
           <Icon name="folder" size={16} />
           <span className="grow name">{detail.project ? t("session.aside.project", { name: detail.project.name }) : detail.workspace_own === false ? t("session.aside.workspace", { name: detail.workspace_name ?? "" }) : t("session.aside.own")}</span>
@@ -165,23 +181,25 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
             </span>
           </div>
         )}
-        <div className="dt-row sub">
-          <span className="dt-key">{t("session.project")}</span>
-          <span className="grow truncate" title={projectPath(detail.project)}>
-            {t("session.project.inside", { name: detail.project.name })}
-          </span>
-          <button className="linkbtn" onClick={on.move}>{t("session.project.move")}</button>
-        </div>
-      </Section>
+        {!conductor && (
+          <div className="dt-row sub">
+            <span className="dt-key">{t("session.project")}</span>
+            <span className="grow truncate" title={projectPath(detail.project)}>
+              {t("session.project.inside", { name: detail.project.name })}
+            </span>
+            <button className="linkbtn" onClick={on.move}>{t("session.project.move")}</button>
+          </div>
+        )}
+      </Section>}
 
       {provider && <ProviderUsageCard ids={ids} provider={provider} usage={providerUsage} />}
 
-      <Section ids={ids} id="loop" label={t("session.loop")} aside={detail.loop ? <span className={`badge loop ${detail.loop.status}`}>{statusWord(detail.loop.status).toLowerCase()}</span> : undefined}>
+      {!conductor && <Section ids={ids} id="loop" label={t("session.loop")} aside={detail.loop ? <span className={`badge loop ${detail.loop.status}`}>{statusWord(detail.loop.status).toLowerCase()}</span> : undefined}>
         {detail.loop && (
           <div className="sub">{loopLabel(detail.loop).replace(/^\S+ · /, "")}{detail.loop.next_run_at && detail.loop.status === "active" ? t("agents.loop.next", { t: untilShort(detail.loop.next_run_at) }) : ""}</div>
         )}
         <LoopPanel sessionId={id} loop={detail.loop ?? null} onChange={() => reload(true)} toast={toast} />
-      </Section>
+      </Section>}
 
       {schedules.length > 0 && (
         <Section ids={ids} id="cron" label={t("session.cron")} aside={t("session.cron.on", { n: schedules.filter((x) => x.enabled).length })}>
@@ -205,7 +223,7 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
         <SessionToolGroups sessionId={id} toast={toast} />
       </Section>
 
-      <Section ids={ids} id="tools" label={t("session.tools")}>
+      {!conductor && <Section ids={ids} id="tools" label={t("session.tools")}>
         <ToolPicker
           off={detail.tools_off ?? []}
           note={t("session.tools.note")}
@@ -218,7 +236,7 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
             }
           }}
         />
-      </Section>
+      </Section>}
 
       <Section ids={ids} id="brief" label={t("session.brief")}>
         <label className="field">{t("session.brief.label")}{detail.spawned_by ? t("session.brief.by", { id: detail.spawned_by }) : ""}</label>
@@ -275,12 +293,12 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
         </div>
       </Section>
 
-      <Section ids={ids} id="danger" label={t("session.danger")} className="danger">
+      {!conductor && <Section ids={ids} id="danger" label={t("session.danger")} className="danger">
         <div className="btnrow" style={{ marginTop: 0 }}>
           <button className="btn small danger" onClick={on.clearHistory} disabled={busy}><Icon name="trash" size={14} /> {t("session.clear.short")}</button>
           <button className="btn small danger" onClick={on.remove}><Icon name="trash" size={14} /> {t("session.delete.short")}</button>
         </div>
-      </Section>
+      </Section>}
     </div>
   );
 }

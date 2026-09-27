@@ -14,7 +14,7 @@
 // so Claude Code, Codex, OpenCode, pi and Grok Build are drawn by the same code.
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { api, type Ask, type HarnessCapabilities, type StaffChanges, type StaffEventRow, type StaffMessage, type StaffSessionView, type StandingRule, type TerminalView as TerminalRow } from "../api";
+import { api, type Ask, type HarnessCapabilities, type StaffChanges, type StaffEventRow, type StaffMessage, type StaffSessionView, type StaffTurn, type StandingRule, type TerminalView as TerminalRow } from "../api";
 import { Sheet } from "../dialogs";
 import { useEvent } from "../events";
 import { relTime, tokens, usd } from "../format";
@@ -26,7 +26,7 @@ import { MessageRow, StaffHeader, useMember, useStaffMessages } from "../project
 import { navigate, pathFor, projectPagePath } from "../router";
 import { invalidate, useQuery } from "../store";
 import { HarnessBadge } from "../team/parts";
-import { HARNESS_NAMES } from "../team/team";
+import { HARNESS_NAMES, type Staff } from "../team/team";
 import { TerminalView } from "../terminal/view";
 import type { TerminalState } from "../terminal/instance";
 import { errorText } from "../ui";
@@ -36,6 +36,7 @@ import { BrowserTab } from "../browser/BrowserPanel";
 import { deviceSaving, useBrowsers } from "../browser/data";
 import { BrowserHeadButton } from "../browser/phone";
 import { BrowserPip } from "../browser/pip";
+import { StaffDetails } from "./StaffDetails";
 import { ASIDE_STEP, alwaysServer, attention, canAlways, channelWords, clampAside, composerWhen, defaultMode, keyboardBlocks, listRows, nowChoice, openRequests, outboxRows, readAsideWidth, rememberAsideWidth, ruleWords, turnFacts, type StaffViewMode } from "./model";
 import { PaneHandle, pixelDrag } from "../layout";
 
@@ -185,7 +186,7 @@ export function StaffView({ projectId, staffId, wide, toast, onBack }: { project
     }
   }
   const panel = (
-    <StaffPanel projectId={projectId} staffId={staffId} name={member.name} view={view ?? null} notes={member.notes} instructions={member.instructions} taskId={session?.task_id ?? null}
+    <StaffPanel projectId={projectId} staffId={staffId} member={member} turns={turns} name={member.name} view={view ?? null} notes={member.notes} instructions={member.instructions} taskId={session?.task_id ?? null}
       tab={tab === "browser" && !hasBrowser ? "session" : tab} onTab={setTab} messages={messages} reveal={reveal} toast={toast}
       browser={hasBrowser ? <BrowserTab groups={browsers.groups} toast={toast} phone={!wide} /> : null} />
   );
@@ -389,11 +390,14 @@ function StaffComposer({ staffId, name, caps, live, toast }: { staffId: string; 
   );
 }
 
-type SideTab = "session" | "changes" | "notes" | "browser";
+type SideTab = "session" | "details" | "changes" | "notes" | "browser";
 
 type PanelProps = {
   projectId: string;
   staffId: string;
+  member: Staff;
+  /** The member's transcript as the Feed read it; the Details tab counts who spoke from it. */
+  turns: StaffTurn[];
   name: string;
   view: StaffSessionView | null;
   notes: string;
@@ -409,9 +413,10 @@ type PanelProps = {
   browser: ReactNode;
 };
 
-/** The column beside the member (a sheet on a phone): its session and messages, what it changed, its notes. */
-function StaffPanel({ projectId, staffId, name, view, notes, instructions, taskId, tab, onTab: setTab, messages, reveal, toast, browser }: PanelProps) {
-  const tabs: SideTab[] = browser ? ["session", "changes", "notes", "browser"] : ["session", "changes", "notes"];
+/** The column beside the member (a sheet on a phone): its session and messages, the standing facts a
+ *  session's Details has (what runs it, how long, what it cost), what it changed, its notes. */
+function StaffPanel({ projectId, staffId, member, turns, name, view, notes, instructions, taskId, tab, onTab: setTab, messages, reveal, toast, browser }: PanelProps) {
+  const tabs: SideTab[] = browser ? ["session", "details", "changes", "notes", "browser"] : ["session", "details", "changes", "notes"];
   return (
     <div className={`staff-panel ${tab === "browser" ? "with-browser" : ""}`}>
       <div className="panel-tabs" role="tablist">
@@ -424,6 +429,7 @@ function StaffPanel({ projectId, staffId, name, view, notes, instructions, taskI
       <div className={`panel-body staff-panel-body ${tab === "browser" ? "tab-browser" : ""}`}>
         {tab === "browser" && browser}
         {tab === "session" && <SessionTab staffId={staffId} view={view} toast={toast} messages={<MessagesSection staffId={staffId} name={name} messages={messages} reveal={reveal} toast={toast} />} />}
+        {tab === "details" && <StaffDetails member={member} view={view} turns={turns} />}
         {tab === "changes" && <ChangesTab projectId={projectId} staffId={staffId} taskId={taskId} />}
         {tab === "notes" && (
           <div className="staff-notes">

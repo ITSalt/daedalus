@@ -3129,6 +3129,16 @@ button.staff-row:hover { background: var(--surface-2); }
 .staff-health.compact { margin-top: 2px; }
 .staff-aside { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--line); background: var(--surface-1); }
 .staff-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+/* Five tabs in Russian are wider than the narrowest column (280 px): the row scrolls sideways, as
+   the session panel's tab list does, rather than wrapping under itself or clipping the last tab. */
+.staff-panel > .panel-tabs { overflow-x: auto; scrollbar-width: none; }
+.staff-panel > .panel-tabs::-webkit-scrollbar { display: none; }
+/* The panel body is a grid, whose items grow to their longest unbroken line: a Details row would
+   push the whole column past the aside. The rows wrap instead, the key taking a fixed share. */
+.staff-panel-body > .details { min-width: 0; }
+.staff-details .dt-row { flex-wrap: wrap; align-items: baseline; padding-block: 2px; }
+.staff-details .dt-key { flex: 0 0 38%; min-width: 0; }
+.staff-details .dt-row > .grow { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .staff-panel-body { display: grid; align-content: start; gap: var(--space-3); font-size: var(--fs-13); }
 .staff-aside-section { display: grid; gap: 4px; }
 .staff-aside-label { color: var(--fg-3); font-size: var(--fs-11); text-transform: uppercase; letter-spacing: .06em; }

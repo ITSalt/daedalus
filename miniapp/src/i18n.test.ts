@@ -53,12 +53,16 @@ const SAME_IN_BOTH = [
   "sched.when.cron",
   "session.mcp.toggled",
   "session.sched.cron",
+  // Today's spend is a row made only of holes and arrows.
+  "session.usage.today.line",
   "settings.exec.title",
   "settings.search.title",
   "settings.vision.title",
   "settings.web.title",
   // Lines changed and the files they are in, and git's own word for the checkout a member works in.
   "staff.changes.summary",
+  // The key before a member's CLI and its version: the acronym is read as is in either language.
+  "staff.details.cli",
   "staff.worktree",
   "theme.claude",
   // A tool named by its own id and a count: the id is the same in both languages.
