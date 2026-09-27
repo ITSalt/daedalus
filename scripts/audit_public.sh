@@ -63,8 +63,14 @@ audit() {
   if git grep -InE "$PATTERNS" -- . 2>/dev/null | grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
 
   echo "== history (all blobs)"
-  if git rev-list --all | while read -r c; do git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null | sed "s/^/$c:/"; done |
-    grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
+  local history_hits
+  # Captured, then tested -- never tested by the pipeline's status. Under pipefail the status of
+  # `cmd | while ...; done | grep ...` is the status of the loop's LAST iteration, so a pattern
+  # present in an older commit and absent from the newest one printed its line here and answered
+  # "clean": the verdict hung on the order `git rev-list --all` happens to visit commits in.
+  history_hits=$(git rev-list --all | while read -r c; do git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null | sed "s/^/$c:/"; done |
+    grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER" || true)
+  if [ -n "$history_hits" ]; then printf '%s\n' "$history_hits"; failed=1; else echo "clean"; fi
 
   echo "== commit messages"
   if git log --all --format='%H %s%n%b' | grep -inE "$PATTERNS" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
@@ -182,6 +188,35 @@ Generated with a tool: see the session log at https://example.invalid/session_01
     return 1
   }
   echo "self-check: the audit passes this tree"
+
+  # A place, not a family: the same rule, applied where the fixture never puts it. Every fault in the
+  # fixture above is committed, so it lives in the working tree AND in history at once and nothing in
+  # it separates "the history reader works" from "it is dead and another check caught the bytes".
+  # Here the pattern exists ONLY in an older commit: it is in no file of the tree and in no message.
+  local older status2 report2
+  older=$(mktemp -d)
+  (
+    cd "$older"
+    git init -q .
+    git config user.email a@b.c
+    git config user.name a
+    git commit -q --allow-empty -m "an empty tree"
+    printf 'a key %s_%s\n' ghp "$(printf 'A%.0s' $(seq 1 40))" > gone.txt
+    git add -A
+    git commit -qm "a file that will not stay"
+    git rm -q gone.txt
+    git commit -qm "and is gone from the tree"
+  )
+  status2=0
+  bash "$SELF" "$older" > "$older/out.txt" 2>&1 || status2=$?
+  report2=$(cat "$older/out.txt")
+  rm -rf "$older"
+  if [ "$status2" -eq 0 ]; then
+    echo "SELF-CHECK FAILED: the audit passed a repository whose only credential is in an older commit"
+    printf '%s\n' "$report2"
+    return 1
+  fi
+  echo "self-check: the audit refuses a pattern that survives only in history"
 }
 
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")

@@ -40,3 +40,37 @@ def test_the_public_audit_refuses_a_committed_binary_and_a_machine_path() -> Non
     assert done.returncode == 0, done.stdout + done.stderr
     assert "refuses a committed binary and a machine path" in done.stdout
     assert "passes this tree" in done.stdout
+
+
+def test_the_public_audit_gates_a_pattern_that_lives_only_in_an_older_commit(tmp_path) -> None:
+    """The history check gates, and its verdict does not depend on which commit is visited last.
+
+    Every fault in the self-check's own fixture is a committed file, so it sits in the working tree
+    and in history at once and the tree scanner catches the same bytes: nothing there can tell "the
+    history reader works" from "it is dead and another check caught it". Here the credential is in no
+    file of the tree and in no commit message -- only in an older blob -- and the audit must refuse.
+    """
+    import subprocess
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "audit_public.sh"
+    repo = tmp_path / "history-only"
+    repo.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.invalid", "-c", "user.name=t", *args],
+            cwd=repo, check=True, capture_output=True, text=True,
+        )
+
+    git("init", "-q", ".")
+    git("commit", "-q", "--allow-empty", "-m", "an empty tree")
+    (repo / "gone.txt").write_text("a key " + "ghp_" + "A" * 40 + "\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "a file that will not stay")
+    git("rm", "-q", "gone.txt")
+    git("commit", "-qm", "and is gone from the tree")
+
+    done = subprocess.run(["bash", str(script), str(repo)], capture_output=True, text=True)
+    assert done.returncode != 0, "a credential surviving only in an older commit was not refused:\n" + done.stdout
+    assert "gone.txt" in done.stdout
