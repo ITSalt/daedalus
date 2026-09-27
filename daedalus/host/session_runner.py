@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from protocore.contracts.llm import LLMObservabilityContext, LLMRequest
+from protocore.contracts.runtime_constants import LoopConstants
 from protocore.contracts.tool_registry import ToolVisibilityPolicy, policy_admits
 from protocore.contracts.types import (
     COMPACTION_SUMMARY_METADATA_KEY,
@@ -77,7 +78,7 @@ from daedalus.host.services import SessionServices, locator, session_scratch_dir
 from daedalus.host.skills import DirectorySkillStore
 from daedalus.host.transcript_view import TranscriptViewBuilder, message_view
 from daedalus.host.worktrees import append_exclude, exclude_lines
-from daedalus.mcp.manager import McpManager, blocked_for
+from daedalus.mcp.manager import McpManager, blocked_for, mcp_tool_prefix
 from daedalus.providers.chain import build_chain
 from daedalus.providers.registry import ProviderRegistry
 from daedalus.security import redact
@@ -129,6 +130,9 @@ FALLBACK_REASONS = {
 BRIEF_MAX_CHARS = 12_000
 """A spawned agent's brief lives in its system prompt; longer hand-overs belong in files."""
 WORKSPACE_NOTES_CHARS = 6000
+MCP_EXAMPLE_NAMES = 5
+"""How many of a large MCP server's tool names McpList and McpEnable show beside its prefix and count:
+enough to show what the server covers and how its names are spelt, not so many that the list is back."""
 GRANT_TTL_SECONDS = 2 * 3600
 
 STEER_CARD_CHARS = 200
@@ -904,22 +908,59 @@ class SessionManager:
     def mcp_enabled(self, state: SessionState) -> list[str]:
         return [s for s in state.metadata.get("mcp_enabled", []) if s in self.mcp.available()]
 
-    async def set_mcp(self, session_id: str, server: str, enabled: bool) -> list[str]:
+    async def set_mcp(self, session_id: str, server: str, enabled: bool, *, announce: bool = True) -> list[str]:
+        """Switch ``server`` on or off for a session; returns the servers enabled now.
+
+        A server switched off with ``announce`` (the operator's switch, not the model's own McpDisable,
+        whose result says so) leaves a note for the next turn: the history still holds results that
+        called its tools loaded and callable, and a model reading them lists them as available.
+        """
         state = await self.get_state(session_id)
         if state is None:
             raise KeyError(session_id)
         current = self.mcp_enabled(state)
+        was_enabled = server in current
         if enabled:
             await self.mcp.ensure(server)
             if server not in current:
                 current.append(server)
         else:
             current = [s for s in current if s != server]
-        state.metadata["mcp_enabled"] = current
-        state.session.metadata["mcp_enabled"] = current
+        switched_off = [str(s) for s in (state.metadata.get("mcp_switched_off") or ()) if str(s) != server]
+        if not enabled and was_enabled and announce:
+            switched_off.append(server)
+        for meta in (state.metadata, state.session.metadata):
+            meta["mcp_enabled"] = current
+            if switched_off:
+                meta["mcp_switched_off"] = switched_off
+            else:
+                meta.pop("mcp_switched_off", None)
         await self.sessions.update_metadata(session_id, state.session.metadata)
         self._apply_tool_visibility_all()
         return current
+
+    def mcp_tools_line(self, state: SessionState, server: str) -> str:
+        """``server``'s tools as this session should read them: every exact name, or the prefix and a few.
+
+        With ToolSearch the core holds every server back and its catalogue names a large one by prefix
+        and count, so listing all three hundred names here only put ten kilobytes into the history that
+        every later request re-reads — a third of what holding the server back saved. The examples are
+        spread across the sorted names, so they show more of the server than its first few names.
+        """
+        names = sorted(self.mcp.tool_names(server))
+        prefix = mcp_tool_prefix(server)
+        compact = self._searches_for_tools(state) and len(names) > self._catalogue_listed_names(state)
+        if not compact or not all(name.startswith(prefix) for name in names):
+            return ", ".join(names)
+        step = len(names) / MCP_EXAMPLE_NAMES
+        examples = ", ".join(names[int(i * step)] for i in range(MCP_EXAMPLE_NAMES))
+        return f"{prefix}* ({len(names)} tools; for example {examples})"
+
+    @staticmethod
+    def _catalogue_listed_names(state: SessionState) -> int:
+        """How many names the core's catalogue lists before it falls back to a prefix and a count."""
+        rc = state.engine.config.rc if state.engine is not None else None
+        return int(getattr(rc, "tool_catalogue_max_listed_names", 0) or LoopConstants.model_fields["tool_catalogue_max_listed_names"].default)
 
     async def mcp_service(
         self, op: str, *, session_id: str, server: str | None = None, redirect_url: str = ""
@@ -932,7 +973,7 @@ class SessionManager:
             lines = []
             for item in self.mcp.status():
                 mark = "on " if item["name"] in enabled else "off"
-                tools = ", ".join(item["tools"]) if item["tools"] else ("connected, no tools" if item["connected"] else "not connected yet")
+                tools = self.mcp_tools_line(state, item["name"]) if item["tools"] else ("connected, no tools" if item["connected"] else "not connected yet")
                 err = f" (error: {item['error']})" if item["error"] else ""
                 lines.append(f"[{mark}] {item['name']} — {item['description'] or 'no description'}: {tools}{err}")
             return "\n".join(lines) or "no MCP servers are configured"
@@ -957,16 +998,20 @@ class SessionManager:
         if op == "oauth_disconnect":
             removed = await self.mcp.oauth_disconnect(server)
             return f"removed stored OAuth tokens for {server}" if removed else f"{server} is not OAuth-configured"
-        current = await self.set_mcp(session_id, server, enabled=(op == "enable"))
+        # The model's own switch: its result tells it, so no note is left for the next turn.
+        current = await self.set_mcp(session_id, server, enabled=(op == "enable"), announce=False)
         if op == "enable":
-            names = ", ".join(sorted(self.mcp.tool_names(server))) or "(none)"
+            names = self.mcp_tools_line(state, server) or "(none)"
             if self._searches_for_tools(state):
                 # A server's tools are the first thing the core holds back whenever ToolSearch is on, so
                 # they are named in the catalogue rather than put in the tool list. Saying so, with the
-                # exact names, is what keeps a model from composing a name out of the server's.
+                # exact names or the exact prefix, is what keeps a model from composing a name out of
+                # the server's.
+                if names.startswith(mcp_tool_prefix(server) + "*"):
+                    return f"enabled {server}; its tools are not loaded yet: load the ones you need with ToolSearch, describing the task or selecting exact names. Tools: {names}"
                 return f"enabled {server}; its tools are not loaded yet: load the ones you need with ToolSearch, by these exact names: {names}"
             return f"enabled {server}; tools available from your next step: {names}"
-        return f"disabled {server}; enabled now: {', '.join(current) or 'none'}"
+        return f"disabled {server}; its tools ({mcp_tool_prefix(server)}*) are no longer available, including any loaded earlier; enabled now: {', '.join(current) or 'none'}"
 
     async def _load_image(self, ref: str) -> tuple[bytes, str]:
         data = await self.blobs.get(TENANT, ref)
@@ -3233,6 +3278,9 @@ class SessionManager:
             if notes is not None:
                 break
         volatile = [notes if notes is not None else await self.workspace_notes(state)]
+        switched_off = await self._take_mcp_switched_off(state)
+        if switched_off:
+            volatile.append("\n" + switched_off)
         loop_state = str(state.metadata.get("loop_state") or "").strip()
         if loop_state:
             volatile.append("\n" + loop_state)  # the loop's counter and next wake-up change every run
@@ -3243,6 +3291,27 @@ class SessionManager:
                 blocks[i] = TextBlock(text=f"{block.text.rstrip()}\n\n{context}")
                 return message.model_copy(update={"content_blocks": blocks})
         return message
+
+    async def _take_mcp_switched_off(self, state: SessionState) -> str:
+        """The note for the MCP servers the operator switched off since the last turn, once; ``""`` for none.
+
+        Without it nothing told the model: the tools left the surface, but the history still said
+        "Loaded, and callable" of them, and a model asked what it could use listed them.
+        """
+        if "mcp_switched_off" not in state.metadata:
+            return ""
+        # A server switched back on since is not gone; its tools are named again where they are.
+        servers = [str(s) for s in (state.metadata.get("mcp_switched_off") or ()) if str(s) not in self.mcp_enabled(state)]
+        for meta in (state.metadata, state.session.metadata):
+            meta.pop("mcp_switched_off", None)
+        try:
+            await self.sessions.update_metadata(state.session.id, state.session.metadata)
+        except Exception:  # noqa: BLE001 — at worst the note is given twice
+            logger.warning("could not clear the switched-off MCP servers of session %s", state.session.id, exc_info=True)
+        return "\n".join(
+            f"- MCP server {server} was switched off: its tools ({mcp_tool_prefix(server)}*) are no longer available, whatever an earlier result said."
+            for server in servers
+        )
 
     async def _drive(
         self, state: SessionState, engine: QueryEngine, message: Message | None, continue_turn: bool

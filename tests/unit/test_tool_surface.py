@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from protocore.contracts.tool_registry import TOOL_VISIBILITY_POLICY_METADATA_KEY, policy_admits
 from protocore.contracts.tools import ToolContext
+from protocore.contracts.types import Message, MessageRole, TextBlock
 from protocore.runtime.tool_deferral import build_tool_surface, tool_catalogue_block
 from protocore.runtime.tool_registry import ToolRegistry
 
@@ -236,6 +237,76 @@ async def test_a_catalogue_that_changes_under_a_running_session_never_reaches_it
         assert not any(policy_admits(bystander.engine.effective_tool_policy, name) for name in tracker | late)
         assert all(policy_admits(user.engine.effective_tool_policy, name) for name in tracker)
         assert not any(policy_admits(user.engine.effective_tool_policy, name) for name in late)
+    finally:
+        await manager.close()
+
+
+def _listed(manager: SessionManager, server: str) -> None:
+    """Make ``server``'s published catalogue show in McpList, as a connected server's does."""
+    connection = McpConnection(server, manager.config.mcp.servers[server])
+    connection.tools = [manager.mcp._registered_tools[server][name] for name in sorted(manager.mcp.tool_names(server))]
+    manager.mcp._connections[server] = connection
+
+
+async def test_mcp_list_and_enable_name_a_held_back_server_by_prefix_and_a_few_names(settings: Settings, db: Database) -> None:
+    """Both used to list every name: three hundred of them, ten kilobytes each, kept in the history that
+    every later request re-reads — a third of what holding the server back had saved."""
+    manager = await _manager(settings, db)
+    try:
+        _connect(manager, "bigsrv", _catalogue(300))
+        _connect(manager, "small", _catalogue(5))
+        _listed(manager, "bigsrv")
+        _listed(manager, "small")
+        state = await manager.create_session("s")
+        sid = state.session.id
+        enabled = await manager.mcp_service("enable", session_id=sid, server="bigsrv")
+        assert "ToolSearch" in enabled and "Mcp_Bigsrv_* (300 tools; for example " in enabled
+        assert len(enabled) < 600
+        examples = enabled.split("for example ", 1)[1].rstrip(")").split(", ")
+        assert len(examples) == 5 and all(name in manager.mcp.tool_names("bigsrv") for name in examples)
+        assert len(set(examples)) == 5
+        listing = await manager.mcp_service("list", session_id=sid)
+        assert "[on ] bigsrv" in listing and "Mcp_Bigsrv_* (300 tools; for example " in listing and len(listing) < 1200
+        # A small server is named in full, as the catalogue names it.
+        small = sorted(manager.mcp.tool_names("small"))
+        assert ", ".join(small) in listing
+        assert ", ".join(small) in await manager.mcp_service("enable", session_id=sid, server="small")
+        # Without ToolSearch nothing is held back, and the model needs every exact name.
+        state.metadata["tools_off"] = ["ToolSearch"]
+        assert len(await manager.mcp_service("list", session_id=sid)) > 5000
+    finally:
+        await manager.close()
+
+
+async def test_a_server_switched_off_is_told_to_the_model(settings: Settings, db: Database) -> None:
+    """The tools left the surface, but nothing said so: the history still held "Loaded, and callable" of
+    them, and a model asked what it could use listed them as available."""
+    manager = await _manager(settings, db)
+    try:
+        _connect(manager, "tracker", _catalogue(5))
+        state = await manager.create_session("s", metadata={"mcp_enabled": ["tracker"]})
+        sid = state.session.id
+        # The model's own switch: the result says it.
+        text = await manager.mcp_service("disable", session_id=sid, server="tracker")
+        assert "Mcp_Tracker_*" in text and "no longer available" in text
+        assert "mcp_switched_off" not in state.metadata
+        # The operator's switch: the next turn is told, once.
+        await manager.set_mcp(sid, "tracker", True)
+        await manager.set_mcp(sid, "tracker", False)
+        opening = Message(role=MessageRole.user, content_blocks=[TextBlock(text="what can you use?")])
+        first = await manager._with_turn_context(state, opening)
+        text = "".join(b.text for b in first.content_blocks if isinstance(b, TextBlock))
+        assert "MCP server tracker was switched off: its tools (Mcp_Tracker_*) are no longer available" in text
+        stored = await manager.sessions.get(sid, "daedalus")
+        assert stored is not None and "mcp_switched_off" not in stored.metadata
+        again = await manager._with_turn_context(state, opening)
+        assert "switched off" not in "".join(b.text for b in again.content_blocks if isinstance(b, TextBlock))
+        # Switched back on before the next turn, there is nothing to tell.
+        await manager.set_mcp(sid, "tracker", True)
+        await manager.set_mcp(sid, "tracker", False)
+        await manager.set_mcp(sid, "tracker", True)
+        back = await manager._with_turn_context(state, opening)
+        assert "switched off" not in "".join(b.text for b in back.content_blocks if isinstance(b, TextBlock))
     finally:
         await manager.close()
 

@@ -44,8 +44,9 @@ async def mcp_list(context: ToolContext) -> ToolResult:
     name="McpEnable",
     description=(
         "Enable an MCP server for this session. The connection is made if needed, and the result "
-        "names the server's tools exactly; call them by those names, and load them with ToolSearch "
-        "first when the result says they are not loaded."
+        "names the server's tools exactly (a large one by its exact name prefix, the count and a few "
+        "names); call them by those names, and load them with ToolSearch first when the result says "
+        "they are not loaded."
     ),
 )
 async def mcp_enable(context: ToolContext, server: str) -> ToolResult:
@@ -63,7 +64,7 @@ async def mcp_enable(context: ToolContext, server: str) -> ToolResult:
     "disable mcp server turn off integration disconnect connector deactivate "
     "выключить выключи отключить отключи мсп интеграцию коннектор деактивировать убрать убери"
 )
-@tool(name="McpDisable", description="Disable an MCP server for this session; its tools disappear on the next step.")
+@tool(name="McpDisable", description="Disable an MCP server for this session; its tools, including any loaded earlier, disappear on the next step.")
 async def mcp_disable(context: ToolContext, server: str) -> ToolResult:
     hook = _hook(context)
     if hook is None:
