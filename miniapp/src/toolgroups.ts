@@ -41,8 +41,11 @@ export function usageLine(used: number, total: number, days: number): string {
 
 export type Chip = { word: string; tone: "" | "accent" | "ok" | "attn" };
 
-/** The chip a session's group wears: what the model has in front of it right now. */
-export function stateChip(group: Pick<SessionToolGroup, "state" | "pending">): Chip {
+/** The chip a session's group wears: what the model has in front of it right now. A group the core
+ *  places by the window, before any run of the session has placed it, wears its mode instead of a
+ *  guess at what the first run will do. */
+export function stateChip(group: Pick<SessionToolGroup, "state" | "pending"> & Partial<Pick<SessionToolGroup, "load">>): Chip {
+  if (group.state === "undecided") return { word: loadWord(group.load ?? "auto"), tone: "" };
   if (group.state === "loaded") return group.pending ? { word: t("tgroup.state.pending"), tone: "attn" } : { word: t("tgroup.state.loaded"), tone: "ok" };
   if (group.state === "deferred") return { word: t("tgroup.state.deferred"), tone: "accent" };
   if (group.state === "off") return { word: t("tgroup.state.off"), tone: "" };

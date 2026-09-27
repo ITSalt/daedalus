@@ -27,6 +27,13 @@ SESSION_LOADS_KEY = "tool_group_loads"
 LOAD_NOW_KEY = "load_tool_groups"
 """Session metadata: groups the operator asked to have loaded, handed to the next run and then dropped."""
 
+CARRIED_KEY = "loaded_tool_groups"
+"""Session metadata: groups the last run loaded whole and called a tool of, handed to the next run whole."""
+
+SURFACE_KEY = "tool_group_surface"
+"""Session metadata: ``{group: state}`` as the last run's last advertisement put it — the core's word on
+an ``auto`` group, which nothing else can say and a restart must not forget."""
+
 USAGE_DAYS = 30
 USAGE_TTL_SECONDS = 60.0
 """The statistics move by a few rows an hour; a settings page opened twice in a minute reads them once."""

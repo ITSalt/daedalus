@@ -451,6 +451,91 @@ async def test_a_group_loaded_now_starts_the_next_run_loaded_and_the_queue_empti
         await manager.close()
 
 
+async def test_groups_loaded_now_are_seeded_whole_and_each_is_one_loaded_entry(settings: Settings, db: Database) -> None:
+    manager = await _manager(settings, db)
+    try:
+        # Fifteen tools carried by name fill the core's cap on loaded tools; passed as names too, the two
+        # groups' eleven tools pushed most of them out. Whole, each group is one entry more.
+        state = await manager.create_session("two groups")
+        policy = manager.tool_policy_for(state)
+        carried = sorted(t.name for t in manager.tools.list_all() if not getattr(t, "tool_group", "") and policy_admits(policy, t.name))[:13]
+        assert len(carried) == 13
+        state.metadata["discovered_tools"] = carried
+        await manager.load_tool_group_now(state.session.id, "scheduling")
+        await manager.load_tool_group_now(state.session.id, "loop")
+        engine = await manager._build_engine(state, "run-two")
+        assert engine.config.loaded_tool_groups == ("scheduling", "loop")
+        build_tool_surface(engine)
+        loaded = engine.context_manager
+        assert loaded.loaded_tool_group_names() == ("scheduling", "loop")
+        members = tool_groups.members(manager.tools.list_all())
+        assert set(members["scheduling"]) | set(members["loop"]) | set(carried) == set(loaded.discovered_tool_names())
+    finally:
+        await manager.close()
+
+
+async def test_a_group_is_carried_whole_only_while_the_runs_use_it(settings: Settings, db: Database) -> None:
+    manager = await _manager(settings, db)
+    try:
+        state = await manager.create_session("carry groups")
+        state.metadata[tool_groups.CARRIED_KEY] = ["scheduling", "loop", "telepathy"]
+        engine = await manager._build_engine(state, "run-carry")
+        # A group nothing declares loads nothing and is not handed on.
+        assert engine.config.loaded_tool_groups == ("scheduling", "loop")
+        build_tool_surface(engine)
+        engine.context_manager.discover_tool("DocsRead")
+        engine.context_manager.note_tool_used("DocsRead")
+        engine.context_manager.note_tool_used("ScheduleList")
+        assert manager._keep_loaded_tools(state, engine)
+        # The schedules were used and go on whole; the loop was seeded and never called, so it is let go;
+        # a tool loaded on its own and called is carried by name, as before.
+        assert state.metadata[tool_groups.CARRIED_KEY] == ["scheduling"]
+        assert state.metadata["discovered_tools"] == ["DocsRead"]
+        assert not manager._keep_loaded_tools(state, engine)
+        groups = {g["name"]: g for g in manager.tool_group_states(state)}
+        assert groups["scheduling"]["state"] == "loaded" and groups["loop"]["state"] == "deferred"
+
+        # One the session now keeps on the surface needs no loading.
+        await manager.set_session_tool_group(state.session.id, "scheduling", "eager")
+        assert manager.loaded_groups_for(state) == ()
+        await manager.set_session_tool_group(state.session.id, "scheduling", None)
+        assert manager.loaded_groups_for(state) == ("scheduling",)
+
+        # A group the session may no longer call is not carried back, whatever the last run used.
+        members = tool_groups.members(manager.tools.list_all())
+        await manager.set_tools_off(state.session.id, members["scheduling"])
+        assert manager.loaded_groups_for(state) == ()
+        assert {g["name"]: g for g in manager.tool_group_states(state)}["scheduling"]["state"] == "off"
+    finally:
+        await manager.close()
+
+
+async def test_the_panel_reads_the_last_runs_placement_of_a_group_after_a_restart(settings: Settings, db: Database) -> None:
+    manager = await _manager(settings, db)
+    try:
+        state = await manager.create_session("placed")
+        sid = state.session.id
+        engine = await manager._build_engine(state, "run-placed")
+        # What the last advertisement of the run said: the agents went on demand in a small window.
+        state.tool_group_surface = {"agents": "deferred", "board": "advertised", "browser": "deferred"}
+        assert manager._keep_loaded_tools(state, engine)
+        await manager.sessions.update_metadata(sid, state.session.metadata)
+    finally:
+        await manager.close()
+
+    restarted = await _manager(settings, db)
+    try:
+        state = await restarted.get_state(sid)
+        assert state is not None and state.tool_group_surface == {}
+        groups = {g["name"]: g for g in restarted.tool_group_states(state)}
+        assert groups["agents"]["state"] == "deferred"
+        assert groups["board"]["state"] == "advertised"
+        # A group placed by its mode is placed by it, whatever was stored.
+        assert groups["services"]["state"] == "undecided"
+    finally:
+        await restarted.close()
+
+
 def test_sections_left_in_the_prompt_follow_the_policy_or_the_surface() -> None:
     """What the host still writes itself: Notify's rules where the tool is admitted, teaching where it is shown."""
     shown = {"HistorySearch", "HistoryExpand"}

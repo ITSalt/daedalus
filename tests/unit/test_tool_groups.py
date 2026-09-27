@@ -145,7 +145,8 @@ async def test_a_session_chooses_its_own_mode_and_loads_a_group_for_its_next_run
     sid = state.session.id
     groups = {g["name"]: g for g in (await client.get(f"/api/sessions/{sid}/tool-groups", headers=H)).json()["groups"]}
     assert groups["scheduling"]["state"] == "deferred" and groups["scheduling"]["source"] == "default"
-    assert groups["board"]["state"] == "advertised"
+    # No run has placed a group that goes by the window yet, so the panel says its mode, not a guess.
+    assert groups["board"]["state"] == "undecided" and groups["board"]["load"] == "auto"
 
     changed = {g["name"]: g for g in (await client.put(f"/api/sessions/{sid}/tool-groups/scheduling", json={"load": "eager"}, headers=H)).json()["groups"]}
     assert changed["scheduling"]["state"] == "advertised" and changed["scheduling"]["source"] == "session"
@@ -158,8 +159,7 @@ async def test_a_session_chooses_its_own_mode_and_loads_a_group_for_its_next_run
 
     loaded = {g["name"]: g for g in (await client.post(f"/api/sessions/{sid}/tool-groups/loop/load", headers=H)).json()["groups"]}
     assert loaded["loop"]["state"] == "loaded" and loaded["loop"]["pending"]
-    queued = manager._queued_group_tools(state)
-    assert set(queued) == {"LoopNext", "LoopPause", "LoopResume", "LoopStatus", "LoopStop"}
+    assert manager.loaded_groups_for(state) == ("loop",)
     assert (await client.post("/api/sessions/nope/tool-groups/loop/load", headers=H)).status_code == 404
     assert (await client.post(f"/api/sessions/{sid}/tool-groups/telepathy/load", headers=H)).status_code == 404
 
@@ -171,4 +171,4 @@ async def test_a_group_the_session_may_not_call_is_off(client: httpx.AsyncClient
     assert groups["loop"]["state"] == "off" and groups["loop"]["tools"] == 0
     # Loading it is asked for and yet brings nothing: the session's policy decides, as for anything carried.
     await manager.load_tool_group_now(state.session.id, "loop")
-    assert manager._queued_group_tools(state) == ()
+    assert manager.loaded_groups_for(state) == ()

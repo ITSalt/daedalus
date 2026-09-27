@@ -122,22 +122,27 @@ TOOL_GROUP_CATALOGUE: dict[str, object] = {
         _group("loop", "The standing task of a loop agent", ["LoopNext", "LoopPause", "LoopResume", "LoopStatus", "LoopStop"], 520, "lazy", 2, 2, 2),
         _group("mcp", "MCP servers for this session", ["McpDisable", "McpEnable", "McpList"], 420, "auto", 16, 18, 30),
         _group("mcp_oauth", "Sign in to an MCP server", ["McpOAuthBegin", "McpOAuthDisconnect", "McpOAuthFinish", "McpOAuthStatus"], 390, "lazy", 0, 0, 0),
-        _group("scheduling", "Work that runs later or on an event", ["IntentCreate", "IntentDelete", "IntentList", "ScheduleCreate", "ScheduleDelete", "ScheduleList"], 1260, "lazy", 3, 10, 42, load="eager"),
+        _group("scheduling", "Work that runs later or on an event", ["IntentCreate", "IntentDelete", "IntentList", "ScheduleCreate", "ScheduleDelete", "ScheduleList"], 1260, "lazy", 3, 10, 42),
         _group("self_development", "Change your own code", ["SelfApply", "SelfPropose", "SelfRebuild", "SelfRollback", "SelfWorkspace"], 900, "lazy", 3, 27, 53),
-        _group("services", "Processes that outlive the turn", ["ServiceList", "ServiceLogs", "ServiceStart", "ServiceStop"], 700, "auto", 17, 40, 136),
+        _group("services", "Processes that outlive the turn", ["ServiceList", "ServiceLogs", "ServiceStart", "ServiceStop"], 700, "auto", 17, 40, 136, load="eager"),
     ],
 }
 """``GET /api/tool-groups``: every host group, shaped like one month of a real installation's use."""
 
 
 def session_tool_groups() -> dict[str, object]:
-    """``GET /api/sessions/<id>/tool-groups`` for a session that loaded the browser and holds the rare groups back."""
-    states = {"browser": "loaded", "board": "advertised", "agents": "advertised", "services": "advertised", "mcp": "advertised", "scheduling": "advertised", "mcp_oauth": "off"}
+    """``GET /api/sessions/<id>/tool-groups`` for a session that loaded the browser, cannot sign in to MCP
+    servers and chose its own mode for the board. Every other group is where its mode puts it, as the
+    host derives it: on demand held back, always and "when it fits" (as the last run placed it) on the
+    surface — so the panel shows the defaults and the settings, not a state nothing would produce."""
+    fixed = {"browser": "loaded", "mcp_oauth": "off"}
+    by_load = {"eager": "advertised", "auto": "advertised", "lazy": "deferred"}
     groups = TOOL_GROUP_CATALOGUE["groups"]
     assert isinstance(groups, list)
     return {"groups": [
-        {"name": g["name"], "description": g["description"], "tools": len(g["tools"]), "load": g["load"], "source": "session" if g["name"] == "board" else "default",
-         "state": states.get(g["name"], "deferred"), "pending": False}
+        {"name": g["name"], "description": g["description"], "tools": len(g["tools"]), "load": g["load"],
+         "source": "session" if g["name"] == "board" else "settings" if g["load"] != g["default"] else "default",
+         "state": fixed.get(g["name"], by_load[g["load"]]), "pending": False}
         for g in groups
     ]}
 

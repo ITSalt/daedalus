@@ -581,7 +581,8 @@ export type SessionToolGroup = {
   tools: number;
   load: ToolGroupLoad;
   source: "default" | "settings" | "session";
-  state: "off" | "loaded" | "deferred" | "advertised";
+  /** ``undecided``: a group the core places by the window, in a session no run has placed it in yet. */
+  state: "off" | "loaded" | "deferred" | "advertised" | "undecided";
   pending: boolean;
 };
 

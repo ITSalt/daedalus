@@ -30,6 +30,8 @@ describe("the words", () => {
     expect(stateChip({ state: "deferred", pending: false }).word).toBe("On demand");
     expect(stateChip({ state: "advertised", pending: false }).word).toBe("Always");
     expect(stateChip({ state: "off", pending: false }).word).toBe("Off");
+    // Before any run has placed a group that goes by the window, the chip says the mode, not a guess.
+    expect(stateChip({ state: "undecided", pending: false, load: "auto" }).word).toBe("When it fits");
   });
 
   it("reads the group a search asked for in either of its forms", () => {
