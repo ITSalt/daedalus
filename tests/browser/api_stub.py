@@ -243,6 +243,14 @@ SHARED_WRITES: dict[tuple[str, str], tuple[int, str, str]] = {
 
 EVENTS = "/api/events"
 
+LONG_RESULT_LAST_LINE = "the last line of the long result"
+LONG_RESULT = "".join(f"{n:05d} build step output, long enough to wrap on a phone and to need scrolling\n" for n in range(660)) + LONG_RESULT_LAST_LINE
+"""A tool result of about fifty thousand characters, ending in a line a harness looks for.
+
+The listing carries only a preview of a result (``TOOL_RESULT_PREVIEW_CHARS``), and "show all"
+asks ``/api/sessions/<id>/tool-results/<call>`` for the rest; every such call is answered with this,
+so a harness that opens a result sees a long one end to end."""
+
 
 def event_stream_hello() -> str:
     """The host's event stream as a stub gives it: one comment line, and then the end.
@@ -283,6 +291,8 @@ def answer_shared(method: str, path: str) -> tuple[int, str, str] | None:
     if method.upper() == "POST" and len(parts) == 5 and parts[2] == "sessions" and parts[4] in ("mode", "yagni"):
         # The composer's mode chip: a harness that reads the switch back answers these itself.
         return 200, "application/json", "{}"
+    if method.upper() == "GET" and len(parts) == 6 and parts[2] == "sessions" and parts[4] == "tool-results":
+        return 200, "application/json", json.dumps({"id": parts[5], "content": LONG_RESULT, "is_error": False, "length": len(LONG_RESULT), "complete": True})
     if len(parts) >= 5 and parts[2] == "sessions" and parts[4] == "tool-groups":
         # Every session's Details lists its tool groups; a change or a "Load now" answers the same list.
         return 200, "application/json", json.dumps(session_tool_groups())

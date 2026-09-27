@@ -102,7 +102,7 @@ export function parseArgs(raw: string): Record<string, unknown> {
  * very same object, which is what keeps the view from reconciling the whole history.
  */
 export function buildTurns(messages: MessageView[], previous: readonly Turn[] = []): Turn[] {
-  const results = new Map<string, { content: string; is_error: boolean; length?: number; clipped?: boolean; at: number }>();
+  const results = new Map<string, { content: string; is_error: boolean; length?: number | null; clipped?: boolean; at: number }>();
   for (const m of messages) for (const r of m.tool_results) results.set(r.id, { ...r, at: Date.parse(m.created_at) || 0 });
   const turns: Turn[] = [];
   const sigs: string[][] = [];
@@ -190,7 +190,7 @@ export function buildTurns(messages: MessageView[], previous: readonly Turn[] = 
       if (running) current.pendingTools++;
       current.toolIds.push(c.id);
       const ms = r && at && r.at >= at ? r.at - at : undefined;
-      current.activity.push({ kind: "tool", id: c.id, name: c.name, args: c.arguments, result: r?.content, error: r?.is_error, running, length: r?.length, clipped: r?.clipped, ms });
+      current.activity.push({ kind: "tool", id: c.id, name: c.name, args: c.arguments, result: r?.content, error: r?.is_error, running, length: r?.length ?? undefined, clipped: r?.clipped, ms });
       mark(`t${c.id}:${r ? `${r.content.length}${r.is_error ? "!" : ""}` : "-"}`);
     }
   });

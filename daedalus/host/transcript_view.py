@@ -17,6 +17,7 @@ import json
 import re
 from typing import Any
 
+from protocore.contracts.blob import IBlobStore
 from protocore.contracts.types import (
     COMPACTION_SUMMARY_METADATA_KEY,
     Message,
@@ -26,13 +27,14 @@ from protocore.contracts.types import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from protocore.runtime.wire_format import is_compacted_placeholder, parse_compacted_placeholder
 
 from daedalus.host import prompts
 from daedalus.host.prompts import split_headline
 from daedalus.host.run_outcome import OUTCOME_METADATA_KEY
 from daedalus.security import redact
 
-VIEW_VERSION = 7
+VIEW_VERSION = 8
 """Bumped whenever the shape below changes; stored views from an older version are recomputed. It
 covers this file only — what the redactor masks is covered by the key, by value and by shape, so a
 new secret format does not depend on anyone remembering this number."""
@@ -41,6 +43,10 @@ TOOL_RESULT_PREVIEW_CHARS = 400
 """Characters of a tool result a listed turn carries. The whole text is one request away
 (``/api/sessions/{id}/tool-results/{call_id}``), and previews were the larger half of a
 session payload while they were ten times this long."""
+
+_SPLIT_POINTER_RE = re.compile(r"\n\[truncated \d+ chars(?:; full result at [^\]]*)?\]\Z")
+"""The line the core ends a result with when it cut the text for the model and kept the whole value
+beside it (``canonical_content``)."""
 
 _SUMMARY_WRAP_RE = re.compile(r"</?compacted-turn[^>]*>")
 _NUDGE_MARKERS = ("[internal control", "tool repeatedly failed with the same error", "has been disabled for the rest of this run", "The run has reached its budget")
@@ -68,19 +74,7 @@ def message_view(message: Message) -> dict[str, Any]:
                 args = {"raw": block.arguments_json}
             tool_calls.append({"id": block.tool_call_id, "name": block.name, "arguments": redact.shared().redact_any(args)})
         elif isinstance(block, ToolResultBlock):
-            # The listing carries a preview; the full text (a skill body, a long command output) is one request away.
-            # Whether there is more to fetch is decided here, on the text itself: the length the app
-            # is told is the text's, while what it holds is a redacted preview, and a secret that
-            # redacts to something shorter would otherwise read as a result cut short.
-            tool_results.append(
-                {
-                    "id": block.tool_call_id,
-                    "content": redact.redact(block.content[:TOOL_RESULT_PREVIEW_CHARS]),
-                    "is_error": block.is_error,
-                    "length": len(block.content),
-                    "clipped": len(block.content) > TOOL_RESULT_PREVIEW_CHARS,
-                }
-            )
+            tool_results.append(_result_preview(block))
     compaction = message.metadata.get("daedalus.compaction") if isinstance(message.metadata, dict) else None
     is_summary = bool(message.metadata.get(COMPACTION_SUMMARY_METADATA_KEY)) if isinstance(message.metadata, dict) else False
     body = prompts.without_turn_context("".join(text))
@@ -130,6 +124,72 @@ def message_view(message: Message) -> dict[str, Any]:
     }
 
 
+def _readable_part(placeholder: str) -> str:
+    """What a compaction placeholder says for a reader: the lines under its machine frame, or, in the
+    older placeholders that have none, the head and tail of the output the frame carries."""
+    frame, _, readable = placeholder.strip().partition("\n")
+    if readable:
+        return readable
+    parsed = parse_compacted_placeholder(frame)
+    return parsed[0].preview if parsed else ""
+
+
+def _result_preview(block: ToolResultBlock) -> dict[str, Any]:
+    """The listing's preview of one tool result; the full text (a skill body, a long command output) is one request away.
+
+    Whether there is more to fetch is decided here, on the text itself: the length the app is told
+    is the text's, while what it holds is a redacted preview, and a secret that redacts to something
+    shorter would otherwise read as a result cut short.
+
+    A result compaction masked holds a placeholder whose first line is a machine frame of hashes and
+    base64. That frame used to be the preview, and its few hundred characters were all the expand
+    button ever fetched: the original sits in the blob store, which only the endpoint reads. So the
+    preview is the part written for a reader, and the length is left unknown rather than given as
+    the placeholder's, which would claim the result was that short.
+    """
+    content = block.content
+    if is_compacted_placeholder(content):
+        return {"id": block.tool_call_id, "content": redact.redact(_readable_part(content)[:TOOL_RESULT_PREVIEW_CHARS]), "is_error": block.is_error, "length": None, "clipped": True}
+    if block.canonical_content and _SPLIT_POINTER_RE.search(content):
+        # The model was shown a first page; the listing measures what the tool returned.
+        content = block.canonical_content
+    return {
+        "id": block.tool_call_id,
+        "content": redact.redact(content[:TOOL_RESULT_PREVIEW_CHARS]),
+        "is_error": block.is_error,
+        "length": len(content),
+        "clipped": len(content) > TOOL_RESULT_PREVIEW_CHARS,
+    }
+
+
+async def full_tool_result(block: ToolResultBlock, blobs: IBlobStore, tenant_id: str) -> tuple[str, bool]:
+    """The whole text of one tool result, and whether it really is whole.
+
+    The transcript holds what the model was shown, which is not always what the tool returned:
+    compaction replaces an old result with a placeholder and keeps the original in the blob store,
+    and the core may cut a long result to a first page and keep the rest in ``canonical_content``.
+    Either way the original is what the operator asked to see. Bytes that are not UTF-8 (a binary
+    file read raw) are decoded with replacement characters rather than refused, so the reader sees
+    what is there. When the stored original is gone, the placeholder's readable part is returned
+    and the second value says the text is not the whole result.
+    """
+    content = block.content
+    if is_compacted_placeholder(content):
+        parsed = parse_compacted_placeholder(content)
+        refs = [block.canonical_ref, block.metadata.get("blob_ref"), parsed[0].blob_ref if parsed else None]
+        for ref in refs:
+            if not isinstance(ref, str) or not ref:
+                continue
+            try:
+                return (await blobs.get(tenant_id, ref)).decode("utf-8", errors="replace"), True
+            except Exception:  # noqa: BLE001 — a pruned or unreadable blob falls through to the next name for it
+                continue
+        return _readable_part(content), False
+    if block.canonical_content and _SPLIT_POINTER_RE.search(content):
+        return block.canonical_content, True
+    return content, True
+
+
 class TranscriptViewBuilder:
     """Builds and keys the stored view. Held by the store, which knows nothing else about it."""
 
@@ -147,4 +207,4 @@ class TranscriptViewBuilder:
         return message_view(message)
 
 
-__all__ = ["TOOL_RESULT_PREVIEW_CHARS", "VIEW_VERSION", "TranscriptViewBuilder", "message_view"]
+__all__ = ["TOOL_RESULT_PREVIEW_CHARS", "VIEW_VERSION", "TranscriptViewBuilder", "full_tool_result", "message_view"]

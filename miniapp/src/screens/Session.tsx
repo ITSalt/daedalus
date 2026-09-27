@@ -47,6 +47,7 @@ import { BrowserPip } from "../browser/pip";
 import { BrowserHeadButton, useFirstOpenToast } from "../browser/phone";
 import { pipGroup } from "../browser/model";
 import { orchestrationPathOf } from "../mode";
+import { FullResult, ToolResultView } from "../toolresult";
 
 /**
  * Markdown parsed once per text. `cacheKey` names a message that will never change again, so its
@@ -788,6 +789,9 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
     const startHand = () => {
       userScrolling.current = true;
       window.clearTimeout(timer);
+      // The reader scrolling is the reader taking over: a line held after a click would otherwise
+      // pull the list back while they go down the result they had just opened in full.
+      opened.current = null;
     };
     const endHand = () => {
       timer = window.setTimeout(() => {
@@ -1420,9 +1424,9 @@ function shortModel(name?: string, max = 18): string {
 // two screens later, and the result fetched again on the way back. It is held here instead, keyed by
 // session and by the row, and read back when the row mounts again — the same reason the markdown
 // render cache is module-level. What a session held is dropped when the screen leaves it.
-const disclosed = new Map<string, { open?: boolean; full?: string | null }>();
+const disclosed = new Map<string, { open?: boolean; full?: FullResult | null }>();
 
-function remember(key: string, patch: { open?: boolean; full?: string | null }): void {
+function remember(key: string, patch: { open?: boolean; full?: FullResult | null }): void {
   disclosed.set(key, { ...disclosed.get(key), ...patch });
 }
 
@@ -2241,56 +2245,9 @@ function CompactionBar({ c }: { c: Compacting }) {
 }
 
 function ToolResultText({ item }: { item: ToolItem }) {
-  const { id: sessionId } = useContext(SessionContext);
+  const { id: sessionId, toast } = useContext(SessionContext);
   const key = `${sessionId}:result:${item.id}`;
-  const [full, setFullState] = useState<string | null>(() => disclosed.get(key)?.full ?? null);
-  const setFull = (text: string | null) => {
-    remember(key, { full: text });
-    setFullState(text);
-  };
-  const [loading, setLoading] = useState(false);
-  const text = full ?? item.result ?? "";
-  // Whether there is more of it is the server's answer, not a comparison of lengths: what is on
-  // screen is a redacted preview and the length is the text's, so a redaction that shortens the
-  // preview would otherwise offer to fetch a result that is already whole.
-  const clipped = full === null && !!item.clipped && item.length !== undefined;
-  async function loadAll() {
-    setLoading(true);
-    try {
-      const r = await api.get<{ content: string }>(`/api/sessions/${sessionId}/tool-results/${encodeURIComponent(item.id)}`);
-      setFull(r.content);
-    } catch {
-      setFull(text);
-    } finally {
-      setLoading(false);
-    }
-  }
-  const approval = item.error ? /Approval key: ([0-9a-f]{12})/.exec(text) : null;
-  const [granted, setGranted] = useState(false);
-  async function allowOnce() {
-    if (!approval) return;
-    try {
-      await api.post(`/api/sessions/${sessionId}/policy/grant`, { key: approval[1] });
-      setGranted(true);
-    } catch {
-      setGranted(false);
-    }
-  }
-  return (
-    <>
-      <pre className={`result ${item.error ? "error" : ""} ${full !== null ? "full" : ""}`}>{text}</pre>
-      {approval && (
-        <button type="button" className="btn small" onClick={allowOnce} disabled={granted} title={t("session.allow.title")}>
-          {t(granted ? "session.allowed.once" : "session.allow.once", { key: approval[1] })}
-        </button>
-      )}
-      {clipped && (
-        <button type="button" className="btn small" onClick={loadAll} disabled={loading}>
-          {loading ? t("common.loading") : t("session.showall", { n: fmtInt(item.length!) })}
-        </button>
-      )}
-    </>
-  );
+  return <ToolResultView sessionId={sessionId} item={item} toast={toast} initial={disclosed.get(key)?.full ?? null} keep={(full) => remember(key, { full })} />;
 }
 
 function langOf(path: string): string {

@@ -163,8 +163,23 @@ export async function copyText(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    // No clipboard API (http, old webview): a selectable field is the fallback the caller shows anyway.
-    return false;
+    // No clipboard API (http, Telegram's webview): a hidden field and the old copy command still
+    // work there. Where even that is refused the caller says so, and the text stays selectable.
+    const field = document.createElement("textarea");
+    field.value = text;
+    field.setAttribute("readonly", "");
+    field.style.position = "fixed";
+    field.style.opacity = "0";
+    document.body.appendChild(field);
+    field.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    field.remove();
+    return ok;
   }
 }
 

@@ -83,7 +83,7 @@ from daedalus.host.prompt_changes import PromptChangePlanner
 from daedalus.host.prompts import DEFAULT_RULES
 from daedalus.host.services import SCRATCH_DIR_NAME
 from daedalus.host.session_runner import TENANT, Attachment, clip_title
-from daedalus.host.transcript_view import message_view
+from daedalus.host.transcript_view import full_tool_result, message_view
 from daedalus.providers.llamacpp import discover_llamacpp
 from daedalus.providers.openai_compat import UsageRecord
 from daedalus.search.service import ConversationSearch, SearchBusy
@@ -2280,14 +2280,19 @@ def build_app(app: Application, api_token: str) -> FastAPI:
 
     @api.get("/api/sessions/{session_id}/tool-results/{call_id}")
     async def tool_result(session_id: str, call_id: str, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
-        """The whole text of one tool result, for the listing's preview to expand."""
+        """The whole text of one tool result, for the listing's preview to expand.
+
+        ``complete`` is false only when the result was masked and its stored original is gone; the
+        text is then the placeholder's own account of it, and the app says so.
+        """
         state = await manager.get_state(session_id)
         if state is None:
             raise HTTPException(404, "no such session")
         for message in await manager.sessions.messages_for_call(session_id, call_id):
             for block in message.content_blocks:
                 if isinstance(block, ToolResultBlock) and block.tool_call_id == call_id:
-                    return {"id": call_id, "content": redact.redact(block.content), "is_error": block.is_error, "length": len(block.content)}
+                    text, complete = await full_tool_result(block, manager.blobs, TENANT)
+                    return {"id": call_id, "content": redact.redact(text), "is_error": block.is_error, "length": len(text), "complete": complete}
         raise HTTPException(404, "no such tool result")
 
     @api.get("/api/sessions/{session_id}/sent/{call_id}/download")

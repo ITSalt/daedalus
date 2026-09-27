@@ -737,6 +737,8 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
             return respond(route, [])
         if tail.startswith("tool-groups"):
             return respond(route, session_tool_groups())
+        if tail.startswith("tool-results/") and fulfil_shared(route):
+            return None
         return respond(route, {})
     if rel.startswith("/api/usage/provider/"):
         return respond(route, PROVIDER_USAGE)

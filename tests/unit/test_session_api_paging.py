@@ -7,13 +7,21 @@ from typing import Any
 
 import httpx
 import pytest
-from protocore.contracts.types import Message, MessageRole, TextBlock, ToolResultBlock, ToolUseBlock
+from protocore.contracts.types import (
+    CompactionSourceRef,
+    Message,
+    MessageRole,
+    TextBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+)
+from protocore.runtime.wire_format import render_compacted_placeholder
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 from starlette.requests import Request
 
 from daedalus.config import RuntimeConfig, Settings
 from daedalus.extensions.api import build_app
-from daedalus.host.session_runner import SessionManager
+from daedalus.host.session_runner import TENANT, SessionManager
 from daedalus.host.transcript_view import TOOL_RESULT_PREVIEW_CHARS
 from daedalus.stores.database import Database
 
@@ -73,6 +81,66 @@ async def test_a_listed_tool_result_is_a_preview_and_the_expand_endpoint_has_the
     full = (await client.get(f"/api/sessions/{sid}/tool-results/call-7", headers=H)).json()
     assert full["content"] == body and full["length"] == len(body)
     assert (await client.get(f"/api/sessions/{sid}/tool-results/nope", headers=H)).status_code == 404
+
+
+async def _one_result(manager: SessionManager, block: ToolResultBlock) -> str:
+    state = await manager.create_session("tools")
+    await manager.sessions.append_transcript(
+        state.session.id,
+        [
+            Message(role=MessageRole.assistant, content_blocks=[ToolUseBlock(tool_call_id=block.tool_call_id, name="Read", arguments_json="{}")]),
+            Message(role=MessageRole.tool, content_blocks=[block]),
+        ],
+    )
+    return state.session.id
+
+
+def _masked(ref: str, original: str) -> str:
+    """The placeholder compaction leaves: the machine frame, then a line for the model."""
+    frame = render_compacted_placeholder(CompactionSourceRef(blob_ref=ref, sha256=ref, original_tokens=len(original) // 4, label="tool_result", tool_name="Read", preview=original[:40]))
+    return f"{frame}\n[The output of Read was masked by compaction; the original is stored as {ref}.]"
+
+
+async def test_a_masked_result_expands_to_the_original_in_the_blob_store(client: httpx.AsyncClient, manager: SessionManager) -> None:
+    # The fault this guards: the endpoint returned the placeholder, so "show all" on any result
+    # compaction had masked showed a frame of hashes and base64 instead of the output.
+    original = "".join(f"line {i:05d} of the original output\n" for i in range(2000))
+    stored = await manager.blobs.put(TENANT, original.encode(), content_type="text/plain; charset=utf-8")
+    block = ToolResultBlock(tool_call_id="call-m", content=_masked(stored.ref, original), metadata={"compacted": True, "blob_ref": stored.ref})
+    sid = await _one_result(manager, block)
+    listed = [r for m in (await client.get(f"/api/sessions/{sid}", headers=H)).json()["messages"] for r in m["tool_results"]]
+    assert listed[0]["clipped"] and listed[0]["length"] is None
+    assert "PROTOCOL_COMPACTED" not in listed[0]["content"] and "masked by compaction" in listed[0]["content"]
+    full = (await client.get(f"/api/sessions/{sid}/tool-results/call-m", headers=H)).json()
+    assert full["content"] == original and full["length"] == len(original) and full["complete"]
+    assert full["content"].endswith("line 01999 of the original output\n")
+
+
+async def test_a_masked_result_whose_original_is_gone_says_it_is_not_whole(client: httpx.AsyncClient, manager: SessionManager) -> None:
+    ref = "0" * 64
+    sid = await _one_result(manager, ToolResultBlock(tool_call_id="call-g", content=_masked(ref, "whatever it was"), metadata={"compacted": True, "blob_ref": ref}))
+    full = (await client.get(f"/api/sessions/{sid}/tool-results/call-g", headers=H)).json()
+    assert not full["complete"] and "PROTOCOL_COMPACTED" not in full["content"] and "masked by compaction" in full["content"]
+
+
+async def test_an_original_that_is_not_text_is_shown_rather_than_refused(client: httpx.AsyncClient, manager: SessionManager) -> None:
+    raw = b"head \xff\xfe\x00 binary \x80 tail"
+    stored = await manager.blobs.put(TENANT, raw)
+    sid = await _one_result(manager, ToolResultBlock(tool_call_id="call-b", content=_masked(stored.ref, "x"), canonical_ref=stored.ref))
+    response = await client.get(f"/api/sessions/{sid}/tool-results/call-b", headers=H)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["complete"] and body["content"].startswith("head ") and body["content"].endswith(" tail") and "\ufffd" in body["content"]
+
+
+async def test_a_result_cut_for_the_model_expands_to_what_the_tool_returned(client: httpx.AsyncClient, manager: SessionManager) -> None:
+    whole = "x" * 9000 + "THE END"
+    page = whole[:3000] + f"\n[truncated {len(whole) - 3000} chars]"
+    sid = await _one_result(manager, ToolResultBlock(tool_call_id="call-s", content=page, canonical_content=whole))
+    listed = [r for m in (await client.get(f"/api/sessions/{sid}", headers=H)).json()["messages"] for r in m["tool_results"]]
+    assert listed[0]["length"] == len(whole) and listed[0]["clipped"]
+    full = (await client.get(f"/api/sessions/{sid}/tool-results/call-s", headers=H)).json()
+    assert full["content"] == whole and full["complete"]
 
 
 async def test_the_page_goes_out_compressed_and_the_stream_does_not(client: httpx.AsyncClient, manager: SessionManager) -> None:

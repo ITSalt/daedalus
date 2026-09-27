@@ -443,6 +443,9 @@ a { color: var(--accent); text-decoration: none; }
 .toolcard .result.error { color:var(--bad); }
 .toolcard .result.full { max-height:70vh; }
 .toolcard > .btn.small { align-self:flex-start; }
+.toolcard .result-tools { display:flex; align-items:center; gap:8px; flex-wrap:wrap; color:var(--muted); font-size:var(--fs-13); }
+.toolcard .result-note { color:var(--muted); font-size:var(--fs-13); }
+.toolcard .result-note.error { color:var(--bad); }
 .diff pre { margin:0; padding:8px 10px; font-family:var(--mono); font-size:var(--fs-mono); white-space:pre-wrap; word-break:break-word; }
 .diff .del { background:rgba(248,113,113,.14); border-radius:var(--radius-md) var(--radius-md) 0 0; color:#fca5a5; }
 .diff .add { background:rgba(74,222,128,.12); border-radius:0 0 var(--radius-md) var(--radius-md); color:#86efac; }
@@ -1280,6 +1283,9 @@ body.resizing iframe { pointer-events: none; }
   .msg.user { max-width: 92%; }
   .thought { padding-left: 12px; }
   .toolcard, .tool-attachment, .summary-inline { margin-left: 12px; }
+  /* Between the header, the composer and the tab bar a phone's chat is about two thirds of the
+     screen; a whole result at 70vh filled all of it, and its end sat under the composer. */
+  .toolcard .result.full { max-height: 50vh; }
   .act-wrap.nested { padding-left: 14px; }
 }
 @media (max-width: 400px) {
