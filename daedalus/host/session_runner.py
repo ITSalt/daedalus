@@ -954,7 +954,10 @@ class SessionManager:
             return ", ".join(names)
         step = len(names) / MCP_EXAMPLE_NAMES
         examples = ", ".join(names[int(i * step)] for i in range(MCP_EXAMPLE_NAMES))
-        return f"{prefix}* ({len(names)} tools; for example {examples})"
+        # "Spelt like", not "for example": offered five names after McpEnable, a model picked the one
+        # that looked closest to its task, called it three times with the wrong arguments and only
+        # then searched. The names show the spelling; the search finds the tool.
+        return f"{prefix}* ({len(names)} tools, spelt like {examples})"
 
     @staticmethod
     def _catalogue_listed_names(state: SessionState) -> int:
@@ -1008,7 +1011,7 @@ class SessionManager:
                 # exact names or the exact prefix, is what keeps a model from composing a name out of
                 # the server's.
                 if names.startswith(mcp_tool_prefix(server) + "*"):
-                    return f"enabled {server}; its tools are not loaded yet: load the ones you need with ToolSearch, describing the task or selecting exact names. Tools: {names}"
+                    return f"enabled {server}; its tools are not loaded yet: find the ones you need with ToolSearch by describing the task; the names below only show how they are spelt. Tools: {names}"
                 return f"enabled {server}; its tools are not loaded yet: load the ones you need with ToolSearch, by these exact names: {names}"
             return f"enabled {server}; tools available from your next step: {names}"
         return f"disabled {server}; its tools ({mcp_tool_prefix(server)}*) are no longer available, including any loaded earlier; enabled now: {', '.join(current) or 'none'}"

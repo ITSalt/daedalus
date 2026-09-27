@@ -260,13 +260,13 @@ async def test_mcp_list_and_enable_name_a_held_back_server_by_prefix_and_a_few_n
         state = await manager.create_session("s")
         sid = state.session.id
         enabled = await manager.mcp_service("enable", session_id=sid, server="bigsrv")
-        assert "ToolSearch" in enabled and "Mcp_Bigsrv_* (300 tools; for example " in enabled
+        assert "ToolSearch by describing the task" in enabled and "Mcp_Bigsrv_* (300 tools, spelt like " in enabled
         assert len(enabled) < 600
-        examples = enabled.split("for example ", 1)[1].rstrip(")").split(", ")
+        examples = enabled.split("spelt like ", 1)[1].rstrip(")").split(", ")
         assert len(examples) == 5 and all(name in manager.mcp.tool_names("bigsrv") for name in examples)
         assert len(set(examples)) == 5
         listing = await manager.mcp_service("list", session_id=sid)
-        assert "[on ] bigsrv" in listing and "Mcp_Bigsrv_* (300 tools; for example " in listing and len(listing) < 1200
+        assert "[on ] bigsrv" in listing and "Mcp_Bigsrv_* (300 tools, spelt like " in listing and len(listing) < 1200
         # A small server is named in full, as the catalogue names it.
         small = sorted(manager.mcp.tool_names("small"))
         assert ", ".join(small) in listing
