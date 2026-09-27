@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/session-browser.png" alt="A session: the agent's answer with its checks and the files it sent, and beside it the agent's own browser, live, with the actions it took" width="100%" />
+  <img src="docs/screenshots/browser.gif" alt="The agent's own browser, live, with the actions it took: the operator takes control, leaves a note for the agent and gives the browser back" width="100%" />
 </p>
 
 > Built on [protocore](https://github.com/ascorblack-labs/protocore-community), an open agent core (ReAct loop, tools, context compaction, snapshots and resumable runs, memory, skills). The copy it runs on is [protocore-exp](https://github.com/anchor-inference/protocore-exp).
@@ -55,12 +55,12 @@ Each of these at full length: [docs/FEATURES.md](docs/FEATURES.md).
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/main.png" alt="The main orchestrator's chat: dispatches to project orchestrators, their progress, and the Questions tab with what waits for the operator" /></td>
-<td width="50%"><img src="docs/screenshots/composer-modes.png" alt="A session's answer with its checks, and the composer's mode chip open: Agent, Plan, Quick, Deep, Careful and the YAGNI switch" /></td>
+<td width="50%"><img src="docs/screenshots/orchestration.gif" alt="The main orchestrator's chat: dispatches to project orchestrators, their progress, the Questions tab answered and sent, and a project's team of staff" /></td>
+<td width="50%"><img src="docs/screenshots/session.gif" alt="A session: the agent's answer with its checks and the files it sent, the steps it took, and the site it built in the panel's browser" /></td>
 </tr>
 <tr>
 <td align="center"><sub>Orchestration — the main chat hands work to projects, and what waits for you is one Questions tab</sub></td>
-<td align="center"><sub>A session and its mode: plan first, work fast, go deep, or ask before anything irreversible</sub></td>
+<td align="center"><sub>A session — the answer with its checks and files, the steps behind it, and the agent's browser beside it</sub></td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/session-tool-groups.png" alt="A session with the panel on its Details tab: the tool groups the agent has in front of it, loaded, always on, or on demand" /></td>
@@ -81,13 +81,11 @@ Each of these at full length: [docs/FEATURES.md](docs/FEATURES.md).
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/phone-bots.png" width="30%" alt="Phone: agents" />
-  <img src="docs/screenshots/phone-composer-modes.png" width="30%" alt="Phone: a session with the mode sheet open" />
-  <img src="docs/screenshots/phone-browser.png" width="30%" alt="Phone: the agent's browser" />
+  <img src="docs/screenshots/phone.gif" width="100%" alt="Phone: the agents, a session with its answer, the mode sheet, and the agent's browser" />
 </p>
 <p align="center"><sub>The same app on a phone — inside Telegram as a Mini App, or in any browser</sub></p>
 
-<sub>The screenshots are taken over an invented installation by <code>tests/browser/screenshots.py</code>; rerun it after a change to the app.</sub>
+<sub>The screenshots are taken over an invented installation by <code>tests/browser/screenshots.py</code>; rerun it after a change to the app. The animated ones are sped-up recordings of the same installation, listed in <a href="docs/screenshots/MEDIA.md">docs/screenshots/MEDIA.md</a>.</sub>
 
 <sub>The app is bilingual — Russian and English, switched in Settings (the first row) or in the More sheet on a phone, and remembered by the browser. The same pictures in Russian: <code>docs/screenshots/ru/</code>.</sub>
 
@@ -113,6 +111,8 @@ What makes them survive: runs resume from snapshots after a restart; a run the p
 ## Self-development
 
 <p align="center"><img src="docs/diagrams/selfdev.png" alt="Self-development: worktree → edit → pull request → your approval in the chat → merge → rebuild → rollback on a failed preflight" width="100%" /></p>
+
+<p align="center"><img src="docs/screenshots/selfdev.gif" alt="Changes: a pull request the agent opened against its own code, its summary and diff, approved in the app, merged, and the rebuild started" width="100%" /></p>
 
 The PR text passes a public-text gate (nothing about your machine leaks into a public repository), the diff is checked for references it must not carry, and `GOVERNANCE.md` — the rules the agent always sees and can never edit — is mounted read-only. Approval is manual by default; `/approval auto` hands it over when you trust it.
 
