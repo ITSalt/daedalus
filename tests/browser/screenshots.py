@@ -1628,9 +1628,10 @@ def phone_project_shots(context) -> None:  # type: ignore[no-untyped-def]
     page.close()
 
 
-def staff_stand(context, *, browse: bool = False):  # type: ignore[no-untyped-def]
+def staff_stand(context, *, browse: bool = False, aside: int | None = None):  # type: ignore[no-untyped-def]
     """Ira, a Claude Code member, in her own view: her terminal with a permission dialog on it. With
-    ``browse`` her browser's permission waits beside it."""
+    ``browse`` her browser's permission waits beside it, and with ``aside`` the column beside the
+    terminal was dragged to that width."""
     from terminal_stub import TerminalStub
 
     focus = FocusStub.bakery(LANG)
@@ -1645,6 +1646,8 @@ def staff_stand(context, *, browse: bool = False):  # type: ignore[no-untyped-de
     page.route("**/api/**", focus_stub(focus))
     term.install(page)
     page.add_init_script("try { localStorage.setItem('daedalus.term.renderer', 'dom'); } catch (e) {}")
+    if aside is not None:
+        page.add_init_script(f"try {{ localStorage.setItem('daedalus.staff.asideWidth', '{aside}'); }} catch (e) {{}}")
     return page, pid
 
 
@@ -1689,8 +1692,9 @@ def run_staff() -> int:
         print("wrote staff-feed")
         desk.close()
         # The browser's permission, which "Always" may grant for its whole server, and the standing
-        # grants listed. In a browser of its own: a terminal already shown in one holds its size.
-        for name, over, wait in (("staff-permissions", {"browse": True}, ".staff-request [data-answer='always-server']"),):
+        # grants listed; then the column beside the terminal dragged wider, the terminal refitted to
+        # what is left. Each in a browser of its own: a terminal already shown in one holds its size.
+        for name, over, wait in (("staff-permissions", {"browse": True}, ".staff-request [data-answer='always-server']"), ("staff-aside-wide", {"aside": 560}, ".staff-term .term-view[data-state='live']")):
             desk = browser.new_context(viewport=DESK, device_scale_factor=2, color_scheme="dark")
             page, pid = staff_stand(desk, **over)
             shot(page, name, f"project/{pid}/staff/st-ira", wait=wait, settle=1400)

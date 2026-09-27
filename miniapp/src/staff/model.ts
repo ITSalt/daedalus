@@ -137,6 +137,54 @@ export function ruleWords(rule: string): string {
   return whole && !whole[1].includes("__") ? t("staff.rules.server", { server: whole[1] }) : rule;
 }
 
+// The column beside the terminal: the operator drags it wider or narrower, and the width is kept per
+// browser. Until they do, the stylesheet's own width stands (a quarter of the window, 280–360 px).
+
+export const ASIDE_KEY = "daedalus.staff.asideWidth";
+export const ASIDE_W_MIN = 260;
+export const ASIDE_W_MAX = 760;
+/** What the terminal keeps however wide the column is dragged: about eighty columns of a CLI. */
+export const ASIDE_TERMINAL_MIN = 480;
+/** One arrow key's worth of width. */
+export const ASIDE_STEP = 16;
+
+/** A width held to its bounds, and to what leaves the terminal its share of `body` (the row both sit in). */
+export function clampAside(width: number, body: number): number {
+  const max = Math.min(ASIDE_W_MAX, Math.max(ASIDE_W_MIN, body - ASIDE_TERMINAL_MIN));
+  return Math.round(Math.min(max, Math.max(ASIDE_W_MIN, width)));
+}
+
+type WidthStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+function widthStore(): WidthStore | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The width the operator left the column at, or null for the stylesheet's own. */
+export function readAsideWidth(storage: WidthStore | null = widthStore()): number | null {
+  try {
+    const raw = storage?.getItem(ASIDE_KEY);
+    const n = raw == null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= ASIDE_W_MIN && n <= ASIDE_W_MAX ? Math.round(n) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keep a width, or forget it (null) so the stylesheet's own comes back. A browser without site data keeps it for the visit. */
+export function rememberAsideWidth(width: number | null, storage: WidthStore | null = widthStore()): void {
+  try {
+    if (width == null) storage?.removeItem(ASIDE_KEY);
+    else storage?.setItem(ASIDE_KEY, String(Math.round(width)));
+  } catch {
+    /* private mode */
+  }
+}
+
 /** The requests of this member that wait for an answer, oldest first: the one waiting longest is the one on top. */
 export function openRequests<T extends Pick<Ask, "resolved_at" | "created_at"> & { staff_id: string | null }>(asks: T[], staffId: string): T[] {
   return asks.filter((a) => a.staff_id === staffId && !a.resolved_at).sort((a, b) => a.created_at.localeCompare(b.created_at));

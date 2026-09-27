@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelHealth, StaffMessage, StaffTurn } from "../api";
 import { setLang } from "../i18n";
-import { alwaysServer, mcpServer, ruleWords } from "./model";
+import { ASIDE_KEY, ASIDE_TERMINAL_MIN, ASIDE_W_MAX, ASIDE_W_MIN, alwaysServer, clampAside, mcpServer, readAsideWidth, rememberAsideWidth, ruleWords } from "./model";
 import { answeredBy, applyMessageEvent, attention, canAlways, channelWords, composerWhen, defaultMode, healthParts, keyboardBlocks, listRows, mergeTurns, nextSince, nowChoice, openRequests, outboxRows, stripRows, turnFacts } from "./model";
 
 const msg = (id: string, state: StaffMessage["state"], created_at: string, origin: StaffMessage["origin"] = "orchestrator"): StaffMessage => ({
@@ -196,3 +196,42 @@ describe("always for a whole MCP server", () => {
   });
 });
 
+describe("the column beside the terminal", () => {
+  const store = () => {
+    const kept = new Map<string, string>();
+    return { kept, getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
+  };
+
+  it("is held between its bounds and leaves the terminal its share of the row", () => {
+    expect(clampAside(100, 1600)).toBe(ASIDE_W_MIN);
+    expect(clampAside(5000, 2400)).toBe(ASIDE_W_MAX);
+    expect(clampAside(420.4, 1600)).toBe(420);
+    expect(clampAside(900, 1100)).toBe(1100 - ASIDE_TERMINAL_MIN);
+    // A row too narrow for both still gives the column its least width.
+    expect(clampAside(500, 600)).toBe(ASIDE_W_MIN);
+  });
+
+  it("is kept per browser, and a reset gives the stylesheet its own width back", () => {
+    const s = store();
+    expect(readAsideWidth(s)).toBeNull();
+    rememberAsideWidth(432, s);
+    expect(s.kept.get(ASIDE_KEY)).toBe("432");
+    expect(readAsideWidth(s)).toBe(432);
+    rememberAsideWidth(null, s);
+    expect(s.kept.has(ASIDE_KEY)).toBe(false);
+    expect(readAsideWidth(s)).toBeNull();
+  });
+
+  it("reads nothing it cannot trust, and survives a browser with no storage", () => {
+    const s = store();
+    for (const bad of ["wide", "", "12", String(ASIDE_W_MAX + 1), "NaN"]) {
+      s.kept.set(ASIDE_KEY, bad);
+      expect(readAsideWidth(s)).toBeNull();
+    }
+    const broken = { getItem: () => { throw new Error("private"); }, setItem: () => { throw new Error("private"); }, removeItem: () => { throw new Error("private"); } };
+    expect(readAsideWidth(broken)).toBeNull();
+    expect(() => rememberAsideWidth(400, broken)).not.toThrow();
+    expect(() => rememberAsideWidth(null, broken)).not.toThrow();
+    expect(readAsideWidth(null)).toBeNull();
+  });
+});

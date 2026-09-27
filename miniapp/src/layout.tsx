@@ -67,6 +67,10 @@ export type PaneDrag = {
   commit: (width: number) => void;
   /** 1 when moving the pointer right widens the pane (a pane on the left), -1 when it narrows it. */
   sign: 1 | -1;
+  /** Pixels one arrow key moves the edge. Given, the strip takes focus and the arrow keys. */
+  step?: number;
+  /** A double click (or Home) gives the pane its default width back. */
+  reset?: () => void;
 };
 
 /** A drag that writes a pixel width to one property of an element: a custom property the stylesheet
@@ -111,12 +115,33 @@ export function PaneHandle({ side, drag }: { side: "left" | "right"; drag: PaneD
     document.body.classList.remove("resizing");
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
+  // The keys move the edge the way the pointer would: → and ← by one step in the pointer's direction,
+  // Home for the default width. Each press is a whole drag, so it is kept at once.
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const d = latest.current;
+    if (!d.step) return;
+    if (e.key === "Home" && d.reset) {
+      e.preventDefault();
+      d.reset();
+      return;
+    }
+    const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const w = d.begin() + d.sign * dir * d.step * (e.shiftKey ? 4 : 1);
+    d.show(w);
+    d.commit(w);
+  };
   return (
     <div
       className={`pane-handle wide-only ${side}`}
       role="separator"
       aria-orientation="vertical"
       aria-label={t("session.resize")}
+      tabIndex={drag.step ? 0 : undefined}
+      title={drag.reset ? t("session.resize.hint") : undefined}
+      onKeyDown={drag.step ? onKey : undefined}
+      onDoubleClick={drag.reset ? () => latest.current.reset?.() : undefined}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         // No text selection starts under a drag, and the capture keeps the moves coming when the

@@ -3152,7 +3152,13 @@ button.staff-row:hover { background: var(--surface-2); }
 .staff-rule-text { flex: 1; min-width: 0; }
 .staff-rule .btn { flex: none; }
 @media (min-width: 1024px) {
-  .chat-body.with-staff-aside { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 26%, 360px); }
+  /* The column's own width until the operator drags its edge (--staff-aside-w, kept per browser);
+     a dragged width still leaves the terminal 480 px when the window is made narrower later. */
+  .chat-body.with-staff-aside { display: grid; grid-template-columns: minmax(0, 1fr) max(260px, min(var(--staff-aside-w, clamp(280px, 26%, 360px)), calc(100% - 480px))); }
+  .staff-aside { position: relative; }
+  .staff-aside > .pane-handle { position: absolute; top: 0; bottom: 0; left: -4px; margin: 0; }
+  .staff-aside > .pane-handle:focus-visible { outline: none; }
+  .staff-aside > .pane-handle:focus-visible::after { background: var(--accent); width: 2px; }
   .staff-request .ask-answers-row .btn { flex: none; min-height: var(--ctl-h); }
   .staff-request .ask-answers-own .field, .staff-request .ask-answers-own .btn { min-height: var(--ctl-h); }
 }

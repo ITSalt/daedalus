@@ -2570,6 +2570,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "session.provider.balance": { en: " · balance {sum}", ru: " · баланс {sum}" },
   "session.provider.resets": { en: " · resets in {t}", ru: " · обновится через {t}" },
   "session.resize": { en: "resize", ru: "изменить ширину" },
+  "session.resize.hint": { en: "Drag to resize · double-click for the default width", ru: "Потяните, чтобы изменить ширину · двойной щелчок — ширина по умолчанию" },
   "session.sub.kept": { en: "kept", ru: "сохранён" },
   "session.files.crumb": { en: "project", ru: "проект" },
   "session.files.upload": { en: "upload", ru: "загрузить" },

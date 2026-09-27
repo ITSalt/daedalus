@@ -13,7 +13,7 @@
 // what the status channel is called come from the capability table the host sends with the session,
 // so Claude Code, Codex, OpenCode, pi and Grok Build are drawn by the same code.
 
-import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, type Ask, type HarnessCapabilities, type StaffChanges, type StaffEventRow, type StaffMessage, type StaffSessionView, type StandingRule, type TerminalView as TerminalRow } from "../api";
 import { Sheet } from "../dialogs";
 import { useEvent } from "../events";
@@ -36,7 +36,8 @@ import { BrowserTab } from "../browser/BrowserPanel";
 import { deviceSaving, useBrowsers } from "../browser/data";
 import { BrowserHeadButton } from "../browser/phone";
 import { BrowserPip } from "../browser/pip";
-import { alwaysServer, attention, canAlways, channelWords, composerWhen, defaultMode, keyboardBlocks, listRows, nowChoice, openRequests, outboxRows, ruleWords, turnFacts, type StaffViewMode } from "./model";
+import { ASIDE_STEP, alwaysServer, attention, canAlways, channelWords, clampAside, composerWhen, defaultMode, keyboardBlocks, listRows, nowChoice, openRequests, outboxRows, readAsideWidth, rememberAsideWidth, ruleWords, turnFacts, type StaffViewMode } from "./model";
+import { PaneHandle, pixelDrag } from "../layout";
 
 const enc = encodeURIComponent;
 const MODE_KEY = "daedalus.staff.view";
@@ -93,6 +94,31 @@ export function StaffView({ projectId, staffId, wide, toast, onBack }: { project
   const [tab, setTab] = useState<SideTab>("session");
   const [reveal, setReveal] = useState(0);
   const [terminalState, setTerminalState] = useState<TerminalState | null>(null);
+  // The column's width, dragged at its edge: null is the stylesheet's own until the operator drags.
+  // The terminal refits by itself — its view observes its own box, and a change of columns waits
+  // out the drag (`terminal/fit.ts`) — so dragging sends the PTY one size, not one per frame.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const [asideWidth, setAsideWidth] = useState<number | null>(() => readAsideWidth());
+  const asideDrag = {
+    ...pixelDrag(
+      () => bodyRef.current,
+      "--staff-aside-w",
+      () => asideRef.current?.getBoundingClientRect().width ?? asideWidth ?? 320,
+      (w) => clampAside(w, bodyRef.current?.clientWidth ?? window.innerWidth),
+      (w) => {
+        setAsideWidth(w);
+        rememberAsideWidth(w);
+      },
+      -1,
+    ),
+    step: ASIDE_STEP,
+    reset: () => {
+      bodyRef.current?.style.removeProperty("--staff-aside-w");
+      setAsideWidth(null);
+      rememberAsideWidth(null);
+    },
+  };
   const messages = useStaffMessages(staffId, MESSAGES_N);
   // A member's browser (a CLI's through its tools entry): a tab beside its session once it has one.
   const browsers = useBrowsers({ staff: staffId });
@@ -217,7 +243,7 @@ export function StaffView({ projectId, staffId, wide, toast, onBack }: { project
         {/* A phone's header keeps only what is wrong; the whole line is in the sheet beside. */}
         <HealthLine health={view?.health ?? member.health ?? null} compact={!wide} />
       </StaffHeader>
-      <div className={`chat-body ${wide && side ? "with-staff-aside" : ""}`}>
+      <div ref={bodyRef} className={`chat-body ${wide && side ? "with-staff-aside" : ""}`} data-aside-width={asideWidth ?? "auto"} style={asideWidth != null ? ({ "--staff-aside-w": `${asideWidth}px` } as CSSProperties) : undefined}>
         <div className="chat-main">
           {wide && !browserInView && <BrowserPip groups={browsers.groups} onOpen={showBrowser} />}
           {shown === "terminal" && terminalId ? (
@@ -240,7 +266,8 @@ export function StaffView({ projectId, staffId, wide, toast, onBack }: { project
           </div>
         </div>
         {wide && side && (
-          <aside className="staff-aside" aria-label={t("staff.side")}>
+          <aside ref={asideRef} className="staff-aside" aria-label={t("staff.side")}>
+            <PaneHandle side="left" drag={asideDrag} />
             {panel}
           </aside>
         )}
