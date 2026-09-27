@@ -1430,7 +1430,8 @@ def run_notifications() -> int:
         page = phone.new_page()
         page.route("**/api/**", stub)
         shot(page, "phone-inbox", "inbox", wait=".needs-you .notice-row")
-        stub.events = notify_frames(PERMISSION)  # type: ignore[attr-defined]
+        # Two at once: the banner holds the first, and the second is counted beside Close all.
+        stub.events = notify_frames(PERMISSION, finished)  # type: ignore[attr-defined]
         shot(page, "phone-toast", "agents", wait=".notice-toasts.banner .notice-toast", settle=500)
         stub.events = ""  # type: ignore[attr-defined]
         phone.close()

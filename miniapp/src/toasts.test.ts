@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Notification } from "./api";
-import { ACTIONABLE_MS, STACK_MAX, TOAST_MS, ToastQueue, shouldToast, type ToastContext } from "./toasts";
+import { ACTIONABLE_MS, GLANCE_MS, STACK_MAX, TOAST_MS, URGENT_MS, ToastQueue, shouldToast, type ToastContext } from "./toasts";
 
 function entry(id: number, over: Partial<Notification> = {}): Notification {
   return {
@@ -30,50 +30,115 @@ describe("the queue", () => {
     expect(q.waiting.map((i) => i.entry.id)).toEqual([4, 5]);
   });
 
-  it("lets each one go after its time and fills its place from the line", () => {
+  it("lets each one go after its time, and the ones that waited with them", () => {
     const c = clock();
     const q = new ToastQueue(STACK_MAX, () => c.now);
     for (let i = 1; i <= 5; i++) q.push(entry(i), i);
     c.advance(TOAST_MS - 1);
     q.tick();
     expect(q.visible()).toHaveLength(3);
+    expect(q.waiting).toHaveLength(2);
     c.advance(1);
-    q.tick();
-    expect(q.visible().map((i) => i.entry.id)).toEqual([5, 4]);
-    c.advance(TOAST_MS);
+    // A burst is one glance: what waited is in the inbox, not in a procession after the first three.
     expect(q.tick()).toBeNull();
-    expect(q.visible()).toEqual([]);
+    expect(q.count).toBe(0);
   });
 
-  it("gives a request to answer longer than a line to read", () => {
+  it("shows one that waited for room only while it has a glance left", () => {
+    const c = clock();
+    const q = new ToastQueue(STACK_MAX, () => c.now);
+    for (let i = 1; i <= 3; i++) q.push(entry(i), i);
+    c.advance(TOAST_MS - GLANCE_MS - 1000);
+    q.push(entry(4), 4);
+    c.advance(GLANCE_MS + 1000);
+    q.tick();
+    expect(q.visible().map((i) => i.entry.id)).toEqual([4]);
+    expect(q.shown[0].expires).toBe(c.now + TOAST_MS - GLANCE_MS - 1000);
+    q.push(entry(5), 5);
+    q.push(entry(6), 6);
+    q.push(entry(7), 7);
+    expect(q.visible().map((i) => i.entry.id)).toEqual([6, 5, 4]);
+    c.advance(TOAST_MS - GLANCE_MS - 1000);
+    q.tick();
+    // 4 left with more than a glance of 7's time to go, so 7 takes its place.
+    expect(q.visible().map((i) => i.entry.id)).toEqual([7, 6, 5]);
+    q.push(entry(8), 8);
+    c.advance(GLANCE_MS + 1000);
+    q.tick();
+    // 5, 6 and 7 leave together; 8 has exactly a glance left and gets it.
+    expect(q.visible().map((i) => i.entry.id)).toEqual([8]);
+  });
+
+  it("only counts one whose time runs out before it could be read", () => {
+    const c = clock();
+    const q = new ToastQueue(1, () => c.now);
+    q.push(entry(1), 1);
+    c.advance(1);
+    q.push(entry(2), 2);
+    c.advance(TOAST_MS - 1);
+    q.tick();
+    expect(q.visible()).toEqual([]);
+    expect(q.count).toBe(0);
+  });
+
+  it("gives a request to answer longer than a line to read, and an urgent one in between", () => {
     const c = clock();
     const q = new ToastQueue(STACK_MAX, () => c.now);
     q.push(permission(1), 1);
     q.push(entry(2), 2);
+    q.push(entry(3, { tone: "error", category: "run_failed" }), 3);
+    expect(TOAST_MS).toBeLessThan(URGENT_MS);
+    expect(URGENT_MS).toBeLessThan(ACTIONABLE_MS);
     c.advance(TOAST_MS);
     q.tick();
+    expect(q.visible().map((i) => i.entry.id)).toEqual([3, 1]);
+    c.advance(URGENT_MS - TOAST_MS);
+    q.tick();
     expect(q.visible().map((i) => i.entry.id)).toEqual([1]);
-    c.advance(ACTIONABLE_MS - TOAST_MS);
+    c.advance(ACTIONABLE_MS - URGENT_MS);
     q.tick();
     expect(q.visible()).toEqual([]);
   });
 
-  it("stops the clock while the reader holds the stack", () => {
+  it("stops the clock only of the toast that is held", () => {
     const c = clock();
     const q = new ToastQueue(STACK_MAX, () => c.now);
     q.push(entry(1), 1);
+    q.push(entry(2), 2);
     c.advance(TOAST_MS - 1000);
-    q.pause();
+    q.hold(1);
     c.advance(60_000);
-    expect(q.tick()).toBeNull();
-    expect(q.visible()).toHaveLength(1);
-    q.resume();
+    q.tick();
+    expect(q.visible().map((i) => i.entry.id)).toEqual([1]);
+    expect(q.next()).toBeNull();
+    q.release(1);
     c.advance(999);
     q.tick();
     expect(q.visible()).toHaveLength(1);
     c.advance(1);
     q.tick();
     expect(q.visible()).toEqual([]);
+  });
+
+  it("forgets a hold when its toast is gone, so nothing after it stays up forever", () => {
+    const c = clock();
+    const q = new ToastQueue(STACK_MAX, () => c.now);
+    q.push(entry(1), 1);
+    q.hold(1);
+    // Closed under the pointer: no leave follows.
+    q.dismiss(1);
+    q.push(entry(2), 2);
+    c.advance(TOAST_MS);
+    q.tick();
+    expect(q.count).toBe(0);
+  });
+
+  it("closes all of them at once, the waiting ones too", () => {
+    const q = new ToastQueue(STACK_MAX, () => 0);
+    for (let i = 1; i <= 5; i++) q.push(entry(i), i);
+    expect(q.clear()).toBe(5);
+    expect(q.count).toBe(0);
+    expect(q.next()).toBeNull();
   });
 
   it("replaces a repeat of an entry already shown instead of stacking it", () => {

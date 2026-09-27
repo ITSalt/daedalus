@@ -7,7 +7,12 @@ one changes what the next read returns, the way the host does.
 
 What is checked, in order:
 
-- five notifications arrive: three toasts are shown, the rest wait, and each leaves after its time;
+- five notifications arrive: three toasts are shown with a "+2 more" line and Close all, and all of
+  them leave after their time, the counted ones with them;
+- a toast closed under the mouse does not freeze the next one, which still leaves by itself;
+- Close all empties the stack; "Don't show pop-ups" switches them off for this device, after which
+  none is drawn, and the switch in Settings → Notifications turns them back on;
+- in a conversation the stack stays clear of the composer and its send button;
 - the bell's badge counts them;
 - a permission request: the popover shows it under "Needs you" with Allow and Deny; Allow posts
   ``…/act {action: "allow"}``, and the ``notify.resolved`` that follows takes it off the list;
@@ -34,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from api_stub import expect_app  # noqa: E402
 from screenshots import BASE, CHROMIUM, P1, S1, S2, S3, UNHANDLED, stub  # noqa: E402
 
-TOAST_S = 6.0
+TOAST_S = 7.0
 """The app's time for a toast that asks nothing; the checks allow a second on either side."""
 
 
@@ -144,6 +149,10 @@ def toasts(page) -> list[str]:  # type: ignore[no-untyped-def]
     return page.eval_on_selector_all(".notice-toasts .notice-toast", "els => els.map(e => e.dataset.notice)")
 
 
+def overlap(a: dict, b: dict) -> bool:
+    return a["x"] < b["x"] + b["width"] and b["x"] < a["x"] + a["width"] and a["y"] < b["y"] + b["height"] and b["y"] < a["y"] + a["height"]
+
+
 def run() -> int:
     problems: list[str] = []
     server = ThreadingHTTPServer(("127.0.0.1", 0), EventServer)
@@ -195,7 +204,7 @@ def run() -> int:
             page.mouse.move(700, 300)
             page.wait_for_timeout(500)
 
-            # Five at once: three shown, two waiting, each gone after its time.
+            # Five at once: three shown, two counted, all gone after their time.
             for i in range(1, 6):
                 arrive(notification(i, f"Run {i} finished", session=S3))
             if not wait(page, lambda: len(toasts(page)) == 3, 3):
@@ -204,18 +213,87 @@ def run() -> int:
             print("toasts shown:", shown)
             if shown != ["3", "2", "1"]:
                 problems.append(f"the stack is {shown}, not the first three newest on top")
-            if not page.locator(".notice-toasts .notice-waiting").count():
-                problems.append("the two waiting toasts are not mentioned")
+            more = page.locator(".notice-toasts .notice-more")
+            if not more.count() or more.inner_text() != "+2 more":
+                problems.append(f"the two waiting toasts are not counted: {more.inner_text() if more.count() else 'no line'}")
+            if not page.locator(".notice-toasts [data-close-all]").count():
+                problems.append("a stack of three has no Close all")
             badge = page.locator(".sidebar .bell .bell-badge")
             if not wait(page, lambda: badge.count() and badge.inner_text() == "5", 3):
                 problems.append(f"the bell's badge says {badge.inner_text() if badge.count() else 'nothing'}, not 5")
             page.wait_for_timeout(int((TOAST_S - 1) * 1000))
             if len(toasts(page)) != 3:
                 problems.append("a toast left before its time")
-            if not wait(page, lambda: toasts(page) == ["5", "4"], 2.5):
-                problems.append(f"after their time the first three did not give way to the rest: {toasts(page)}")
+            if not wait(page, lambda: toasts(page) == [] and not page.locator(".notice-toasts").count(), 3):
+                problems.append(f"after their time the toasts did not leave: {toasts(page)}")
+
+            # Closed under the mouse: the stack leaves the page with the pointer inside it, and the
+            # next toast must still run its own clock.
+            arrive(notification(11, "Run 11 finished", session=S3))
+            if not wait(page, lambda: toasts(page) == ["11"], 3):
+                problems.append(f"a lone notification raised {toasts(page)}")
+            close = page.locator(".notice-toast[data-notice='11'] button[aria-label='Dismiss']")
+            close.hover()
+            close.click()
+            arrive(notification(12, "Run 12 finished", session=S3))
+            if not wait(page, lambda: toasts(page) == ["12"], 3):
+                problems.append(f"the next notification raised {toasts(page)}")
             if not wait(page, lambda: toasts(page) == [], TOAST_S + 2):
-                problems.append(f"the last toasts did not leave: {toasts(page)}")
+                problems.append("a toast after one closed under the mouse stayed up past its time")
+            page.mouse.move(700, 300)
+
+            # A mouse moved onto a toast holds it past its time; moved away, the toast goes.
+            arrive(notification(19, "Run 19 finished", session=S3))
+            if not wait(page, lambda: toasts(page) == ["19"], 3):
+                problems.append(f"a lone notification raised {toasts(page)}")
+            held = page.locator(".notice-toast[data-notice='19']").bounding_box()
+            if held:
+                page.mouse.move(held["x"] + 40, held["y"] + 20, steps=4)
+                page.mouse.move(held["x"] + 60, held["y"] + 24, steps=4)
+            page.wait_for_timeout(int((TOAST_S + 1.5) * 1000))
+            if toasts(page) != ["19"]:
+                problems.append("a toast under a moving mouse left while it was held")
+            page.mouse.move(700, 300, steps=4)
+            if not wait(page, lambda: toasts(page) == [], TOAST_S + 2):
+                problems.append("a toast the mouse let go of did not leave")
+
+            # Close all, then "Don't show pop-ups", then nothing at all until Settings turns them on.
+            for i in (13, 14):
+                arrive(notification(i, f"Run {i} finished", session=S3))
+            if not wait(page, lambda: len(toasts(page)) == 2, 3):
+                problems.append(f"two notifications raised {toasts(page)}")
+            page.locator(".notice-toasts [data-close-all]").click()
+            if not wait(page, lambda: not page.locator(".notice-toasts").count(), 2):
+                problems.append("Close all left the stack up")
+            arrive(notification(15, "Run 15 finished", session=S3))
+            if not wait(page, lambda: toasts(page) == ["15"], 3):
+                problems.append(f"after Close all a new one raised {toasts(page)}")
+            page.locator(".notice-toasts [data-popups-off]").click()
+            if not wait(page, lambda: not page.locator(".notice-toasts").count() and page.locator(".toast").count() == 1, 2):
+                problems.append("Don't show pop-ups did not take the stack down and say how to bring it back")
+            stored = page.evaluate("() => localStorage.getItem('daedalus.notice.popups')")
+            if stored != "off":
+                problems.append(f"the device did not remember the switch: {stored}")
+            arrive(notification(16, "Run 16 finished", session=S3))
+            page.wait_for_timeout(1500)
+            if page.locator(".notice-toast").count():
+                problems.append("a pop-up was drawn with pop-ups switched off")
+            if not wait(page, lambda: badge.count() and badge.inner_text() == str(Centre.summary()["unseen"]), 3):
+                problems.append("with pop-ups off the bell stopped counting")
+            page.goto(f"{BASE}/settings/notifications?token=t&lang=en", wait_until="commit")
+            switch = page.locator("[data-popups-card] button[aria-pressed]")
+            switch.wait_for(timeout=10000)
+            if switch.get_attribute("aria-pressed") != "false":
+                problems.append("Settings does not show pop-ups as off")
+            switch.click()
+            if page.evaluate("() => localStorage.getItem('daedalus.notice.popups')") is not None:
+                problems.append("the switch in Settings did not turn pop-ups back on")
+            page.goto(f"{BASE}/agents?token=t&lang=en", wait_until="commit")
+            page.wait_for_selector(".sidebar .bell", timeout=20000)
+            if not wait(page, lambda: len(Streams.open) >= 1, 10):
+                problems.append("the stream did not come back after Settings")
+            page.wait_for_timeout(1500)
+            page.mouse.move(700, 300)
 
             # A permission request, answered from the bell's popover.
             arrive(notification(6, "Bakery site: photos is waiting for permission", session=S2, category="permission", level="urgent", tone="warning", project=P1, request=f"policy:{S2}:exec"))
@@ -253,6 +331,24 @@ def run() -> int:
             arrive(notification(8, "Support inbox finished", session=S3))
             if not wait(page, lambda: toasts(page) == ["8"], 3):
                 problems.append(f"a notification about another session raised {toasts(page)}")
+            for i in (17, 18):
+                arrive(notification(i, f"Run {i} finished", session=S3))
+            wait(page, lambda: len(toasts(page)) == 3, 3)
+            page.wait_for_timeout(300)
+            stack = page.locator(".notice-toasts").bounding_box()
+            composer = page.locator(".composer-box").first.bounding_box()
+            print("stack:", stack, "composer:", composer)
+            if not stack or not composer or overlap(stack, composer):
+                problems.append(f"the stack covers the composer: {stack} over {composer}")
+            # A small laptop puts the composer under the corner: the stack must rise above it.
+            page.set_viewport_size({"width": 1100, "height": 720})
+            page.wait_for_timeout(400)
+            stack = page.locator(".notice-toasts").bounding_box()
+            composer = page.locator(".composer-box").first.bounding_box()
+            print("small laptop, stack:", stack, "composer:", composer)
+            if not stack or not composer or overlap(stack, composer):
+                problems.append(f"on a small laptop the stack covers the composer: {stack} over {composer}")
+            page.set_viewport_size({"width": 1440, "height": 900})
             context.close()
 
             # The phone: one banner, the More tab's badge, and Needs you first on the Inbox.
@@ -274,6 +370,10 @@ def run() -> int:
                 box = page.locator(".notice-toasts.banner").bounding_box()
                 if not box or box["y"] > 40:
                     problems.append(f"the phone's banner is not at the top: {box}")
+                for name in (".composer-box", ".tabbar"):
+                    other = page.locator(name).first.bounding_box() if page.locator(name).count() else None
+                    if box and other and overlap(box, other):
+                        problems.append(f"the phone's banner covers {name}: {box} over {other}")
             # The Inbox is in More on a phone (Terminals took its tab); More carries its unseen count.
             tab = page.locator(".tabbar button[aria-haspopup='dialog'] .tab-badge")
             if not wait(page, lambda: tab.count() and tab.inner_text() == str(Centre.summary()["unseen"]), 3):

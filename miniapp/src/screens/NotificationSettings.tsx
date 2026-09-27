@@ -14,6 +14,7 @@ import { plural, t } from "../i18n";
 import { categoryLabel } from "../notifications";
 import { CELLS, CHANNELS, MUTE_ENDS, joinQuietHours, muteState, muteUntil, nextCell, preferencesDiff, splitQuietHours, testLines, withCell, withMute } from "../notifyprefs";
 import { currentEndpoint, type PushDevice } from "../push";
+import { setPopupsShown, usePopupsShown } from "../popups";
 import { PushCard } from "../pushui";
 import { useMedia } from "../shell";
 import { invalidate, useQuery } from "../store";
@@ -263,6 +264,23 @@ function Answering({ prefs, change }: { prefs: NotificationPreferences; change: 
   );
 }
 
+/** The one switch that lives on this device rather than with the host (see `popups.ts`), so it is
+ *  there even before the host's preferences have loaded. */
+function PopupsCard() {
+  const on = usePopupsShown();
+  return (
+    <div className="card" data-popups-card>
+      <div className="section-title" style={{ marginTop: 0 }}>{t("nset.popups.title")}</div>
+      <div className="btnrow">
+        <button className={`btn small ${on ? "primary" : ""}`} aria-pressed={on} onClick={() => setPopupsShown(!on)}>
+          {t("nset.popups", { state: t(on ? "common.on" : "common.off") })}
+        </button>
+      </div>
+      <div className="sub">{t("nset.popups.sub")}</div>
+    </div>
+  );
+}
+
 /** When a mute ends, in words: a time today, a date and time otherwise. */
 function muteEnd(until: Date, now: Date): string {
   return until.toDateString() === now.toDateString() ? clock(until) : shortDateTime(until);
@@ -412,6 +430,7 @@ export function NotificationSettings({ toast }: { toast: (text: string) => void 
   return (
     <>
       <PushCard />
+      <PopupsCard />
       {view ? (
         <>
           <div className="card nmatrix-card">
