@@ -239,11 +239,18 @@ async def test_session_toggle_changes_visibility(settings: Settings, db: Databas
     assert await manager.mcp_service("list", session_id=state.session.id) == "[off] echo — echo tools: not connected yet"
     text = await manager.mcp_service("enable", session_id=state.session.id, server="echo")
     assert "enabled echo" in text and mcp_tool_name("echo", "add") in text
+    # The agent's session has ToolSearch, so the core holds the server back: the answer says to load
+    # the tools by their exact names instead of promising them on the next step.
+    assert "not loaded yet: load the ones you need with ToolSearch, by these exact names" in text
     assert manager.mcp_enabled(state) == ["echo"]
     reloaded = await manager.sessions.get(state.session.id, "daedalus")
     assert reloaded.metadata["mcp_enabled"] == ["echo"]
     await manager.mcp_service("disable", session_id=state.session.id, server="echo")
     assert manager.mcp_enabled(state) == []
+    # With ToolSearch switched off nothing is held back, and the tools are simply there next step.
+    state.metadata["tools_off"] = ["ToolSearch"]
+    text = await manager.mcp_service("enable", session_id=state.session.id, server="echo")
+    assert text.startswith("enabled echo; tools available from your next step: ")
     await manager.close()
 
 

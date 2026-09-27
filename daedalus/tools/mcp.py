@@ -43,8 +43,9 @@ async def mcp_list(context: ToolContext) -> ToolResult:
 @tool(
     name="McpEnable",
     description=(
-        "Enable an MCP server for this session. Its tools become available on your next step "
-        "(they appear as Mcp_<Server>_<tool>). The connection is made if needed."
+        "Enable an MCP server for this session. The connection is made if needed, and the result "
+        "names the server's tools exactly; call them by those names, and load them with ToolSearch "
+        "first when the result says they are not loaded."
     ),
 )
 async def mcp_enable(context: ToolContext, server: str) -> ToolResult:

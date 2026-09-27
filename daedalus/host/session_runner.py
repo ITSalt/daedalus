@@ -43,7 +43,7 @@ from protocore.runtime.query_engine import QueryEngine
 from protocore.runtime.soft_stop import CAUSE_MODEL_NO_PROGRESS, CAUSE_PROVIDER_ERROR
 from protocore.runtime.tool_registry import ToolRegistry
 from protocore.tools.memory import build_memory_tools
-from protocore.tools.tool_search import ToolSearchTool
+from protocore.tools.tool_search import TOOL_SEARCH_TOOL_NAME, ToolSearchTool
 
 from daedalus.config import (
     DISPATCHER_TOOLS,
@@ -955,8 +955,13 @@ class SessionManager:
             return f"removed stored OAuth tokens for {server}" if removed else f"{server} is not OAuth-configured"
         current = await self.set_mcp(session_id, server, enabled=(op == "enable"))
         if op == "enable":
-            names = sorted(self.mcp.tool_names(server))
-            return f"enabled {server}; tools available from your next step: {', '.join(names) or '(none)'}"
+            names = ", ".join(sorted(self.mcp.tool_names(server))) or "(none)"
+            if self._searches_for_tools(state):
+                # A server's tools are the first thing the core holds back whenever ToolSearch is on, so
+                # they are named in the catalogue rather than put in the tool list. Saying so, with the
+                # exact names, is what keeps a model from composing a name out of the server's.
+                return f"enabled {server}; its tools are not loaded yet: load the ones you need with ToolSearch, by these exact names: {names}"
+            return f"enabled {server}; tools available from your next step: {names}"
         return f"disabled {server}; enabled now: {', '.join(current) or 'none'}"
 
     async def _load_image(self, ref: str) -> tuple[bytes, str]:
@@ -3955,6 +3960,11 @@ class SessionManager:
 
     def registry_for(self, state: SessionState) -> ToolRegistry:
         return self.dispatcher_tools if self.is_dispatcher(state) else self.tools
+
+    def _searches_for_tools(self, state: SessionState) -> bool:
+        """Whether this session has ToolSearch, which is what makes the core hold MCP servers back."""
+        registry = self.registry_for(state)
+        return registry.get(TOOL_SEARCH_TOOL_NAME) is not None and policy_admits(self.tool_policy_for(state), TOOL_SEARCH_TOOL_NAME)
 
     def _local_blocked_tools_for(self, state: SessionState) -> set[str]:
         """Restrictions selected directly for this session, before its parent narrows them."""
