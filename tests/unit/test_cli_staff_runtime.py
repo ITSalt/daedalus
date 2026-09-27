@@ -497,6 +497,20 @@ async def test_the_team_tools_are_answered_by_the_host(settings: Settings, db: D
         assert [r["body"] for r in s.ptyd.replies][0] == {"text": "euros"}
 
 
+async def test_a_held_question_gets_the_option_and_the_operators_whole_note(settings: Settings, db: Database) -> None:
+    from tests.unit.test_answer_words import NOTE
+
+    async with stand(settings, db, adapter=StubClaude("askorch:Euros or dollars?|euros|dollars")) as s:
+        trust(s)
+        ada = await s.hire()
+        await s.team.assign(ada, await s.task())
+        await s.status_event(ada, "question")
+        [ask] = await s.manager.asks.open_for(s.project.id)
+        await s.team.answer(ask.short_id, selected=["euros"], note=NOTE, by="operator")
+        # The note once replaced the option here, and a command-line dialog got the option alone.
+        assert [r["body"] for r in s.ptyd.replies][0] == {"text": f"euros — {NOTE}"}
+
+
 async def test_an_answer_after_the_hold_expired_arrives_as_a_message(settings: Settings, db: Database) -> None:
     async with stand(settings, db, adapter=StubClaude("askorch:Which oven?|left|right")) as s:
         trust(s)

@@ -653,7 +653,7 @@ class CodexAdapter:
             granted = request.params.get("permissions") if allowed else {}
             result = {"permissions": granted or {}, "scope": "session" if answer.choice == "allow_always" else "turn"}
         elif request.method == "item/tool/requestUserInput":
-            chosen = answer.note if answer.choice == "text" else answer.choice
+            chosen = answer.said
             result = {"answers": {str(q.get("id") or ""): {"answers": [chosen]} for q in request.params.get("questions") or [] if isinstance(q, dict)}}
         else:
             result = {"action": "accept" if answer.choice in ("accept", "allow_once", "allow_always") else "decline", "content": None}

@@ -68,6 +68,9 @@ INSTRUCTIONS_MAX = 16_000
 TEXT_MAX = 8_000
 """A message to a staff member or the text of a request. Longer text belongs in a file the message points at."""
 ASK_DETAIL_MAX = 16_000
+"""Characters of a request's detail or answer, as JSON written with its letters as they are. Written
+escaped, every Cyrillic letter cost six, and an operator's answer of 2,700 Russian characters was
+refused although the answer routes accept 4,000."""
 TITLE_MAX = 120
 """A request's title: a line in a list, not a second text."""
 
@@ -1079,7 +1082,7 @@ class AsksStore:
         if not body:
             raise StaffError("a request needs text")
         heading = _plain(title, "the title", TITLE_MAX)
-        details = json.dumps(detail or {})
+        details = json.dumps(detail or {}, ensure_ascii=False)
         if len(details) > ASK_DETAIL_MAX:
             raise StaffError(f"a request's detail is at most {ASK_DETAIL_MAX} characters of JSON")
         at = _now()
@@ -1112,7 +1115,7 @@ class AsksStore:
         """Answer a request. True for the one answer that got there first; False for every later one."""
         if by not in ASK_RESOLVERS:
             raise StaffError(f"a request is answered by the orchestrator, the operator, staff or the system, not {by!r}")
-        body = json.dumps(resolution or {})
+        body = json.dumps(resolution or {}, ensure_ascii=False)
         if len(body) > ASK_DETAIL_MAX:
             raise StaffError(f"an answer is at most {ASK_DETAIL_MAX} characters of JSON")
         async with self._db.transaction() as conn:

@@ -948,7 +948,10 @@ class Team:
             # Kept before the delivery: the operator's "always" stands even when the session that
             # asked has ended by now, and its next launch is where the rule is read.
             await self.manager.staff.grant_rule(ask.staff_id, rule, by="operator")
-        delivered, error = await self._deliver(ask, allow=allow, always=always, server=bool(server and rule), text=text or note or None, selected=selected, by=by)
+        # The typed answer and the note beside it both go: ``text or note`` once dropped the note
+        # whenever the operator had typed an answer as well.
+        said = " — ".join(part for part in dict.fromkeys(((text or "").strip(), note)) if part)
+        delivered, error = await self._deliver(ask, allow=allow, always=always, server=bool(server and rule), text=said or None, selected=selected, by=by)
         if ask.kind == "permission" and allow:
             who = "The orchestrator" if by == "orchestrator" else "The operator"
             member = await self.manager.staff.get(ask.staff_id) if ask.staff_id else None

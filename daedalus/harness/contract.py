@@ -374,6 +374,16 @@ class Answer:
     """One of ``ANSWER_CHOICES`` for a permission; an option's label or ``text`` for a question."""
     note: str = ""
 
+    @property
+    def said(self) -> str:
+        """A question's answer as the asker is handed it: the option chosen and the operator's words
+        beside it, whole. Once only the option's label went to the command-line agents, and a note
+        written next to a chosen option never reached the member at all."""
+        if self.choice == "text":
+            return self.note
+        note = self.note.strip()
+        return f"{self.choice} — {note}" if note and note != self.choice else self.choice
+
 
 @dataclass(frozen=True, slots=True)
 class Delivery:

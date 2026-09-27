@@ -476,7 +476,7 @@ class OpenCodeAdapter:
                 body["message"] = answer.note
             result = await self._http(term, state, "POST", f"/permission/{request_ref}/reply", body)
         else:
-            chosen = answer.note if answer.choice == "text" else answer.choice
+            chosen = answer.said
             result = await self._http(term, state, "POST", f"/question/{request_ref}/reply", {"answers": [[chosen]] * max(1, int(request.get("count") or 1))})
         if result.status != 200:
             state.answered.discard(request_ref)

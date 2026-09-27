@@ -129,7 +129,10 @@ def _settled_reply(ask: Any) -> dict[str, Any]:
     if resolution.get("closed"):
         return {"text": f"This question was withdrawn: {resolution['closed']}", "error": True}
     allow = resolution.get("allow")
-    words = str(resolution.get("text") or "").strip() or ", ".join(str(s) for s in resolution.get("selected") or [])
+    # The option, the typed answer and the note beside it, all of them: the note was once left out
+    # here, and a replayed question heard the option without the operator's words.
+    parts = (", ".join(str(s) for s in resolution.get("selected") or []), str(resolution.get("text") or "").strip(), str(resolution.get("note") or "").strip())
+    words = " — ".join(part for part in dict.fromkeys(parts) if part)
     return {"text": words or ("yes" if allow else "no" if allow is False else "")}
 
 
@@ -1216,7 +1219,12 @@ class CliStaffRuntime:
         CLI's own request through the adapter, which must confirm it or the delivery fails."""
         session = self._session(live)
         ref = ask.request_ref
-        text = (decision.text or "").strip() or ", ".join(decision.selected)
+        # The operator's own words are kept apart from the option they pressed: a note written
+        # beside a chosen option once replaced the option in a team answer, and never reached a
+        # command-line member at all, whose answer carried only the option's label.
+        note = (decision.text or "").strip()
+        chosen = ", ".join(decision.selected)
+        text = " — ".join(part for part in dict.fromkeys((chosen, note)) if part)
         if ref.startswith("tools:"):
             # A tool call's question: the call waiting on it takes the answer; one that gave up has
             # it kept for the same call made again.
@@ -1249,7 +1257,7 @@ class CliStaffRuntime:
                 choice = (always if decision.always else "allow_once") if decision.allow else "deny_with_note" if text else "deny"
             else:
                 choice = decision.selected[0] if decision.selected else "text"
-            if not await self.adapter.answer(session.term, ref, Answer(choice, note=text)):
+            if not await self.adapter.answer(session.term, ref, Answer(choice, note=note)):
                 raise RuntimeError(f"the answer could not be confirmed in {self.adapter.capabilities.label}; answer it in the terminal")
         await self._apply(session, StaffEvent(EventKind.REQUEST_RESOLVED, _now(), {"via": decision.by}, native_id=ref, launch_id=session.launch.launch_id))
 

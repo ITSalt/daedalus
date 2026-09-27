@@ -849,7 +849,7 @@ async def op_answer(d: Dispatcher, session_id: str, *, ask_id: str, text: str = 
         raise ValueError("the team is not running here")
     answer = (text or quote).strip()
     await team.answer(ask.id, text=answer, by="operator", via="dispatcher", extra={"quote_message_id": seq, "quote": wanted[:500]})
-    return f"answered [{ask.short_id}] with the operator's words: {answer[:200]}"
+    return f"answered [{ask.short_id}] with the operator's words: {answer}"
 
 
 async def _latest_operator_message(d: Dispatcher, session_id: str) -> tuple[str, int]:

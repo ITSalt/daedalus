@@ -525,14 +525,16 @@ class ClaudeCodeAdapter:
             # this session no further, and the next launch carries it from the host's list.
             return await self._keys_for_permission(term, request, allowed, always=answer.choice.startswith("allow_always"))
         labels = [str(o.get("label") or "") for q in request.questions[:1] for o in q.get("options") or [] if isinstance(o, dict)]
-        chosen = answer.note if answer.choice == "text" else answer.choice
+        chosen = answer.said
         answers = {str(q.get("question") or ""): chosen for q in request.questions}
         body = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow", "updatedInput": {**request.tool_input, "answers": answers}}}
         if request.reply_id and await term.reply(request.reply_id, body):
             request.settled = True
             return True
         if chosen not in labels:
-            return False  # free text goes only through the hook; the dialog's own text box is the operator's
+            # Free text, or an option with the operator's words beside it, goes only through the
+            # hook: pressing the option's key would deliver the choice and silently drop the words.
+            return False  # the dialog's own text box is the operator's
         return await self._keys_for_dialog(term, re.escape(str(request.questions[0].get("question") or "")[:40]), str(labels.index(chosen) + 1), request)
 
     async def _keys_for_permission(self, term: TerminalPort, request: _Request, allowed: bool, *, always: bool = False) -> bool:

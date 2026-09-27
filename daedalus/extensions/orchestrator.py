@@ -83,6 +83,8 @@ TASK_WAKES = frozenset({"task.created", "task.moved", "task.assigned", "task.acc
 SELF_EVENTS_ALLOWED = frozenset({"ask.answered", "permission.resolved"})
 """Events that carry the orchestrator's own session id but are someone else's news: the operator
 answering what it asked."""
+ANSWER_EVENTS = frozenset({"ask.answered", "permission.resolved", "ask.batch"})
+"""The events that bring the operator's answers; a wake-up never folds them into "… N more"."""
 
 QUESTION_MAX = 2000
 OPTION_MAX = 200
@@ -115,6 +117,19 @@ def _now() -> str:
 def _one_line(text: str, limit: int) -> str:
     flat = " / ".join(line.strip() for line in (text or "").strip().splitlines() if line.strip())
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
+
+
+def _verbatim(text: str) -> str:
+    """The operator's words for an event line, whole and with their line breaks.
+
+    Never clipped: an answer is the operator's instruction, and a 600-character cut once handed the
+    orchestrator half a numbered list of remarks ending on "Такж…", which it could only report as
+    broken. The size is bounded where the words are taken, by the answer routes' own limits. Lines
+    after the first are indented so they stay with their event: a line of the operator's that began
+    with "- 12:30" would otherwise read as an event of its own.
+    """
+    lines = [line.rstrip() for line in (text or "").strip().splitlines()]
+    return "\n  ".join(lines)
 
 
 def _age(at: str | None, now: datetime) -> str:
@@ -842,8 +857,11 @@ class Orchestrators:
         name = project.name if project is not None else project_id
         limit = self.manager.config.orchestrator.batch_max_lines
         events = batch.events
+        # An answer of the operator's is never one of the "… N more": the cap is for news the tools
+        # can list again, and the operator's words are nowhere else the orchestrator looks.
+        shown = [event for index, event in enumerate(events) if index < limit or event.type in ANSWER_EVENTS]
         lines: list[str] = []
-        for event in events[:limit]:
+        for event in shown:
             try:
                 # A batch of answers is one event and one wake-up, but each answer is a line of its
                 # own, worded as a single answer is: the orchestrator reads them the same way, and
@@ -853,8 +871,8 @@ class Orchestrators:
                 logger.warning("could not describe %s for the orchestrator", event.type, exc_info=True)
                 said = [event.type]
             lines.extend(f"- {self._clock(event.at)} {line}" for line in said)
-        if len(events) > limit:
-            lines.append(f"- … and {len(events) - limit} more (Team, Tasks)")
+        if len(events) > len(shown):
+            lines.append(f"- … and {len(events) - len(shown)} more (Team, Tasks)")
         first = self._clock(events[0].at) if events else ""
         return f"[events · {name} · {len(lines)} since {first}]\n" + "\n".join(lines)
 
@@ -959,7 +977,7 @@ class Orchestrators:
         if ask.kind == "permission":
             always = f"granted always ({r['rule']})" if r.get("rule") else "granted always"
             said = (always if r.get("always") else "granted") if r.get("allow") else "refused"
-            return f"{said} — the operator said: {_one_line(str(r['note']), 400)}" if r.get("note") else said
+            return f"{said} — the operator said: {_verbatim(str(r['note']))}" if r.get("note") else said
         if ask.kind == "folder":
             if r.get("outcome") and str(r["outcome"]) != "added":
                 # Said in full, with the advice after the dash: "approved" alone once sent the
@@ -971,7 +989,7 @@ class Orchestrators:
         if r.get("note"):
             # The operator's words beside the option they chose: part of the answer, not a remark.
             said = f"{said} — note: {r['note']}" if said else str(r["note"])
-        return _one_line(said, 600) or "(no text)"
+        return _verbatim(said) or "(no text)"
 
     async def _task_bit(self, task_id: Any) -> str:
         row = await self.manager.db.fetchone("SELECT id, title FROM board_tasks WHERE id = ?", (str(task_id),))
