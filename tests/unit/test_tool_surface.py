@@ -215,6 +215,31 @@ async def test_a_large_mcp_server_is_held_back_behind_the_search(settings: Setti
         await manager.close()
 
 
+async def test_a_catalogue_that_changes_under_a_running_session_never_reaches_it_unless_enabled(settings: Settings, db: Database) -> None:
+    """The policies refuse other servers' proxies by name, so a server that connected or re-listed its
+    tools after a session's policy was computed had its new proxies advertised to that session."""
+    manager = await _manager(settings, db)
+    try:
+        _connect(manager, "tracker", _catalogue(5))
+        bystander = await manager.create_session("bystander")
+        user = await manager.create_session("user", metadata={"mcp_enabled": ["tracker"]})
+        for state in (bystander, user):
+            state.engine = await manager._build_engine(state, f"run-{state.session.title}")
+        # The server re-lists with more tools, and another server connects, while both are running.
+        _connect(manager, "tracker", _catalogue(12))
+        _connect(manager, "late", _catalogue(3))
+        tracker, late = manager.mcp.tool_names("tracker"), manager.mcp.tool_names("late")
+        assert len(tracker) == 12 and len(late) == 3
+        assert bystander.engine is not None and user.engine is not None
+        surface = {d.name for d in build_tool_surface(bystander.engine)}
+        assert not surface & (tracker | late)
+        assert not any(policy_admits(bystander.engine.effective_tool_policy, name) for name in tracker | late)
+        assert all(policy_admits(user.engine.effective_tool_policy, name) for name in tracker)
+        assert not any(policy_admits(user.engine.effective_tool_policy, name) for name in late)
+    finally:
+        await manager.close()
+
+
 # -- the prompt --------------------------------------------------------------------------------------
 
 

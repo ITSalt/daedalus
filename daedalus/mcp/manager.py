@@ -384,6 +384,14 @@ class McpManager:
         self._oauth_clients: dict[str, MCPOAuthClient] = {}
         self._ensure_locks: dict[str, asyncio.Lock] = {}
         self._registered_tools: dict[str, dict[str, McpToolProxy]] = {}
+        self.catalog_listeners: list[Callable[[str], None]] = []
+        """Called with the server's name, synchronously, whenever its proxies change in the registry.
+
+        The sessions' policies refuse the proxies of servers they did not enable BY NAME, so a proxy
+        that appears after a policy was computed is admitted by it. A server that re-lists its tools
+        mid-session (``notifications/tools/list_changed``) registered new proxies that every other
+        session's running engine then advertised and let ToolSearch load, until something unrelated
+        refreshed the policies. Called before any await, so no request is built in between."""
 
     def reload(self, servers: dict[str, McpServerConfig]) -> None:
         previous = self._configs
@@ -421,6 +429,12 @@ class McpManager:
                     break
         for tool in current.values():
             self._registry.register(tool)
+        if previous.keys() != current.keys():
+            for listener in tuple(self.catalog_listeners):
+                try:
+                    listener(server)
+                except Exception:  # noqa: BLE001 — the catalogue is published either way; the next refresh retries
+                    logger.exception("a listener of MCP server %s's catalogue failed", server)
 
     def available(self) -> list[str]:
         return sorted(self._configs)

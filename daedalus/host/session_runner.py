@@ -515,6 +515,10 @@ class SessionManager:
             settings, config, usage_sink=self.usage, image_loader=self._load_image
         )
         self.mcp = McpManager(config.mcp.servers, self.tools, token_dir=settings.state_dir / "mcp")
+        # A server's catalogue can change under running sessions — a re-listing, a reconnect, another
+        # session enabling it. Each session refuses the proxies of servers it did not enable by name, so
+        # every session's policy is recomputed at once, not at the next thing that happens to refresh it.
+        self.mcp.catalog_listeners.append(lambda server: self._apply_tool_visibility_all())
         self.request_manifests = RequestManifestStore(db, self.blobs, tenant_id=TENANT)
         self.governance_path = governance_path or (settings.bot_repo_dir / "GOVERNANCE.md")
         self._states: dict[str, SessionState] = {}
