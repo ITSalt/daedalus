@@ -111,8 +111,16 @@ audit() {
 
 # -- the self-check ---------------------------------------------------------------------------
 #
-# Builds a throwaway repository holding one committed ELF binary and one file naming the account this
-# is running as, and requires the audit above to refuse it. Then requires the real tree to pass.
+# Builds a throwaway repository holding one of each fault the audit above looks for -- a committed
+# ELF binary, a file naming the account this is running as, a provider token, an internal address,
+# and a commit message carrying tooling trailers -- and requires the audit to refuse every one of
+# them by name. Then requires the real tree to pass.
+#
+# One fault per rule, and the rules are the whole of `PATTERNS`: a fixture carrying only the faults
+# the scanner was written against first proves nothing about the rest of the list. Measured before
+# this fixture was widened: deleting all four provider-token patterns from `PATTERNS` left this
+# self-check green, so a repository carrying a token was scanned clean by an audit that still said
+# it had checked itself.
 
 self_check() {
   local fixture status
@@ -125,8 +133,25 @@ self_check() {
     printf '\177ELF\002\001\001\000 built somewhere\n' > tool
     mkdir -p notes
     printf 'the build ran in /home/%s/checkout\n' "$(id -un)" > notes/build.md
+    # One credential-shaped line per kind `PATTERNS` knows, and one file naming an address on each
+    # of the two private blocks it looks for. Every value here is ASSEMBLED at run time rather than
+    # written down, for the same reason the account name above is read from the environment: the
+    # file that guards against a value has no business carrying it. None of these is real; each is
+    # a repeated byte behind the prefix that gives it its shape.
+    filler=$(printf 'A%.0s' $(seq 1 40))
+    {
+      printf '%s_%s\n' ghp "$filler"
+      printf '%s-%s\n' sk "$filler"
+      printf '%s_%s\n' github_pat "$filler"
+      printf '%s:%s\n' 1234567 "$filler"
+    } > config.env
+    printf 'the console answers at http://%s.%s.9.9:8080 and the proxy at http://%s.%s.0.9:9000\n' \
+      192 168 10 10 > notes/network.md
     git add -A
-    git commit -qm "a fixture"
+    git commit -qm "a fixture
+
+Co-authored-by: someone <someone@example.invalid>
+Generated with a tool: see the session log at https://example.invalid/session_01"
   )
   status=0
   bash "$SELF" "$fixture" > "$fixture/out.txt" 2>&1 || status=$?
@@ -142,7 +167,13 @@ self_check() {
     echo "SELF-CHECK FAILED: the committed binary was not named"; printf '%s\n' "$report"; return 1; }
   printf '%s' "$report" | grep -q "notes/build.md" || {
     echo "SELF-CHECK FAILED: the machine path was not named"; printf '%s\n' "$report"; return 1; }
-  echo "self-check: the audit refuses a committed binary and a machine path"
+  printf '%s' "$report" | grep -q "config.env" || {
+    echo "SELF-CHECK FAILED: the provider token was not named"; printf '%s\n' "$report"; return 1; }
+  printf '%s' "$report" | grep -q "notes/network.md" || {
+    echo "SELF-CHECK FAILED: the internal address was not named"; printf '%s\n' "$report"; return 1; }
+  printf '%s' "$report" | grep -q "someone@example.invalid" || {
+    echo "SELF-CHECK FAILED: the tooling trailer was not named"; printf '%s\n' "$report"; return 1; }
+  echo "self-check: the audit refuses a committed binary and a machine path, a provider token, an internal address and a tooling trailer"
 
   local out
   out=$(bash "$SELF" "$ROOT" 2>&1) || {
