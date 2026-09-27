@@ -329,8 +329,11 @@ def test_owners_label_what_the_daemon_echoes() -> None:
 async def test_a_scripted_model_shops_to_the_payment_and_stops_there(settings: Settings, db: Database, base: Path, daemon: FakeBrowserd) -> None:
     """A whole run: the model's calls go through the core, the policy adapter and the tools, as a real
     model's would. The purchase is refused with a key, the file URL by the policy before the tool, and
-    the system prompt carries the browser's rules."""
+    the browser's rules reach the model before its first browser call runs: the group waits on demand,
+    so the first call — made by name, without loading it — is answered with the rules and runs when
+    it is made again."""
     provider = ScriptedProvider([
+        {"tool": "BrowserOpen", "args": {"url": "https://shop.test/shoes"}},
         {"tool": "BrowserOpen", "args": {"url": "https://shop.test/shoes"}},
         {"tool": "BrowserSnapshot", "args": {}},
         {"tool": "BrowserAct", "args": {"action": "click", "ref": "e10", "element": "the Add to cart button"}},
@@ -351,8 +354,15 @@ async def test_a_scripted_model_shops_to_the_payment_and_stops_there(settings: S
         waiter = asyncio.create_task(_wait_finished(manager))
         await manager.submit(state.session.id, "Find running shoes, add them to the cart, and stop at payment.")
         assert (await waiter)[0][2] == "completed"
-        system = " ".join(str(b.text) for m in provider.requests[0].messages if m.role.value == "system" for b in m.content_blocks if hasattr(b, "text"))
-        assert "The browser: BrowserOpen" in system
+        def said(request: Any) -> str:
+            return " ".join(str(b.text) if hasattr(b, "text") else str(getattr(b, "content", "")) for m in request.messages for b in m.content_blocks)
+
+        first = said(provider.requests[0])
+        # Held back: one catalogue line, and neither the tools nor their rules on the first request.
+        assert "- browser: Drive a real browser" in first and "The browser: BrowserOpen" not in first
+        assert "BrowserOpen" not in {t.name for t in provider.requests[0].tools or ()}
+        second = said(provider.requests[1])
+        assert "Not run yet" in second and "The browser: BrowserOpen" in second and "never type passwords" in second
         results = " ".join(str(b.text) if hasattr(b, "text") else str(getattr(b, "content", "")) for m in provider.requests[-1].messages for b in m.content_blocks)
         assert "[page content from https://shop.test;" in results
         assert "browser.scheme" in results and "needs the operator's approval" in results and "BrowserHandoff" in results

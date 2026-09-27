@@ -62,7 +62,7 @@ from daedalus.config import (
     Settings,
     max_advertised_tools_for,
 )
-from daedalus.host import capabilities, launcher_bridge, prompts
+from daedalus.host import capabilities, launcher_bridge, prompts, tool_groups
 from daedalus.host.checkpoint_retention import CheckpointRetention, RetentionBounds, RetentionReport
 from daedalus.host.checkpoints import DIR_NAME as CHECKPOINT_DIR_NAME
 from daedalus.host.checkpoints import CheckpointError, Checkpoints, scan_workspace
@@ -258,6 +258,11 @@ class SessionState:
     the run's creation, so an hour waiting on the operator's answer is not an hour of run time."""
     tool_starts: dict[str, tuple[float, str]] = field(default_factory=dict)
     """Tool calls in flight: ``call_id -> (monotonic start, tool name)``, for the timing rows."""
+    tool_group_surface: dict[str, str] = field(default_factory=dict)
+    """Each group's state as the last run's ``tool_surface_advertised`` said: ``advertised``, ``deferred``
+    or ``loaded``. In memory only: after a restart the session's panel falls back to the load modes."""
+    tool_groups_loaded: set[str] = field(default_factory=set)
+    """Groups the current run loaded (``tool_group_loaded``), until the next run starts."""
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     """Serialises run starts against history rewrites (compaction)."""
     submit_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -524,6 +529,7 @@ class SessionManager:
         # every session's policy is recomputed at once, not at the next thing that happens to refresh it.
         self.mcp.catalog_listeners.append(lambda server: self._apply_tool_visibility_all())
         self.request_manifests = RequestManifestStore(db, self.blobs, tenant_id=TENANT)
+        self._group_usage = tool_groups.UsageCache()
         self.governance_path = governance_path or (settings.bot_repo_dir / "GOVERNANCE.md")
         self._states: dict[str, SessionState] = {}
         self._sinks: list[EventSink] = []
@@ -599,8 +605,9 @@ class SessionManager:
             self.tools.register(tool)
         for tool in build_memory_tools(self.memory):
             self.tools.register(tool)
-        for group, description in TOOL_GROUPS.items():
-            self.tools.declare_group(group, description)
+        for group, spec in TOOL_GROUPS.items():
+            instructions = prompts.group_instructions(group, selfdev_mode=self.capabilities.selfdev.mode)
+            self.tools.declare_group(group, spec.description, load=spec.load, instructions=instructions)
         # The core advertises it only while it holds a group back, so on an ordinary window it costs
         # nothing; without it registered the core holds nothing back at all, and a large MCP server
         # would put every one of its tools on the surface. The main orchestrator's registry has no
@@ -2957,7 +2964,8 @@ class SessionManager:
             tool_visibility_policy=self.tool_policy_for(state),
             role="voice" if self.is_voice(state) else "orchestrator" if self.is_orchestrator(state) else "dispatcher" if self.is_dispatcher(state) else "agent",
             max_advertised_tools=self.advertised_tools_limit(rungs),
-            discovered_tools=self.discovered_tools_for(state),
+            discovered_tools=self.discovered_tools_for(state) + self._queued_group_tools(state),
+            tool_group_loads=self.tool_group_loads_for(state) if not self.is_dispatcher(state) else None,
         )
         self._attach_hooks(engine, state)
         if chain is not None:
@@ -3240,6 +3248,8 @@ class SessionManager:
         if state.engine is None or not continue_turn:
             run_id = uuid.uuid4().hex[:12]
             engine = await self._build_engine(state, run_id)
+            state.tool_groups_loaded = set()
+            await self._clear_queued_group_loads(state)
             if state.engine is not None:
                 engine.history = list(state.engine.history)
             else:
@@ -3813,6 +3823,7 @@ class SessionManager:
             )
             await self._publish(state, "ask.pending", self._ask_payload(state, pending))
         self._time_tool(state, event)
+        self._track_tool_groups(state, event)
         self._redact_event(state, event)
         durable = event.to_event()
         durable.payload.setdefault("tenant_id", TENANT)
@@ -3828,6 +3839,16 @@ class SessionManager:
         if event.type is EventType.MESSAGE_STOP:
             self._record_model_stamp(state)
             await self._enforce_caps(state, event.run_id)
+
+    @staticmethod
+    def _track_tool_groups(state: SessionState, event: TurnEvent) -> None:
+        """Keep what the run says of its tool groups, for the session's panel: the core's word on an
+        ``auto`` group is the only one there is, and a group loaded mid-run is loaded now."""
+        if event.type.value == "tool_surface_advertised":
+            rows = event.payload.get("tool_groups") or ()
+            state.tool_group_surface = {str(row.get("name")): str(row.get("state")) for row in rows if isinstance(row, dict) and row.get("name")}
+        elif event.type.value == "tool_group_loaded" and event.payload.get("group"):
+            state.tool_groups_loaded.add(str(event.payload["group"]))
 
     def _time_tool(self, state: SessionState, event: TurnEvent) -> None:
         """One row per tool call: name, when, how long, whether it failed. The waterfall of a run is these rows."""
@@ -4141,6 +4162,25 @@ class SessionManager:
         names = [str(name) for name in (state.metadata.get("discovered_tools") or ()) if isinstance(name, str)]
         return tuple(name for name in names if registry.get(name) is not None and policy_admits(policy, name))
 
+    def _queued_group_tools(self, state: SessionState) -> tuple[str, ...]:
+        """The admitted tools of the groups the operator asked to load, after what the session carries."""
+        queued = [str(g) for g in (state.metadata.get(tool_groups.LOAD_NOW_KEY) or ()) if str(g) in TOOL_GROUPS]
+        if not queued:
+            return ()
+        registry = self.registry_for(state)
+        policy = self.tool_policy_for(state)
+        carried = set(self.discovered_tools_for(state))
+        grouped = self._group_members()
+        names = [n for g in queued for n in grouped[g] if n not in carried and registry.get(n) is not None and policy_admits(policy, n)]
+        return tuple(dict.fromkeys(names))
+
+    async def _clear_queued_group_loads(self, state: SessionState) -> None:
+        if tool_groups.LOAD_NOW_KEY not in state.metadata:
+            return
+        for meta in (state.metadata, state.session.metadata):
+            meta.pop(tool_groups.LOAD_NOW_KEY, None)
+        await self.sessions.update_metadata(state.session.id, state.session.metadata)
+
     def _keep_discovered_tools(self, state: SessionState, engine: QueryEngine) -> bool:
         """Remember what the finished run had loaded and called; ``True`` when that changed what is stored.
 
@@ -4183,6 +4223,124 @@ class SessionManager:
         await self.sessions.update_metadata(session_id, state.session.metadata)
         self._apply_tool_visibility_all()
         return chosen
+
+    def tool_group_loads_for(self, state: SessionState) -> dict[str, str]:
+        """How each host group reaches this session's next run: the settings, then its own choice."""
+        return tool_groups.resolved_loads(self.config, state.metadata)
+
+    def _group_members(self) -> dict[str, list[str]]:
+        return tool_groups.members(self.tools.list_all())
+
+    async def tool_group_catalogue(self) -> dict[str, Any]:
+        """Every host group for the settings page: what it is for, its tools and their cost, its default
+        and current mode, and how many sessions and runs of the last month called any of its tools."""
+        grouped = self._group_members()
+        usage = await self._group_usage.read(self.db, tool_groups.group_of(grouped))
+        loads = tool_groups.configured_loads(self.config)
+        groups = []
+        for name, spec in TOOL_GROUPS.items():
+            names = grouped[name]
+            if not names:
+                continue  # not on this installation (no browser, self-development off): nothing to choose
+            used = usage.groups[name]
+            groups.append({
+                "name": name,
+                "description": spec.description,
+                "tools": names,
+                "tokens": tool_groups.schema_tokens(t for t in self.tools.list_all() if t.name in names),
+                "default": spec.load,
+                "load": loads[name],
+                "usage": {"sessions": used.sessions, "runs": used.runs, "calls": used.calls},
+            })
+        return {"days": usage.days, "sessions": usage.sessions, "runs": usage.runs, "groups": groups}
+
+    def tool_group_states(self, state: SessionState) -> list[dict[str, Any]]:
+        """Each host group as this session has it: its mode and where that came from, and its state.
+
+        ``off`` — the session may call none of its tools (switched off, or the role or mode refuses them);
+        ``loaded`` — loaded in this session (by a search, a call, the operator, or carried from an earlier
+        run), ``pending`` when that happens at the next run; ``deferred`` — only its catalogue line is
+        in the prompt; ``advertised`` — its tools are in every request. Without ToolSearch the core
+        holds nothing back, so a lazy group is advertised then.
+        """
+        registry = self.registry_for(state)
+        policy = self.tool_policy_for(state)
+        loads = self.tool_group_loads_for(state)
+        searches = self._searches_for_tools(state)
+        carried = set(self.discovered_tools_for(state))
+        queued = {str(g) for g in (state.metadata.get(tool_groups.LOAD_NOW_KEY) or ())}
+        out = []
+        for name, names in self._group_members().items():
+            if not names:
+                continue
+            admitted = [n for n in names if registry.get(n) is not None and policy_admits(policy, n)]
+            load = loads[name]
+            pending = False
+            if not admitted:
+                current = "off"
+            elif name in state.tool_groups_loaded or (carried & set(admitted)):
+                current = "loaded"
+            elif name in queued:
+                current, pending = "loaded", True
+            elif not searches or load == "eager":
+                current = "advertised"
+            elif load == "lazy":
+                current = "deferred"
+            else:
+                # "auto" is the core's call on the window; the last run's word on it is the best there is.
+                current = state.tool_group_surface.get(name) or "advertised"
+                current = "advertised" if current == "loaded" else current
+            out.append({
+                "name": name,
+                "description": TOOL_GROUPS[name].description,
+                "tools": len(admitted),
+                "load": load,
+                "source": tool_groups.load_source(name, self.config, state.metadata),
+                "state": current,
+                "pending": pending,
+            })
+        return out
+
+    async def set_session_tool_group(self, session_id: str, group: str, load: str | None) -> list[dict[str, Any]]:
+        """This session's own mode for a group, over the settings; ``None`` follows the settings again."""
+        if group not in TOOL_GROUPS:
+            raise KeyError(group)
+        state = await self.get_state(session_id)
+        if state is None:
+            raise KeyError(session_id)
+        chosen = tool_groups.session_loads(state.metadata)
+        if load is None:
+            chosen.pop(group, None)
+        else:
+            chosen[group] = load
+        for meta in (state.metadata, state.session.metadata):
+            if chosen:
+                meta[tool_groups.SESSION_LOADS_KEY] = dict(chosen)
+            else:
+                meta.pop(tool_groups.SESSION_LOADS_KEY, None)
+        await self.sessions.update_metadata(session_id, state.session.metadata)
+        return self.tool_group_states(state)
+
+    async def load_tool_group_now(self, session_id: str, group: str) -> list[dict[str, Any]]:
+        """Have the session's next run start with a group loaded, as if a search had loaded it.
+
+        Queued in the metadata rather than written into ``discovered_tools``: the run in progress
+        rewrites that list when it ends, and would drop what was put there while it ran. The next
+        run's engine takes the queue and empties it, and from then on the group is carried like any
+        tool a run loaded and called.
+        """
+        if group not in TOOL_GROUPS:
+            raise KeyError(group)
+        state = await self.get_state(session_id)
+        if state is None:
+            raise KeyError(session_id)
+        queued = [str(g) for g in (state.metadata.get(tool_groups.LOAD_NOW_KEY) or ()) if str(g) in TOOL_GROUPS]
+        if group not in queued:
+            queued.append(group)
+            for meta in (state.metadata, state.session.metadata):
+                meta[tool_groups.LOAD_NOW_KEY] = list(queued)
+            await self.sessions.update_metadata(session_id, state.session.metadata)
+        return self.tool_group_states(state)
 
     def notes_for(self, state: SessionState) -> str:
         """What the system prompt says about this session beyond the environment: the brief it was created with."""

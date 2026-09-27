@@ -12,7 +12,8 @@ import inspect
 import pkgutil
 import re
 from collections.abc import Callable, Iterable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from protocore.contracts.tools import Tool, ToolContext
 from protocore.contracts.types import ToolResult
@@ -69,39 +70,86 @@ def search_hint(text: str) -> Callable[[type[Tool]], type[Tool]]:
     return attach
 
 
-TOOL_GROUPS: dict[str, str] = {
-    "agents": (
-        "Other agents: a helper in this workspace (SubAgent, SubAgentSend, SubAgentList), an independent "
-        "agent with its own chat and workspace (SpawnAgent), a question to a named peer session (AskPeer)"
+GroupLoad = Literal["eager", "auto", "lazy"]
+"""How a group reaches a run: ``eager`` is always on the surface (only a provider's cap on the number
+of tools can push it off), ``auto`` stays on while the definitions fit and is held back first when
+they do not, ``lazy`` is held back whenever ToolSearch is there to load it, however much room is left."""
+
+GROUP_LOADS: tuple[GroupLoad, ...] = ("eager", "auto", "lazy")
+
+
+@dataclass(frozen=True, slots=True)
+class ToolGroupSpec:
+    description: str
+    """The line the core's catalogue shows while the group is held back: what the group is FOR, and
+    the tool a model would otherwise replace with a workaround."""
+    load: GroupLoad
+    """The default the operator's ``[tools.groups.<name>] load`` and a session's own choice override."""
+
+
+TOOL_GROUPS: dict[str, ToolGroupSpec] = {
+    "agents": ToolGroupSpec(
+        "Hand work to other agents: a helper in this workspace for a bounded piece of the task (SubAgent), an "
+        "independent agent with its own chat and workspace (SpawnAgent), a question to a named peer session (AskPeer)",
+        "auto",
     ),
-    "board": "The session's task board, the plan of record for long work: tasks with acceptance criteria and checklists",
-    "browser": (
-        "A real browser the operator can watch and take over: open and read pages, click and type, "
-        "hand it over for a sign-in or a payment"
+    "board": ToolGroupSpec(
+        "The session's task board, the plan of record for work with more than a few steps: tasks with acceptance "
+        "criteria and checklists that survive compaction and restarts",
+        "auto",
     ),
-    "loop": "The standing task of a loop agent: the next wake-up, pause, resume, stop, status",
-    "mcp": "MCP servers for this session: list them, switch one on or off, sign in to one that needs OAuth",
-    "scheduling": (
-        "Work that runs later or on an event: one-shot and recurring schedules (ScheduleCreate) and standing "
-        "intents that fire on an inbound webhook or message (IntentCreate)"
+    "browser": ToolGroupSpec(
+        "Drive a real browser: open pages, click and type, screenshots, downloads, hand-over to the operator for a "
+        "sign-in or a payment; for sites that need JavaScript or a login. Use WebFetch for plain pages",
+        "lazy",
     ),
-    "self_development": (
-        "Changing the agent's own code: a worktree of its repositories, then a pull request or an applied "
-        "change, a rebuild or a rollback"
+    "docs": ToolGroupSpec(
+        "Search and read the documentation of this installed Daedalus version, for questions about how you "
+        "yourself work or are configured",
+        "lazy",
     ),
-    "services": (
-        "Processes that outlive the turn, such as a dev server or a demo site, on a port the operator can "
-        "open (ServiceStart), with their logs"
+    "learning": ToolGroupSpec(
+        "Look back on your own work: a report of recent runs, failures and spend (LearningReport) and a skill "
+        "distilled from this session saved as a draft (SkillDraft)",
+        "lazy",
+    ),
+    "loop": ToolGroupSpec(
+        "The standing task of a loop agent: set the next wake-up, pause, resume, stop, read its status",
+        "lazy",
+    ),
+    "mcp": ToolGroupSpec(
+        "MCP servers for this session: list them, switch one on to reach its tools, switch one off",
+        "auto",
+    ),
+    "mcp_oauth": ToolGroupSpec(
+        "Sign in to an MCP server that needs OAuth: start the sign-in, finish it with the code, check or drop the link",
+        "lazy",
+    ),
+    "scheduling": ToolGroupSpec(
+        "Work that runs later or on an event: one-shot and recurring schedules (ScheduleCreate) and standing intents "
+        "that fire on an inbound webhook or message (IntentCreate)",
+        "lazy",
+    ),
+    "self_development": ToolGroupSpec(
+        "Change your own code: a worktree of your repositories, then a pull request or an applied change, a "
+        "rebuild or a rollback",
+        "lazy",
+    ),
+    "services": ToolGroupSpec(
+        "Processes that outlive the turn, such as a dev server or a demo site, on a port the operator can open "
+        "(ServiceStart), with their logs",
+        "auto",
     ),
 }
-"""The families of host tools the core may hold back as a unit, and the line its catalogue shows for each.
+"""The families of host tools the core may hold back as a unit, the line its catalogue shows for each,
+and how each reaches a run unless the operator says otherwise.
 
-Advertising every tool is the best surface for as long as it fits, so nothing here is held back on an
-ordinary window: a group leaves the surface only when the definitions outgrow the window's share or the
-provider's cap on the number of tools, largest group first, and comes back through ToolSearch. The line
-is all the model knows of a held-back group, so it says what the group is for and names the tools a
-model would otherwise replace with a workaround (a service started from the shell, a schedule instead of
-an intent). The file, shell, web, memory and question tools are in no group and never leave."""
+The defaults follow what sessions actually call. A group most sessions never touch — the browser, the
+agent's own code, schedules, loops, the documentation, OAuth sign-ins — is ``lazy``: its definitions
+cost thousands of tokens on every request of every session for the one session in fifty that uses it,
+and its catalogue line and ToolSearch bring it back in one call. A group a working session reaches for
+now and then — other agents, the board, services, MCP — is ``auto``: on the surface while it fits. The
+file, shell, web, memory and question tools are in no group and never leave."""
 
 
 def tool_group(name: str) -> Callable[[type[Tool]], type[Tool]]:
@@ -138,4 +186,4 @@ def tool_names(tools: Iterable[Tool]) -> list[str]:
     return sorted(t.name for t in tools)
 
 
-__all__ = ["TOOL_GROUPS", "discover_tools", "search_hint", "tool_group", "tool_names"]
+__all__ = ["GROUP_LOADS", "TOOL_GROUPS", "GroupLoad", "ToolGroupSpec", "discover_tools", "search_hint", "tool_group", "tool_names"]

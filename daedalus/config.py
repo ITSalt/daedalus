@@ -19,7 +19,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 
 import tomli_w
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -619,10 +619,33 @@ class ResultToolsConfig(BaseModel):
     prompt prefix and costs a cache miss on the whole request, so it is done in batches."""
 
 
+class ToolGroupConfig(BaseModel):
+    """The operator's choice for one group of host tools, ``[tools.groups.<name>]``."""
+
+    model_config = ConfigDict(extra="forbid")
+    load: Literal["eager", "auto", "lazy"]
+    """``eager``: always in the tool list. ``auto``: in the list while the definitions fit the window,
+    held back behind ToolSearch first when they do not. ``lazy``: only the group's catalogue line is
+    in the prompt and the model loads it with ToolSearch when a task needs it."""
+
+
 class ToolsConfig(BaseModel):
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolsConfig = Field(default_factory=ExecToolsConfig)
     results: ResultToolsConfig = Field(default_factory=ResultToolsConfig)
+    groups: dict[str, ToolGroupConfig] = Field(default_factory=dict)
+    """Only the groups the operator changed; the rest keep the default their declaration carries
+    (``daedalus.tools.TOOL_GROUPS``), so a better default reaches every installation that never chose."""
+
+    @field_validator("groups")
+    @classmethod
+    def _known_groups(cls, value: dict[str, ToolGroupConfig]) -> dict[str, ToolGroupConfig]:
+        from daedalus.tools import TOOL_GROUPS  # Lazy: config is a leaf the launcher reads without the core
+
+        unknown = sorted(set(value) - set(TOOL_GROUPS))
+        if unknown:
+            raise ValueError(f"unknown tool group(s) {', '.join(unknown)}; known: {', '.join(sorted(TOOL_GROUPS))}")
+        return value
 
 
 class McpOAuthConfig(BaseModel):

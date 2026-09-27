@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -155,7 +155,7 @@ def _agent_sections(deps: EngineDeps, config: RuntimeConfig, *, mode: ModeConfig
         prompts.rules_section(config.prompt.rules),
         prompts.language_section(config.answer_language),
         prompts.governance_section(deps.governance_path),
-        *prompts.tool_sections(advertised, admitted=admitted, selfdev_mode=deps.selfdev_mode),
+        *prompts.tool_sections(advertised, admitted=admitted),
         (mode.prompt.strip() + "\n") if mode is not None and mode.prompt.strip() else "",
         prompts.environment_section(
             workspace=workspace,
@@ -218,6 +218,7 @@ def build_engine(
     project: str = "",
     max_advertised_tools: int = 0,
     discovered_tools: Collection[str] = (),
+    tool_group_loads: Mapping[str, str] | None = None,
 ) -> QueryEngine:
     """``role`` picks the system prompt: an agent that works in a folder, the voice concierge that
     only talks and hands over, a project's orchestrator that only runs a team, or the main
@@ -225,7 +226,8 @@ def build_engine(
 
     ``max_advertised_tools`` is the lowest cap on tools among the run's providers (0 for none);
     ``discovered_tools`` are the tools an earlier run of the session loaded through ToolSearch, oldest
-    first, which this run starts with loaded."""
+    first, which this run starts with loaded; ``tool_group_loads`` is each host group's load mode for
+    this run, the settings and the session's own choice over the defaults the groups were declared with."""
     primary_provider, primary_model = rungs[0]
     model = model_name or primary_model
     if role == "voice":
@@ -252,6 +254,7 @@ def build_engine(
         reasoning_effort=reasoning_effort,
         request_manifest_sink=deps.request_manifest_sink,
         discovered_tools=tuple(discovered_tools),
+        tool_group_loads=dict(tool_group_loads or {}),
     )
     engine = QueryEngine(
         config=engine_config,

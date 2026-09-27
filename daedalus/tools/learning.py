@@ -6,10 +6,11 @@ from protocore.contracts.tools import ToolContext
 from protocore.contracts.types import ToolResult
 from protocore.tools.decorator import tool
 
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok, services_for
 
 
+@tool_group("learning")
 @search_hint(
     "learning report runs statistics recurring failures tool usage spend improvement candidates usage statistics "
     "статистика прогонов ошибки повторяются расходы улучшения аналитика отчет обучения использование"

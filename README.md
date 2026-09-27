@@ -1039,6 +1039,12 @@ fresh_count = 6              # the newest results, always shown whole
 stale_max_chars = 2000       # head kept of an older result longer than this
 trim_batch_chars = 40000     # trimmable excess that must build up before any trimming happens
 
+[tools.groups.browser]       # how a group of tools reaches a run: eager (always in the tool list),
+load = "lazy"                # auto (while it fits), lazy (one catalogue line; the agent loads it with
+                             # ToolSearch). Lazy by default: browser, self_development, scheduling,
+                             # loop, docs, learning, mcp_oauth. Settings → Tools shows each group's
+                             # cost and how often it was used; a session can choose its own mode.
+
 [policy]                     # tool policy on top of the built-in rules (daedalus/host/policy.py)
 egress_allow = []            # hosts the agent may reach without asking; empty = every host, logged
 [[policy.rules]]

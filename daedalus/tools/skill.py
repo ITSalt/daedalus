@@ -12,7 +12,7 @@ from protocore.tools.decorator import tool
 
 from daedalus.host.services import locator
 from daedalus.host.toolchain import status as toolchain_status
-from daedalus.tools import search_hint
+from daedalus.tools import search_hint, tool_group
 from daedalus.tools._common import error, ok
 
 
@@ -88,6 +88,7 @@ def _listing(files: list[Any]) -> str:
     return "\n".join(lines)
 
 
+@tool_group("learning")
 @search_hint(
     "save new skill draft distill procedure write playbook "
     "сохранить сохрани навык скилл черновик оформить оформи рецепт запомнить как делать"

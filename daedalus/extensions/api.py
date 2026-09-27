@@ -108,7 +108,7 @@ from daedalus.stores.staff import ACTIVE_STATUSES, HARNESSES, Staff, StaffBusy, 
 from daedalus.terminals.gateway import TERMINAL_WS_MAX_BYTES, Gateway, SocketGone, ticket_who
 from daedalus.terminals.model import EnvUnavailable, TerminalError, TerminalSpec
 from daedalus.terminals.model import Owner as TerminalOwner
-from daedalus.tools import websearch
+from daedalus.tools import TOOL_GROUPS, websearch
 from daedalus.transport.telegram.front import TelegramBusy, TelegramOutbox, TelegramRefused
 from daedalus.transport.telegram.markdown import split_message
 from daedalus.transport.telegram.voice import (
@@ -405,6 +405,12 @@ class MoveSessionBody(BaseModel):
 
 class ToolsOffBody(BaseModel):
     tools_off: list[str] = Field(default_factory=list)
+
+
+class ToolGroupLoadBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    load: Literal["eager", "auto", "lazy"] | None = None
+    """``None`` goes back to the layer below: the default for the settings, the settings for a session."""
 
 
 class MemoryBody(BaseModel):
@@ -3478,6 +3484,54 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             desc = " ".join((t.definition.description or "").split())
             out.append({"name": t.name, "description": desc[:160], "group": _tool_group(t.name)})
         return out
+
+    @api.get("/api/tool-groups")
+    async def tool_group_catalogue(_: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        """The host's tool groups for the settings page: purpose, tools, cost, mode, a month of use."""
+        return await manager.tool_group_catalogue()
+
+    @api.put("/api/tool-groups/{group}")
+    async def set_tool_group_load(group: str, body: ToolGroupLoadBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        """The installation's mode for a group; every session that did not choose its own follows it
+        from its next run."""
+        if group not in TOOL_GROUPS:
+            raise HTTPException(404, "no such tool group")
+        raw = app.config.model_dump(mode="json")
+        chosen = raw.setdefault("tools", {}).setdefault("groups", {})
+        if body.load is None or body.load == TOOL_GROUPS[group].load:
+            # Writing the default down would pin it: a better default shipped later would not reach an
+            # installation whose operator merely clicked the one it already had.
+            chosen.pop(group, None)
+        else:
+            chosen[group] = {"load": body.load}
+        await app.save_config(type(app.config).model_validate(raw))
+        return await manager.tool_group_catalogue()
+
+    @api.get("/api/sessions/{session_id}/tool-groups")
+    async def session_tool_groups(session_id: str, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        state = await manager.get_state(session_id)
+        if state is None:
+            raise HTTPException(404, "no such session")
+        return {"groups": manager.tool_group_states(state)}
+
+    @api.put("/api/sessions/{session_id}/tool-groups/{group}")
+    async def set_session_tool_group(session_id: str, group: str, body: ToolGroupLoadBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        if group not in TOOL_GROUPS:
+            raise HTTPException(404, "no such tool group")
+        try:
+            return {"groups": await manager.set_session_tool_group(session_id, group, body.load)}
+        except KeyError:
+            raise HTTPException(404, "no such session") from None
+
+    @api.post("/api/sessions/{session_id}/tool-groups/{group}/load")
+    async def load_session_tool_group(session_id: str, group: str, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        """Start the session's next run with the group loaded, as if a search had loaded it."""
+        if group not in TOOL_GROUPS:
+            raise HTTPException(404, "no such tool group")
+        try:
+            return {"groups": await manager.load_tool_group_now(session_id, group)}
+        except KeyError:
+            raise HTTPException(404, "no such session") from None
 
     # -- terminals: the terminal daemons' terminals, as the service mirrors them --------------
 

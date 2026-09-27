@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from protocore.contracts.tool_registry import TOOL_VISIBILITY_POLICY_METADATA_KEY, policy_admits
 from protocore.contracts.tools import ToolContext
-from protocore.contracts.types import Message, MessageRole, TextBlock
-from protocore.runtime.tool_deferral import build_tool_surface, tool_catalogue_block
+from protocore.contracts.types import Message, MessageRole, TextBlock, ToolCall
+from protocore.runtime.tool_deferral import build_tool_surface, calls_held_for_rules, tool_catalogue_block
 from protocore.runtime.tool_registry import ToolRegistry
 
 from daedalus.config import (
@@ -28,7 +28,7 @@ from daedalus.config import (
     Settings,
     max_advertised_tools_for,
 )
-from daedalus.host import prompts
+from daedalus.host import prompts, tool_groups
 from daedalus.host.engine_factory import advertised_tools, runtime_constants
 from daedalus.host.session_runner import SessionManager
 from daedalus.mcp.manager import McpConnection, mcp_group_name, mcp_tool_name
@@ -135,8 +135,8 @@ def test_every_group_of_host_tools_is_declared_and_the_everyday_tools_are_in_non
     for name in ("Read", "Write", "Edit", "MultiEdit", "Find", "Search", "Exec", "WebSearch", "WebFetch", "AskUser", "Skill", "Notify", "HistorySearch"):
         assert not grouped[name], name
     # Held back only by name in a catalogue line that says what the group is for.
-    assert grouped["ServiceStart"] == "services" and "ServiceStart" in TOOL_GROUPS["services"]
-    assert grouped["IntentCreate"] == "scheduling" and "IntentCreate" in TOOL_GROUPS["scheduling"]
+    assert grouped["ServiceStart"] == "services" and "ServiceStart" in TOOL_GROUPS["services"].description
+    assert grouped["IntentCreate"] == "scheduling" and "IntentCreate" in TOOL_GROUPS["scheduling"].description
 
 
 # -- the constants -----------------------------------------------------------------------------------
@@ -183,14 +183,16 @@ async def test_a_run_is_capped_by_the_lowest_limit_among_its_rungs(settings: Set
 async def test_a_large_mcp_server_is_held_back_behind_the_search(settings: Settings, db: Database) -> None:
     manager = await _manager(settings, db)
     try:
-        quiet = await manager.create_session("quiet")
+        # Every group on the surface, so what the server does to it is all that changes.
+        eager = {tool_groups.SESSION_LOADS_KEY: dict.fromkeys(TOOL_GROUPS, "eager")}
+        quiet = await manager.create_session("quiet", metadata=eager)
         plain = build_tool_surface(await manager._build_engine(quiet, "run-quiet"))
         # With nothing held back the surface is every tool the session may call, and no search.
         admitted = {t.name for t in manager.tools.list_all() if policy_admits(manager.tool_policy_for(quiet), t.name)}
         assert {d.name for d in plain} == admitted - {"ToolSearch"}
 
         _connect(manager, "bigsrv", _catalogue(300), description="The team's tracker, calendar and chat")
-        state = await manager.create_session("big", metadata={"mcp_enabled": ["bigsrv"]})
+        state = await manager.create_session("big", metadata={"mcp_enabled": ["bigsrv"], **eager})
         engine = await manager._build_engine(state, "run-big")
         surface = [d.name for d in build_tool_surface(engine)]
         assert not [name for name in surface if name.startswith("Mcp_Bigsrv_")]
@@ -209,9 +211,9 @@ async def test_a_large_mcp_server_is_held_back_behind_the_search(settings: Setti
             assert mcp_tool_name("bigsrv", "create_calendar_event") in result.metadata["matches"][:3], query
 
         # A session that did not enable the server is not told of it, nor offered the search.
-        other = await manager.create_session("other")
+        other = await manager.create_session("other", metadata=eager)
         engine = await manager._build_engine(other, "run-other")
-        assert "ToolSearch" not in [d.name for d in build_tool_surface(engine)] and not tool_catalogue_block(engine)
+        assert "ToolSearch" not in [d.name for d in build_tool_surface(engine)] and "bigsrv" not in tool_catalogue_block(engine)
     finally:
         await manager.close()
 
@@ -319,67 +321,148 @@ async def test_the_prompt_teaches_only_the_tools_a_role_may_call(settings: Setti
     try:
         ordinary = await manager.create_session("ordinary")
         system = _system(await manager._build_engine(ordinary, "run-ordinary"))
-        for section in (prompts.BOARD_TASKS, prompts.SCHEDULING, prompts.LOOP, prompts.NOTIFY, prompts.HISTORY_SEARCH):
+        for section in (prompts.BOARD_TASKS, prompts.NOTIFY, prompts.HISTORY_SEARCH):
             assert section in system
+        # The rules of a group are the group's: the core writes them where its tools are, never here.
+        for section in (prompts.SCHEDULING, prompts.LOOP.removeprefix("- "), prompts.BROWSER):
+            assert section not in system
 
         staff = await manager.create_session("staff", metadata={"staff_session_id": "ss1", "staff_id": "st1"})
         system = _system(await manager._build_engine(staff, "run-staff"))
         # It may not schedule, loop or notify; it keeps its board, its helpers and its services.
-        for section in (prompts.SCHEDULING, prompts.LOOP, prompts.NOTIFY, prompts.BOARD_TWO_WAYS):
+        for section in (prompts.NOTIFY, prompts.BOARD_TWO_WAYS):
             assert section not in system
         for section in (prompts.BOARD_TASKS, prompts.BOARD_SUBAGENT, prompts.BOARD_SERVICES, prompts.HISTORY_HEADLINE):
             assert section in system
 
-        child = await manager.create_session("child", metadata={"subagent_of": ordinary.session.id, "tools_off": ["ScheduleCreate"]})
+        child = await manager.create_session("child", metadata={"subagent_of": ordinary.session.id})
         system = _system(await manager._build_engine(child, "run-child"))
-        assert prompts.NOTIFY not in system and prompts.SCHEDULING not in system and prompts.LOOP in system
+        assert prompts.NOTIFY not in system
     finally:
         await manager.close()
 
 
-async def test_a_group_held_back_on_a_small_window_leaves_the_prompt_to_the_catalogue(settings: Settings, db: Database, tmp_path: Path) -> None:
+def _flat(text: str) -> str:
+    """Text with each line's indent dropped: the catalogue indents a held-back group's rules under its line."""
+    return "\n".join(line.strip() for line in text.strip().splitlines())
+
+
+RULED = {"browser": "BrowserOpen", "self_development": "SelfWorkspace", "scheduling": "ScheduleCreate", "loop": "LoopNext"}
+"""Each group that carries rules, and a tool of it."""
+
+
+def _rules_where_the_model_can_meet_them(engine: Any, group: str) -> bool:
+    """Whether a run's model meets ``group``'s rules before it can use the group's tools.
+
+    Either they are in the prompt's catalogue block, beside tools already in front of the model, or
+    the group is held back and the rules come with its first load — and a call of one of its tools
+    made without loading it is answered with them instead of running.
+    """
+    rules = next(g.instructions for g in engine.tools.tool_groups() if g.name == group)
+    if not rules:
+        return False
+    if _flat(rules) in _flat(tool_catalogue_block(engine)) or _flat(rules) in _flat(_system(engine)):
+        return True
+    decision = engine._tool_deferral
+    if decision is None or group not in decision.deferred_groups:
+        return False
+    # What the loop records as it sends the first request: the names that request advertises.
+    engine._advertised_tool_names = frozenset(d.name for d in build_tool_surface(engine))
+    call = ToolCall(id="blind", name=RULED[group], arguments={})
+    return calls_held_for_rules(engine, [call]) == {"blind": group}
+
+
+async def test_a_groups_rules_are_never_missing_where_its_tools_can_be_called(settings: Settings, db: Database, tmp_path: Path) -> None:
+    """The regression this guards: the rules left the prompt exactly when the core held the group back,
+    and a model that loaded BrowserOpen mid-run met a password field without the rule that it never
+    types one. Every way a group reaches a run is tried, and in each the rules are there or on the way."""
     config = model_config()
     for preset in config.presets.values():
         preset.max_output_tokens = 8_000
-    manager = await _manager(settings, db, config, browser_container_dir=tmp_path / "browser")
+    manager = await _manager(settings, db, config, browser_container_dir=tmp_path / "browser", github_token="stub")
     try:
-        state = await manager.create_session("small")
-        state.context_window = 40_000
-        engine = await manager._build_engine(state, "run-small")
-        decision = engine._tool_deferral
-        assert decision is not None and {"browser", "scheduling"} <= set(decision.deferred_groups)
-        assert "dynamic" not in decision.reasons
-        surface = {d.name for d in build_tool_surface(engine)}
-        assert "ToolSearch" in surface and "BrowserOpen" not in surface and "ScheduleCreate" not in surface
-        assert advertised_tools(engine) == surface
-        system = _system(engine)
-        assert prompts.SCHEDULING not in system and prompts.BOARD_TWO_WAYS not in system
-        # The browser's rules are not teaching: a model that loads BrowserOpen mid-run must meet a
-        # page that asks for a password with the rule that it never types one. Gated on the surface,
-        # they left the prompt exactly when the group was held back.
-        assert prompts.BROWSER in system
-        catalogue = tool_catalogue_block(engine)
-        assert "- browser: " in catalogue and "BrowserOpen" in catalogue and "ScheduleCreate" in catalogue
-        # What never leaves the surface is still taught.
-        assert "Exec" in surface and "Notify" in surface and prompts.NOTIFY in system
+        manager.config.tools.groups = {}
+        assert {g.name: bool(g.instructions) for g in manager.tools.tool_groups() if g.name in RULED} == dict.fromkeys(RULED, True)
+        assert next(g for g in manager.tools.tool_groups() if g.name == "browser").instructions == prompts.BROWSER.strip()
+        cases: dict[str, dict[str, Any]] = {
+            "defaults": {},
+            "eager for the session": {tool_groups.SESSION_LOADS_KEY: dict.fromkeys(RULED, "eager")},
+            "auto": {tool_groups.SESSION_LOADS_KEY: dict.fromkeys(RULED, "auto")},
+            "no search": {"tools_off": ["ToolSearch"]},
+            "loaded now": {tool_groups.LOAD_NOW_KEY: list(RULED)},
+        }
+        for window in (128_000, 40_000):
+            for label, metadata in cases.items():
+                state = await manager.create_session(f"{label} {window}", metadata=dict(metadata))
+                state.context_window = window
+                engine = await manager._build_engine(state, f"run-{window}-{label.replace(' ', '-')}")
+                # The prompt is written for the surface the model is actually shown.
+                assert advertised_tools(engine) == {d.name for d in build_tool_surface(engine)}, label
+                for group, tool in RULED.items():
+                    if policy_admits(manager.tool_policy_for(state), tool):
+                        assert _rules_where_the_model_can_meet_them(engine, group), f"{group}, {label}, window {window}"
+        # A group refused to the role has no rules to meet, and they are nowhere.
+        staff = await manager.create_session("staff", metadata={"staff_session_id": "ss1", "staff_id": "st1", tool_groups.SESSION_LOADS_KEY: {"scheduling": "eager"}})
+        engine = await manager._build_engine(staff, "run-staff")
+        assert _flat(prompts.SCHEDULING) not in _flat(tool_catalogue_block(engine) + _system(engine))
     finally:
         await manager.close()
 
 
-def test_sections_that_carry_rules_follow_the_policy_and_the_rest_follow_the_surface() -> None:
-    """Every gated section, classified. Rules are where the tool is admitted; teaching is where it is shown."""
-    held_back = {"SelfWorkspace", "SelfPropose", "BrowserOpen", "Notify", "ScheduleCreate", "BoardAdd", "BoardUpdate", "BoardList"}
+async def test_the_operators_mode_and_the_sessions_reach_the_run(settings: Settings, db: Database, tmp_path: Path) -> None:
+    manager = await _manager(settings, db, browser_container_dir=tmp_path / "browser")
+    try:
+        default = await manager._build_engine(await manager.create_session("default"), "run-default")
+        assert {"browser", "scheduling", "self_development"} <= set(default._tool_deferral.deferred_groups)
+        assert "BrowserOpen" not in {d.name for d in build_tool_surface(default)}
+
+        manager.config.tools.groups = RuntimeConfig.model_validate({"tools": {"groups": {"browser": {"load": "eager"}}}}).tools.groups
+        chosen = await manager._build_engine(await manager.create_session("settings"), "run-settings")
+        assert "browser" not in chosen._tool_deferral.deferred_groups
+        assert "BrowserOpen" in {d.name for d in build_tool_surface(chosen)}
+        # Beside the tools, the rules: the catalogue carries them for a group on the surface.
+        assert _flat(prompts.BROWSER) in _flat(tool_catalogue_block(chosen))
+        assert "The browser: BrowserOpen" not in _system(chosen)  # once, not twice
+
+        own = await manager.create_session("own", metadata={tool_groups.SESSION_LOADS_KEY: {"browser": "lazy"}})
+        engine = await manager._build_engine(own, "run-own")
+        assert engine.config.tool_group_loads["browser"] == "lazy"
+        assert "browser" in engine._tool_deferral.deferred_groups
+    finally:
+        manager.config.tools.groups = {}
+        await manager.close()
+
+
+async def test_a_group_loaded_now_starts_the_next_run_loaded_and_the_queue_empties(settings: Settings, db: Database) -> None:
+    manager = await _manager(settings, db)
+    try:
+        state = await manager.create_session("load now")
+        await manager.load_tool_group_now(state.session.id, "scheduling")
+        engine = await manager._build_engine(state, "run-now")
+        surface = {d.name for d in build_tool_surface(engine)}
+        assert {"ScheduleCreate", "IntentCreate"} <= surface
+        # Its rules come with it, beside the catalogue line of the group it was loaded from.
+        assert _flat(prompts.SCHEDULING) in _flat(tool_catalogue_block(engine))
+        await manager._clear_queued_group_loads(state)
+        assert tool_groups.LOAD_NOW_KEY not in state.metadata
+        stored = await manager.sessions.get(state.session.id, "daedalus")
+        assert stored is not None and tool_groups.LOAD_NOW_KEY not in stored.metadata
+    finally:
+        await manager.close()
+
+
+def test_sections_left_in_the_prompt_follow_the_policy_or_the_surface() -> None:
+    """What the host still writes itself: Notify's rules where the tool is admitted, teaching where it is shown."""
     shown = {"HistorySearch", "HistoryExpand"}
-    text = "".join(prompts.tool_sections(shown, admitted=shown | held_back, selfdev_mode="server"))
-    for rules in (prompts.SELF_DEVELOPMENT, prompts.BROWSER, prompts.NOTIFY):
-        assert rules in text
-    for teaching in (prompts.SCHEDULING, prompts.BOARD_TASKS):
-        assert teaching not in text
-    assert prompts.HISTORY_SEARCH in text
-    local = "".join(prompts.tool_sections(set(), admitted={"SelfWorkspace"}, selfdev_mode="local"))
-    assert prompts.SELF_DEVELOPMENT_LOCAL in local
-    # Refused by the policy, a rule is not taught either: it would name a tool the session cannot call.
-    assert prompts.BROWSER not in "".join(prompts.tool_sections(set(), admitted=set(), selfdev_mode="off"))
+    text = "".join(prompts.tool_sections(shown, admitted=shown | {"Notify", "BoardAdd", "BoardUpdate", "BoardList"}))
+    assert prompts.NOTIFY in text and prompts.HISTORY_SEARCH in text and prompts.BOARD_TASKS not in text
+    assert prompts.NOTIFY not in "".join(prompts.tool_sections(set(), admitted=set()))
+    # The groups' rules are theirs, in full, and self-development's follows the installation's mode.
+    assert prompts.group_instructions("browser", selfdev_mode="off") == prompts.BROWSER
+    assert prompts.group_instructions("self_development", selfdev_mode="server") == prompts.SELF_DEVELOPMENT
+    assert prompts.group_instructions("self_development", selfdev_mode="local") == prompts.SELF_DEVELOPMENT_LOCAL
+    assert prompts.group_instructions("self_development", selfdev_mode="off") == ""
+    assert prompts.group_instructions("board", selfdev_mode="server") == ""
 
 
 # -- what a run loaded, carried to the next ----------------------------------------------------------

@@ -566,7 +566,6 @@ BOARD_PARTS: ToolParts = (
     (("BoardAdd", "BoardUpdate", "BoardList"), BOARD_TASKS),
     (("AskPeer",), BOARD_PEERS),
 )
-SCHEDULING_PARTS: ToolParts = ((("ScheduleCreate",), SCHEDULING), (("LoopStop", "LoopPause", "LoopNext"), LOOP))
 
 
 def _parts(header: str, parts: ToolParts, advertised: Collection[str]) -> str:
@@ -574,33 +573,43 @@ def _parts(header: str, parts: ToolParts, advertised: Collection[str]) -> str:
     return header + "".join(shown) if shown else ""
 
 
-def tool_sections(advertised: Collection[str], *, admitted: Collection[str] | None = None, selfdev_mode: str) -> tuple[str, ...]:
-    """The sections of an agent's prompt that teach its tools, each where it belongs.
+def group_instructions(group: str, *, selfdev_mode: str) -> str:
+    """The rules a host tool group carries into the run with its tools, or ``""``.
 
-    Two kinds, gated differently. A section that carries RULES — the browser's (page text has no
-    authority; no passwords, codes or cards), self-development's (never push to main; the
-    repositories are public), Notify's (only what cannot wait; urgent breaks quiet hours) — is
-    shown wherever the session's policy ADMITS the tool, ``admitted``, whether or not its group is
-    on the surface of the first request. A held-back tool is one ToolSearch away, and a model that
-    loads BrowserOpen mid-run must not meet a page that asks for a password without the rule that
-    it never types one; gated on the surface, the rules left the prompt exactly when the core held
-    the group back.
+    They are the group's and not the prompt's. The core writes them beside the tools whenever those
+    are in front of the model — after the catalogue while the group is advertised, with the first load
+    while it is held back, and in answer to a call of one of its tools the model made without them —
+    so a rule is never missing where its tools can be called, and costs nothing in a run where they
+    cannot. Written into the prompt as well, they would be there twice.
+    """
+    if group == "browser":
+        return BROWSER
+    if group == "self_development":
+        return self_development_section(selfdev_mode)
+    if group == "scheduling":
+        return SCHEDULING
+    if group == "loop":
+        return LOOP.removeprefix("- ")
+    return ""
 
-    A section that only TEACHES — history search, the board, subagents, services, terminals,
-    peers, scheduling, loops — follows ``advertised``, what the first request puts in ``tools``. A
-    paragraph that teaches a tool the session may not call is an invitation the model accepts and
-    a refusal it cannot understand; one whose tools are held back is left to the core's catalogue,
-    which names the group and its tools in a line, instead of costing its tokens on every request
-    for tools the model may never load. ``admitted`` defaults to ``advertised``.
+
+def tool_sections(advertised: Collection[str], *, admitted: Collection[str] | None = None) -> tuple[str, ...]:
+    """The sections of an agent's prompt that teach the tools in no group, or in a group without rules.
+
+    The browser's, self-development's, scheduling's and the loop's are the rules of their groups
+    (:func:`group_instructions`) and reach the model through the core. Of what is left, a section
+    that carries RULES — Notify's (only what cannot wait; urgent breaks quiet hours) — is shown
+    wherever the session's policy ADMITS the tool, ``admitted``. A section that only TEACHES — history
+    search, the board, subagents, services, terminals, peers — follows ``advertised``, what the first
+    request puts in ``tools``: a paragraph that teaches a tool the session may not call is an
+    invitation the model accepts and a refusal it cannot understand, and one whose tools are held back
+    is left to the core's catalogue line. ``admitted`` defaults to ``advertised``.
     """
     allowed = advertised if admitted is None else admitted
     return (
-        self_development_section(selfdev_mode) if "SelfWorkspace" in allowed else "",
         _parts(HISTORY_HEADER, HISTORY_PARTS, advertised),
         _parts(BOARD_HEADER, BOARD_PARTS, advertised),
-        _parts("", SCHEDULING_PARTS, advertised),
         NOTIFY if "Notify" in allowed else "",
-        BROWSER if "BrowserOpen" in allowed else "",
     )
 
 
@@ -737,4 +746,4 @@ def governance_section(path: Path) -> str:
     return ""
 
 
-__all__ = ["BOARD_HEADER", "BOARD_PARTS", "BOARD_PEERS", "BOARD_SERVICES", "BOARD_SUBAGENT", "BOARD_TASKS", "BOARD_TERMINALS", "BOARD_TWO_WAYS", "BOARD_WAKES", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY_HEADER", "HISTORY_HEADLINE", "HISTORY_PARTS", "HISTORY_SEARCH", "LOOP", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SCHEDULING_PARTS", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "tool_sections", "turn_context", "without_turn_context"]
+__all__ = ["BOARD_HEADER", "BOARD_PARTS", "BOARD_PEERS", "BOARD_SERVICES", "BOARD_SUBAGENT", "BOARD_TASKS", "BOARD_TERMINALS", "BOARD_TWO_WAYS", "BOARD_WAKES", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY_HEADER", "HISTORY_HEADLINE", "HISTORY_PARTS", "HISTORY_SEARCH", "LOOP", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "group_instructions", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "tool_sections", "turn_context", "without_turn_context"]

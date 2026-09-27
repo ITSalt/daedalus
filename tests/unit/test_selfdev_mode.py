@@ -164,7 +164,9 @@ async def test_the_prompt_never_names_a_tool_the_session_does_not_have(tmp_path:
             (
                 prompts.PERSONA,
                 prompts.rules_section(""),
-                *prompts.tool_sections(registered, selfdev_mode=mode),
+                *prompts.tool_sections(registered),
+                # The rules the core writes beside a group's tools, for every group that has any here.
+                *(group.instructions for group in manager.tools.tool_groups() if any(getattr(t, "tool_group", "") == group.name for t in manager.tools.list_all())),
                 prompts.environment_section(
                     workspace=tmp_path,
                     bot_repo=REPO_ROOT,
