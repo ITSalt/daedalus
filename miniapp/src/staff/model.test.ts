@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChannelHealth, StaffMessage, StaffTurn } from "../api";
 import { setLang } from "../i18n";
+import { alwaysServer, mcpServer, ruleWords } from "./model";
 import { answeredBy, applyMessageEvent, attention, canAlways, channelWords, composerWhen, defaultMode, healthParts, keyboardBlocks, listRows, mergeTurns, nextSince, nowChoice, openRequests, outboxRows, stripRows, turnFacts } from "./model";
 
 const msg = (id: string, state: StaffMessage["state"], created_at: string, origin: StaffMessage["origin"] = "orchestrator"): StaffMessage => ({
@@ -165,3 +166,33 @@ describe("the rest of the view", () => {
     expect(healthParts(null)).toEqual([]);
   });
 });
+
+describe("always for a whole MCP server", () => {
+  const claude = { permissions: "hook_then_keys" as const, standing_rules: true };
+  const nav = { kind: "permission" as const, detail: { tool: "mcp__daedalus_browser__BrowserNavigate" } };
+
+  it("is offered for an MCP tool of a CLI that keeps rules, named by its server", () => {
+    expect(mcpServer("mcp__daedalus_browser__BrowserNavigate")).toBe("daedalus_browser");
+    expect(mcpServer("mcp__shop__cart__add")).toBe("shop");
+    expect(alwaysServer(nav, claude)).toBe("daedalus_browser");
+  });
+
+  it("is never offered for a built-in tool, a question, or a CLI whose always knows no server", () => {
+    for (const tool of ["Bash", "Write", "mcp__shop", "mcp__shop__", "mcpx__shop__cart"]) expect(alwaysServer({ kind: "permission", detail: { tool } }, claude)).toBe("");
+    expect(alwaysServer({ kind: "question", detail: nav.detail }, claude)).toBe("");
+    expect(alwaysServer(nav, { permissions: "structured", standing_rules: false })).toBe("");
+    expect(alwaysServer(nav, { permissions: "structured" })).toBe("");
+    expect(alwaysServer(nav, null)).toBe("");
+  });
+
+  it("says what a kept rule covers in the operator's words", () => {
+    setLang("en");
+    expect(ruleWords("mcp__daedalus_browser")).toBe("all daedalus_browser tools");
+    expect(ruleWords("mcp__daedalus_browser__BrowserNavigate")).toBe("BrowserNavigate of daedalus_browser");
+    setLang("ru");
+    expect(ruleWords("mcp__daedalus_browser")).toBe("все инструменты daedalus_browser");
+    setLang("en");
+    expect(ruleWords("Bash(npm test:*)")).toBe("Bash(npm test:*)");
+  });
+});
+

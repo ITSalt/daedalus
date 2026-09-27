@@ -957,7 +957,8 @@ class Orchestrators:
     def _answer_text(ask: Ask) -> str:
         r = ask.resolution
         if ask.kind == "permission":
-            said = ("granted always" if r.get("always") else "granted") if r.get("allow") else "refused"
+            always = f"granted always ({r['rule']})" if r.get("rule") else "granted always"
+            said = (always if r.get("always") else "granted") if r.get("allow") else "refused"
             return f"{said} — the operator said: {_one_line(str(r['note']), 400)}" if r.get("note") else said
         if ask.kind == "folder":
             if r.get("outcome") and str(r["outcome"]) != "added":

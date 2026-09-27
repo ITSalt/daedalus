@@ -24,6 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime, timedelta
+from urllib.parse import unquote
 
 # Outside services_port_range (8100-8119), the range this product hands to an agent's own preview
 # servers: a harness that serves its build into that range competes with the installation running
@@ -682,9 +683,13 @@ def file_search(path: str, query: str, limit: int = 200) -> dict | None:
     return None
 
 
-def question_view(ask: dict, project_name: str, *, asker: str = "", always: bool = False) -> dict:
-    """One entry of GET /api/questions, as ``daedalus/extensions/questions.py`` draws a request."""
+def question_view(ask: dict, project_name: str, *, asker: str = "", always: bool = False, rules: bool = False) -> dict:
+    """One entry of GET /api/questions, as ``daedalus/extensions/questions.py`` draws a request.
+    ``rules``: the member's CLI keeps standing rules (Claude Code), so an MCP tool's "Always" may
+    cover its whole server (``always_server``)."""
     detail = ask.get("detail") or {}
+    tool = str(detail.get("tool") or "")
+    server = tool.split("__")[1] if rules and ask["kind"] == "permission" and tool.startswith("mcp__") and tool.count("__") >= 2 else ""
     options = [o for o in detail.get("options") or [] if isinstance(o, str)]
     title = str(ask.get("title") or "")
     heading = title or next((line.strip() for line in ask["text"].splitlines() if line.strip()), "")
@@ -694,7 +699,7 @@ def question_view(ask: dict, project_name: str, *, asker: str = "", always: bool
         "asker": asker or ("main" if origin == "dispatcher" else "orchestrator" if origin == "orchestrator" else "staff"),
         "section": "requests" if origin == "staff" else "questions",
         "options": options, "multi": bool(detail.get("multi")) and len(options) > 1,
-        "host": bool(ask.get("host")), "always": always, "urgent": bool(detail.get("urgent")),
+        "host": bool(ask.get("host")), "always": always, "always_server": server if always else "", "urgent": bool(detail.get("urgent")),
     }
 
 
@@ -780,6 +785,8 @@ class FocusStub:
         self.sent: list[tuple[str, dict]] = []
         """Every message the operator posted to a member, from the staff view or a terminal card."""
         self.seen: list[str] = []
+        self.revoked: list[tuple[str, str]] = []
+        """Every standing grant the operator took back: ``(staff id, rule)``."""
 
     def project(self, pid: str) -> dict | None:
         return next((p for p in self.projects if p["id"] == pid), None)
@@ -812,7 +819,7 @@ class FocusStub:
             def view(a: dict) -> dict:
                 member = names.get(a.get("staff_id") or "")
                 project = self.project(a["project_id"]) or {}
-                return question_view(a, project.get("name", ""), asker=member["name"] if member else "", always=bool(member) and a["kind"] == "permission" and member["harness"] != "daedalus")
+                return question_view(a, project.get("name", ""), asker=member["name"] if member else "", always=bool(member) and a["kind"] == "permission" and member["harness"] != "daedalus", rules=bool(member) and member["harness"] == "claude")
 
             return 200, {"questions": [view(a) for a in rows]}
         if (path == "/api/asks/answer" or (path.startswith("/api/projects/") and path.endswith("/asks/answer"))) and method == "POST":
@@ -830,6 +837,16 @@ class FocusStub:
             payload = dict(body or {})
             self.answers.append((ask["id"], payload))
             ask.update(resolved_at="2026-09-24T10:00:00Z", resolved_by="operator", resolution={"allow": payload.get("allow"), "text": payload.get("text") or "", "selected": payload.get("selected") or [], "via": "app"})
+            tool = str((ask.get("detail") or {}).get("tool") or "")
+            view = self.staff_views.get(ask.get("staff_id") or "")
+            if payload.get("allow") and payload.get("always") and tool.startswith("mcp__") and view is not None:
+                # The host keeps an MCP tool's "Always" as the member's rule: the tool, or with
+                # ``server`` every tool of its server.
+                rule = "mcp__" + tool.split("__")[1] if payload.get("server") else tool
+                rules = view["session"].setdefault("rules", [])
+                if all(r["rule"] != rule for r in rules):
+                    rules.append({"rule": rule, "created_at": "2026-09-24T10:00:00Z", "created_by": "operator"})
+                ask["resolution"]["rule"] = rule
             refused = self.refusals.get(ask["id"], "")
             if refused:
                 ask["resolution"].update(outcome=f"approved, but the folder could not be added: {refused}", error=refused)
@@ -916,6 +933,16 @@ class FocusStub:
             return 200, {**GATES["/api/terminals"], "terminals": rows}  # type: ignore[dict-item]
         if path.startswith("/api/staff/"):
             parts = path.split("/")
+            if len(parts) == 6 and parts[4] == "rules" and method == "DELETE":
+                # Revoking a standing grant (``api_staff.py``): gone from the list the next launch reads.
+                view = self.staff_views.get(parts[3])
+                rules = view["session"].get("rules", []) if view is not None else []
+                rule = unquote(parts[5])
+                if all(r["rule"] != rule for r in rules):
+                    return 404, {"detail": f"no standing grant {rule!r}"}
+                view["session"]["rules"] = [r for r in rules if r["rule"] != rule]  # type: ignore[index]
+                self.revoked.append((parts[3], rule))
+                return 200, {"rules": view["session"]["rules"]}  # type: ignore[index]
             staff_view = self.staff_view_answer(method, parts, params, body)
             if staff_view is not None:
                 return staff_view
@@ -963,6 +990,7 @@ class FocusStub:
         if what == "seen" and method == "POST":
             self.seen.append(sid)
             return 200, {"ok": True}
+
         if what == "messages" and method == "POST":
             payload = dict(body or {})
             self.sent.append((sid, payload))
@@ -1040,6 +1068,24 @@ class FocusStub:
             "turns": turns[:2], "events": [], "changes": {"files": [], "added": 0, "removed": 0, "untracked": [], "detail": "no worktree of its own"},
         }
         return permission
+
+    def browser_permission_of_ira(self) -> dict:
+        """After ``staff_view_of_ira``: Ira's CLI asks to navigate her browser — a tool of an MCP server,
+        so "Always" may cover the one tool or every tool of the server — and she already holds one
+        standing grant from an earlier "Always", which the Session tab lists with its Revoke."""
+        pid = self.projects[0]["id"]
+        at = (datetime.now(UTC) - timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        tool = "mcp__daedalus_browser__BrowserNavigate"
+        browse = {
+            "id": "ask-browse", "short_id": "b9w4rx", "project_id": pid, "origin": "staff", "kind": "permission", "staff_id": "st-ira", "staff_session_id": "ss-ira", "task_id": "t-checkout",
+            "request_ref": "toolu_2", "text": f"{tool}: https://example.com/photos/bread", "detail": {"tool": tool}, "routed_to": "operator", "suggestion": "",
+            "created_at": at, "routed_at": at, "resolved_at": None, "resolved_by": None, "resolution": {},
+        }
+        self.asks.insert(0, browse)
+        session = self.staff_views["st-ira"]["session"]
+        session["requests"] = [*session["requests"], browse]
+        session["rules"] = [{"rule": "mcp__daedalus_browser__BrowserSnapshot", "created_at": at, "created_by": "operator"}]
+        return browse
 
     def questions_of_bakery(self, lang: str = "en") -> list[dict]:
         """What the Questions tab has to show beside the discount question: a batch the orchestrator
@@ -1268,7 +1314,7 @@ def _caps(harness: str, label: str, channel: str, channel_label: str, steer: str
 
 # The capability table as ``daedalus/harness/capabilities.py`` has it, in the fields the app reads.
 CAPABILITIES: dict[str, dict] = {
-    "claude": _caps("claude", "Claude Code", "hooks", "hooks per launch", "tui_queue", "hook_then_keys", "mcp", ("2.1.281", "2.2.0"), 2),
+    "claude": {**_caps("claude", "Claude Code", "hooks", "hooks per launch", "tui_queue", "hook_then_keys", "mcp", ("2.1.281", "2.2.0"), 2), "standing_rules": True},
     "codex": _caps("codex", "Codex", "app_server", "app-server notifications", "native", "structured", "mcp", ("0.155.1", "0.157.0"), 0),
     "opencode": _caps("opencode", "OpenCode", "sse", "server events", "degrade_to_queue", "structured", "mcp", ("1.18.23", "1.19.0"), 1),
     "pi": _caps("pi", "pi", "extension", "bridge extension", "native", "none", "extension", ("0.84.2", "0.88.0"), 0),

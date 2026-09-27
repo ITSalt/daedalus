@@ -16,7 +16,7 @@ import { plural, t } from "../i18n";
 import { Icon, type IconName } from "../icons";
 import { go, PageHeader } from "../shell";
 import { ORCHESTRATION_LIST, navigate, pathFor, projectHome, projectPagePath, projectSessionPath, projectStaffPath } from "../router";
-import { answeredBy, canAlways, composerWhen, nowChoice } from "../staff/model";
+import { alwaysServer, answeredBy, canAlways, composerWhen, nowChoice } from "../staff/model";
 import { HealthLine } from "../staff/health";
 import { invalidate, useQuery } from "../store";
 import { PhoneTerminal, type PhoneTerminalProps } from "../terminal/mobile";
@@ -135,15 +135,16 @@ function askerLine(ask: Ask, names: Map<string, string>): string {
  */
 /**
  * `always` offers "Always" beside Allow, for a command-line member whose CLI asks permissions (the
- * staff view decides it from the capability table). A refusal because someone answered first names
- * who did.
+ * staff view decides it from the capability table); `server`, the MCP server of the asked tool, adds
+ * "Always, all <server> tools" beside it (`alwaysServer`). A refusal because someone answered first
+ * names who did.
  */
-export function AskAnswers({ ask, projectId, toast, always = false }: { ask: Ask; projectId: string; toast: (text: string) => void; always?: boolean }) {
+export function AskAnswers({ ask, projectId, toast, always = false, server = "" }: { ask: Ask; projectId: string; toast: (text: string) => void; always?: boolean; server?: string }) {
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const options = Array.isArray(ask.detail?.options) ? ask.detail.options.filter((o): o is string => typeof o === "string") : [];
-  async function send(body: { selected?: string[]; text?: string; allow?: boolean; always?: boolean }) {
+  async function send(body: { selected?: string[]; text?: string; allow?: boolean; always?: boolean; server?: boolean }) {
     if (busy) return;
     setBusy(true);
     try {
@@ -159,6 +160,8 @@ export function AskAnswers({ ask, projectId, toast, always = false }: { ask: Ask
       invalidate(`/api/asks?project=${enc(projectId)}`);
       invalidate(`/api/projects/${enc(projectId)}/board`);
       invalidate(`/api/projects/${enc(projectId)}/staff`);
+      // An "Always" may have left the member a standing grant, which the staff view lists.
+      if (body.always && ask.staff_id) invalidate(`/api/staff/${enc(ask.staff_id)}/session`);
     }
   }
   const submit = (e: FormEvent) => {
@@ -176,6 +179,7 @@ export function AskAnswers({ ask, projectId, toast, always = false }: { ask: Ask
             <>
               <button className="btn primary" disabled={busy} onClick={() => void send({ allow: true })}>{t(ask.kind === "folder" ? "focus.ask.yes" : "phone.ask.allow")}</button>
               {always && ask.kind === "permission" && <button className="btn" disabled={busy} data-answer="always" onClick={() => void send({ allow: true, always: true })}>{t("perm.always")}</button>}
+              {always && server && ask.kind === "permission" && <button className="btn" disabled={busy} data-answer="always-server" onClick={() => void send({ allow: true, always: true, server: true })}>{t("perm.always.server", { server })}</button>}
               <button className="btn" disabled={busy} onClick={() => void send({ allow: false })}>{t(ask.kind === "folder" ? "focus.ask.no" : "phone.ask.deny")}</button>
             </>
           ) : (
@@ -433,7 +437,7 @@ export function StaffPhoneTerminal({ staffId, projectId, ...props }: PhoneTermin
   const actions = mine && pid ? (
     <div className="term-phone-ask" data-ask={mine.short_id}>
       <div className="term-phone-ask-text truncate">{mine.text}</div>
-      <AskAnswers key={mine.id} ask={mine} projectId={pid} toast={toast} always={canAlways(mine, view?.capabilities)} />
+      <AskAnswers key={mine.id} ask={mine} projectId={pid} toast={toast} always={canAlways(mine, view?.capabilities)} server={alwaysServer(mine, view?.capabilities)} />
     </div>
   ) : null;
   return <PhoneTerminal {...props} compose={compose} actions={actions} />;

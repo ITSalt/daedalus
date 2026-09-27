@@ -44,13 +44,12 @@ import {
   type CardFate,
   type Draft,
   type Drafts,
-  type PermissionChoice,
+  permissionChoices,
 } from "./model";
 
 type Toast = (text: string) => void;
 
 const KIND_ICON: Record<string, IconName> = { question: "question", permission: "shield", folder: "folder", project: "conductor" };
-const PERMISSION_CHOICES: PermissionChoice[] = ["allow", "always", "deny", "because"];
 
 /**
  * The tab's body. `scope` is one project (its focus mode) or all of them (the main chat, grouped by
@@ -334,11 +333,11 @@ function QuestionCard({ q, draft, fate, fresh, onChange, onClear, onDismiss }: C
   }, [d.text, role]);
 
   const chips: { key: string; label: string; on: boolean; tone?: string; pick: () => void }[] = permission
-    ? PERMISSION_CHOICES.filter((c) => c !== "always" || q.always).map((c) => ({
+    ? permissionChoices(q).map((c) => ({
         key: c,
-        label: t(`questions.perm.${c}`),
+        label: c === "server" ? t("questions.perm.server", { server: q.always_server ?? "" }) : t(`questions.perm.${c}`),
         on: d.choice === c,
-        tone: c === "allow" || c === "always" ? "ok" : "bad",
+        tone: c === "allow" || c === "always" || c === "server" ? "ok" : "bad",
         pick: () => {
           onChange((x) => choosePermission(x, c));
           if (c === "because" && d.choice !== "because") window.setTimeout(() => field.current?.focus(), 0);

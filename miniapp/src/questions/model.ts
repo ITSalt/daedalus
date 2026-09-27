@@ -6,8 +6,19 @@
 
 import type { WaitingQuestion, QuestionAnswer, QuestionOutcome } from "../api";
 
-/** A permission's four answers. "because" is a refusal with the operator's reason, which the member reads. */
-export type PermissionChoice = "allow" | "always" | "deny" | "because";
+/** A permission's answers. "because" is a refusal with the operator's reason, which the member reads;
+ *  "server" is "always" for every tool of the asked tool's MCP server, offered only where the host
+ *  names one (`always_server`). */
+export type PermissionChoice = "allow" | "always" | "server" | "deny" | "because";
+
+/** Every answer a stored draft may hold, in the order the card offers them. */
+export const PERMISSION_CHOICES: PermissionChoice[] = ["allow", "always", "server", "deny", "because"];
+
+/** The answers this card offers: "Always" where the CLI has a standing grant, and the server-wide one
+ *  only for a tool of an MCP server whose tools the CLI can allow together. */
+export function permissionChoices(q: Pick<WaitingQuestion, "always" | "always_server">): PermissionChoice[] {
+  return PERMISSION_CHOICES.filter((c) => (c !== "always" || q.always) && (c !== "server" || (q.always && !!q.always_server)));
+}
 
 /** What the operator has done to one card so far. `text` is the free answer while no option is chosen
  *  and the note once one is — the same field, read by what else is chosen. */
@@ -77,8 +88,9 @@ export function isReady(q: WaitingQuestion, d: Draft | undefined): boolean {
 export function answerOf(q: WaitingQuestion, d: Draft): QuestionAnswer {
   const words = d.text.trim();
   if (isPermission(q)) {
-    const allow = d.choice === "allow" || d.choice === "always";
-    return { ask_id: q.id, allow, ...(d.choice === "always" ? { always: true } : {}), ...(d.choice === "because" && words ? { note: words } : {}) };
+    const allow = d.choice === "allow" || d.choice === "always" || d.choice === "server";
+    const always = d.choice === "always" || d.choice === "server";
+    return { ask_id: q.id, allow, ...(always ? { always: true } : {}), ...(d.choice === "server" ? { server: true } : {}), ...(d.choice === "because" && words ? { note: words } : {}) };
   }
   if (d.selected.length > 0) return { ask_id: q.id, selected: [...d.selected], ...(words && q.kind === "question" ? { note: words } : {}) };
   return { ask_id: q.id, text: words };
@@ -173,7 +185,7 @@ export function loadDrafts(storage: Store | null = safeStorage(), now = Date.now
       if (!d || !Array.isArray(d.selected) || typeof d.text !== "string") continue;
       const at = typeof d.at === "number" ? d.at : 0;
       if (now - at > DRAFT_KEEP_MS) continue;
-      const choice = ["allow", "always", "deny", "because"].includes(String(d.choice)) ? (d.choice as PermissionChoice) : undefined;
+      const choice = (PERMISSION_CHOICES as string[]).includes(String(d.choice)) ? (d.choice as PermissionChoice) : undefined;
       const project = typeof d.project === "string" ? d.project : null;
       out[id] = { selected: d.selected.filter((s): s is string => typeof s === "string"), text: d.text, at, project, ...(choice ? { choice } : {}) };
     }

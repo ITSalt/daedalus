@@ -33,6 +33,7 @@ from protocore.runtime.events.types import EventType
 
 from daedalus.extensions.notifications import ActionConflict, ActionOutcome, ActionRefused, Draft
 from daedalus.harness.capabilities import CAPABILITIES
+from daedalus.harness.contract import mcp_server, standing_rule
 from daedalus.harness.health import ChannelHealth, channel_health
 from daedalus.host import prompts
 from daedalus.host.events import AppEvent, EventFilter
@@ -624,6 +625,7 @@ class Team:
             predecessor=LiveSession(member, predecessor) if predecessor else None,
             origin="orchestrator" if by == "orchestrator" else "operator",
             first_message_id=first_id,
+            allow_rules=tuple(r["rule"] for r in await self.manager.staff.allow_rules(member.id)),
         )
         try:
             started = await runtime.start(request)
@@ -877,6 +879,7 @@ class Team:
         *,
         allow: bool | None = None,
         always: bool = False,
+        server: bool = False,
         text: str | None = None,
         selected: list[str] | None = None,
         note: str = "",
@@ -897,6 +900,10 @@ class Team:
         it may grant only by quoting, as ``basis``, a line of the brief's allowances — the section only
         the operator writes — so a grant is never consent read into a chat message. At ``full`` any
         stated reason will do. Denying is always allowed, and every grant is written to the journal.
+
+        ``always`` with ``server`` grants every tool of the asked tool's MCP server. Where the member's
+        CLI keeps standing rules, an "always" for an MCP tool is also kept as the member's rule and
+        written into each later launch; it stays until the operator revokes it.
         """
         ask = await self.manager.asks.get(ref)
         if ask is None:
@@ -926,25 +933,45 @@ class Team:
         # "Always" is the operator's alone: a standing grant is a change to what the member may do,
         # which the brief's allowances give the orchestrator no say over.
         always = bool(always and allow and ask.kind == "permission" and by == "operator")
+        rule: str | None = None
         if always:
             resolution["always"] = True
+            rule = await self._standing_rule(ask, server=server)
+            if rule is not None:
+                resolution["rule"] = rule
         if extra:
             resolution.update({k: v for k, v in extra.items() if k not in resolution})
         if not await self.manager.asks.resolve(ask.id, by, resolution):
             current = await self.manager.asks.get(ask.id)
             raise AlreadyAnswered(f"request {ask.short_id} was already answered by the {current.resolved_by if current else 'someone else'}")
-        delivered, error = await self._deliver(ask, allow=allow, always=always, text=text or note or None, selected=selected, by=by)
+        if rule is not None and ask.staff_id:
+            # Kept before the delivery: the operator's "always" stands even when the session that
+            # asked has ended by now, and its next launch is where the rule is read.
+            await self.manager.staff.grant_rule(ask.staff_id, rule, by="operator")
+        delivered, error = await self._deliver(ask, allow=allow, always=always, server=bool(server and rule), text=text or note or None, selected=selected, by=by)
         if ask.kind == "permission" and allow:
             who = "The orchestrator" if by == "orchestrator" else "The operator"
             member = await self.manager.staff.get(ask.staff_id) if ask.staff_id else None
             await self.manager.projects.record(
                 project.id, "system", "grant",
-                f"{who} granted {member.name if member else 'a staff member'}: {ask.text[:300]}" + (f" (basis: {basis})" if basis else ""),
+                f"{who} granted {member.name if member else 'a staff member'}: {ask.text[:300]}" + (f" (always: {rule})" if rule else "") + (f" (basis: {basis})" if basis else ""),
                 {"ask_id": ask.id, "staff_id": ask.staff_id or ""},
             )
         await self._announce_resolved(ask, allow=allow, by=by, via=resolution["via"])
         answered = await self.manager.asks.get(ask.id)
         return {"state": "answered", "delivered": delivered, "error": error, "ask": answered.view() if answered else ask.view()}
+
+    async def _standing_rule(self, ask: Ask, *, server: bool) -> str | None:
+        """The rule an operator's "always" leaves for the member, if its CLI keeps rules and the tool
+        is an MCP one. Asked for the whole server where there is none, it is refused rather than
+        quietly narrowed to the one tool: the operator meant more than that."""
+        member = await self.manager.staff.get(ask.staff_id) if ask.staff_id else None
+        caps = CAPABILITIES.get(member.harness) if member is not None else None
+        tool = str(ask.detail.get("tool") or "")
+        keeps = caps is not None and caps.standing_rules
+        if server and not (keeps and mcp_server(tool)):
+            raise StaffError(f"request {ask.short_id} is not for a tool of an MCP server whose tools can be allowed together")
+        return standing_rule(tool, "server" if server else "tool") if keeps else None
 
     async def _orchestrator_may(self, ask: Ask, project: Project, *, allow: bool | None, text: str | None, selected: list[str] | None, basis: str) -> dict[str, Any] | None:
         """The orchestrator's limits; a dict when the answer ends here (a suggestion), ``None`` to go on."""
@@ -975,7 +1002,7 @@ class Team:
                 raise StaffError("a grant states its reason")
         return None
 
-    async def _deliver(self, ask: Ask, *, allow: bool | None, text: str | None, selected: list[str] | None, by: str, always: bool = False) -> tuple[bool, str]:
+    async def _deliver(self, ask: Ask, *, allow: bool | None, text: str | None, selected: list[str] | None, by: str, always: bool = False, server: bool = False) -> tuple[bool, str]:
         if ask.origin == "orchestrator":
             if self.own_requests is None:
                 return False, "no orchestrator is installed to take the answer"
@@ -984,7 +1011,7 @@ class Team:
         live = await self.live(ask.staff_session_id) if ask.staff_session_id else None
         if live is None:
             return False, "the session that asked has ended"
-        decision = Decision(allow=allow, text=text, selected=list(selected or []), by="orchestrator" if by == "orchestrator" else "operator", always=always)
+        decision = Decision(allow=allow, text=text, selected=list(selected or []), by="orchestrator" if by == "orchestrator" else "operator", always=always, server=server)
         try:
             await self.runtime(live.staff).answer(live, AskRef(ask.id, ask.kind, ask.request_ref), decision)  # type: ignore[arg-type]
         except Exception as exc:  # noqa: BLE001 — the answer is recorded; the failure to deliver it is reported beside it

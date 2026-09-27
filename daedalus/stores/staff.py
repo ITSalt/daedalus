@@ -726,6 +726,30 @@ class StaffStore:
         assert updated is not None
         return updated
 
+    # -- standing grants -------------------------------------------------------------
+
+    async def allow_rules(self, staff_id: str) -> builtins.list[dict[str, str]]:
+        """The member's standing grants, oldest first: ``{rule, created_at, created_by}``."""
+        rows = await self._db.fetchall("SELECT rule, created_at, created_by FROM staff_allow_rules WHERE staff_id = ? ORDER BY created_at, rule", (staff_id,))
+        return [{"rule": r["rule"], "created_at": r["created_at"], "created_by": r["created_by"]} for r in rows]
+
+    async def grant_rule(self, staff_id: str, rule: str, *, by: str = "operator") -> bool:
+        """Keep an allow rule for the member; ``False`` when it was already kept."""
+        async with self._db.transaction() as conn:
+            cursor = await conn.execute("INSERT OR IGNORE INTO staff_allow_rules(staff_id, rule, created_at, created_by) VALUES (?, ?, ?, ?)", (staff_id, rule, _now(), by))
+            changed = cursor.rowcount
+            await cursor.close()
+        return bool(changed)
+
+    async def revoke_rule(self, staff_id: str, rule: str) -> bool:
+        """Drop an allow rule; ``False`` when the member had none such. A live session keeps what it
+        was granted until it ends: the CLI takes no rule back from outside."""
+        async with self._db.transaction() as conn:
+            cursor = await conn.execute("DELETE FROM staff_allow_rules WHERE staff_id = ? AND rule = ?", (staff_id, rule))
+            changed = cursor.rowcount
+            await cursor.close()
+        return bool(changed)
+
     async def archive(self, staff_id: str, *, by: str = "operator") -> Staff:
         """Dismiss a member: the row stays (sessions and spend point at it) and its name is free again.
 

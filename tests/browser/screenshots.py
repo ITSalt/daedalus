@@ -1628,12 +1628,15 @@ def phone_project_shots(context) -> None:  # type: ignore[no-untyped-def]
     page.close()
 
 
-def staff_stand(context):  # type: ignore[no-untyped-def]
-    """Ira, a Claude Code member, in her own view: her terminal with a permission dialog on it."""
+def staff_stand(context, *, browse: bool = False):  # type: ignore[no-untyped-def]
+    """Ira, a Claude Code member, in her own view: her terminal with a permission dialog on it. With
+    ``browse`` her browser's permission waits beside it."""
     from terminal_stub import TerminalStub
 
     focus = FocusStub.bakery(LANG)
     focus.staff_view_of_ira(LANG)
+    if browse:
+        focus.browser_permission_of_ira()
     pid = focus.projects[0]["id"]
     term = TerminalStub(S1)
     term.add("tm-ira", title="claude · Ira", owner_kind="staff", owner_id="st-ira", project_id=pid, owner_label="Ira", cwd="/home/operator/work/bakery-site")
@@ -1685,6 +1688,13 @@ def run_staff() -> int:
         page.screenshot(path=str(OUT / "staff-feed.png"))
         print("wrote staff-feed")
         desk.close()
+        # The browser's permission, which "Always" may grant for its whole server, and the standing
+        # grants listed. In a browser of its own: a terminal already shown in one holds its size.
+        for name, over, wait in (("staff-permissions", {"browse": True}, ".staff-request [data-answer='always-server']"),):
+            desk = browser.new_context(viewport=DESK, device_scale_factor=2, color_scheme="dark")
+            page, pid = staff_stand(desk, **over)
+            shot(page, name, f"project/{pid}/staff/st-ira", wait=wait, settle=1400)
+            desk.close()
         phone = browser.new_context(viewport=PHONE, device_scale_factor=3, color_scheme="dark", is_mobile=True, has_touch=True)
         page, pid = staff_stand(phone)
         shot(page, "phone-staff-feed", f"project/{pid}/staff/st-ira", wait=".staff-request .ask-answers-row .btn", settle=900)

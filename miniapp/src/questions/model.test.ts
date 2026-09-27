@@ -13,6 +13,7 @@ import {
   isSendKey,
   leaves,
   loadDrafts,
+  permissionChoices,
   projectGroups,
   pruneDrafts,
   saveDrafts,
@@ -92,6 +93,7 @@ describe("a draft", () => {
     const allow = choosePermission(EMPTY, "allow");
     expect(answerOf(perm, allow)).toEqual({ ask_id: "ask-perm", allow: true });
     expect(answerOf(perm, choosePermission(EMPTY, "always"))).toEqual({ ask_id: "ask-perm", allow: true, always: true });
+    expect(answerOf(perm, choosePermission(EMPTY, "server"))).toEqual({ ask_id: "ask-perm", allow: true, always: true, server: true });
     expect(answerOf(perm, choosePermission(EMPTY, "deny"))).toEqual({ ask_id: "ask-perm", allow: false });
     const because = choosePermission(EMPTY, "because");
     expect(takesText(perm, because)).toBe(true);
@@ -184,5 +186,14 @@ describe("the list", () => {
     expect(isSendKey(key({ metaKey: true }))).toBe(true);
     expect(isSendKey(key({}))).toBe(false);
     expect(isSendKey(key({ ctrlKey: true, altKey: true }))).toBe(false);
+  });
+});
+
+describe("the answers a permission card offers", () => {
+  it("adds always for a whole MCP server only where the host names one", () => {
+    expect(permissionChoices({ always: true, always_server: "daedalus_browser" })).toEqual(["allow", "always", "server", "deny", "because"]);
+    expect(permissionChoices({ always: true, always_server: "" })).toEqual(["allow", "always", "deny", "because"]);
+    expect(permissionChoices({ always: true })).toEqual(["allow", "always", "deny", "because"]);
+    expect(permissionChoices({ always: false, always_server: "daedalus_browser" })).toEqual(["allow", "deny", "because"]);
   });
 });

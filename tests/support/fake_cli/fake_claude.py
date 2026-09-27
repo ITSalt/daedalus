@@ -432,6 +432,8 @@ class FakeClaude(FakeAgent):
             return True
         for rule in self.allow:
             name, _, pattern = rule.partition("(")
+            if name.startswith("mcp__") and name.count("__") == 1 and tool.startswith(name + "__"):
+                return True  # a server's rule: every tool of that MCP server (measured on 2.1.283)
             if name != tool:
                 continue
             if not pattern:
@@ -488,7 +490,22 @@ class FakeClaude(FakeAgent):
     async def _late_hook(self, tool: str, request: dict[str, Any]) -> str:
         if self.faults.late_permission_notification:
             await pause(2)
-        return self._verdict(await self.hook("PermissionRequest", request, tool=tool))
+        answers = await self.hook("PermissionRequest", request, tool=tool)
+        verdict = self._verdict(answers)
+        if verdict == "allow_once":
+            self._take_rules(answers)
+        return verdict
+
+    def _take_rules(self, answers: list[Any]) -> None:
+        """An allow's ``updatedPermissions``: rules added for the session count from the next call on."""
+        for answer in answers:
+            output = answer.get("hookSpecificOutput") if isinstance(answer, dict) else None
+            decision = output.get("decision") if isinstance(output, dict) else None
+            for update in (decision.get("updatedPermissions") or []) if isinstance(decision, dict) else []:
+                if update.get("type") == "addRules" and update.get("behavior") == "allow":
+                    rules = [str(r["toolName"]) for r in update.get("rules") or []]
+                    self.allow += rules
+                    self.log("rules_added", rules=rules, destination=update.get("destination"))
 
     async def _permission_notification(self, tool: str) -> None:
         await pause(12 if self.faults.late_permission_notification else 6)

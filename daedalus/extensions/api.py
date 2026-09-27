@@ -358,6 +358,8 @@ class AskAnswerBody(BaseModel):
 
     allow: bool | None = None
     always: bool = False
+    server: bool = False
+    """With ``always``: every tool of the asked tool's MCP server, not the one tool."""
     text: str | None = None
     selected: list[str] | None = None
     window: Literal["main", "project"] | None = None
@@ -1714,7 +1716,7 @@ def build_app(app: Application, api_token: str) -> FastAPI:
     async def answer_ask(ask_id: str, body: AskAnswerBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
         """The operator's answer. The first answer to reach a request wins; a later one is a 409 naming who was first."""
         team = team_or_503()
-        return await team_call(team.answer(ask_id, allow=body.allow, always=body.always, text=body.text, selected=body.selected, by="operator", via=body.window or "app"))  # type: ignore[no-any-return]
+        return await team_call(team.answer(ask_id, allow=body.allow, always=body.always, server=body.server, text=body.text, selected=body.selected, by="operator", via=body.window or "app"))  # type: ignore[no-any-return]
 
     async def team_live(staff_session_id: str, request: Request) -> Any:
         """A command-line member's team server, authenticated by the token minted for its launch —

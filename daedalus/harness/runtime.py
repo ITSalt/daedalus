@@ -467,6 +467,7 @@ class CliStaffRuntime:
             permission_hold_ms=cfg.permission_hold_s * 1000,
             port_range=port_range(cfg.opencode_port_range),
             tool_sets=tuple(tools.spec(self._tools_hold_ms()) for tools in self.tool_sets.values()),
+            allow_rules=req.allow_rules,
         )
 
     def _tools_hold_ms(self) -> int:
@@ -1244,7 +1245,8 @@ class CliStaffRuntime:
                 session.worker.put(Pending("", f"[the {decision.by} answers your question] {words}", "after_turn", "system"))
         else:
             if ask.kind == "permission":
-                choice = ("allow_always" if decision.always else "allow_once") if decision.allow else "deny_with_note" if text else "deny"
+                always = "allow_always_server" if decision.server else "allow_always"
+                choice = (always if decision.always else "allow_once") if decision.allow else "deny_with_note" if text else "deny"
             else:
                 choice = decision.selected[0] if decision.selected else "text"
             if not await self.adapter.answer(session.term, ref, Answer(choice, note=text)):

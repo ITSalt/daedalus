@@ -77,6 +77,11 @@ class Capabilities:
     autoupdate_off: tuple[tuple[str, str], ...] = field(default=())
     """Environment that switches the CLI's own updater off, so a version changes only from the
     Harnesses screen and never under a working staff member. Empty when it is done with a flag."""
+    standing_rules: bool = False
+    """The host keeps the operator's "Always" for an MCP tool as an allow rule of the CLI, written
+    into every launch, and a rule may cover every tool of one MCP server. Claude Code alone: Codex
+    routes an MCP tool's approval as an elicitation, which has no standing answer, and OpenCode's and
+    Grok's "always" knows no server."""
 
 
 CAPABILITIES: dict[str, Capabilities] = {
@@ -98,6 +103,7 @@ CAPABILITIES: dict[str, Capabilities] = {
         pointer_dir_flag="--add-dir",
         tested_versions=("2.1.281", "2.2.0"),
         supported_major=2,
+        standing_rules=True,
         autoupdate_off=(("DISABLE_AUTOUPDATER", "1"),),
     ),
     "codex": Capabilities(

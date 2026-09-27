@@ -121,6 +121,8 @@ class StartRequest:
     origin: Origin = "operator"
     first_message_id: str = ""
     """The staff message the first message is recorded as, so its receipt can be reported."""
+    allow_rules: tuple[str, ...] = ()
+    """The operator's standing grants to the member, as the CLI's allow rules, for a CLI that keeps them."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +172,8 @@ class Decision:
     """An allow that also covers the same request from now on, where the CLI offers that (Claude's
     "don't ask again", Codex's accept for the session, OpenCode's "always"). A runtime that cannot
     deliver it gives a plain allow: the operator is asked again next time, which is the safe side."""
+    server: bool = False
+    """With ``always``: the grant covers every tool of the asked tool's MCP server, not the one tool."""
 
 
 @dataclass(frozen=True, slots=True)

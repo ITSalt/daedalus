@@ -114,6 +114,29 @@ export function canAlways(ask: Pick<Ask, "kind">, caps: Pick<HarnessCapabilities
   return ask.kind === "permission" && !!caps && caps.permissions !== "none";
 }
 
+/** The MCP server of a tool named `mcp__<server>__<tool>`, or "" for any other tool. Read the way
+ *  Claude Code reads it (and the host's `mcp_server`): the server lies between the first two `__`. */
+export function mcpServer(tool: string): string {
+  const m = /^mcp__(.+?)__(.+)$/.exec(tool);
+  return m ? m[1] : "";
+}
+
+/** The server whose every tool "Always" can allow at once for this request, or "": only for an MCP
+ *  tool, and only where the member's CLI keeps the operator's grants as rules (`standing_rules`).
+ *  A built-in tool never gets it — its only rule would be the whole tool, every command or file. */
+export function alwaysServer(ask: Pick<Ask, "kind" | "detail">, caps: Pick<HarnessCapabilities, "permissions" | "standing_rules"> | null | undefined): string {
+  if (!canAlways(ask, caps) || !caps?.standing_rules) return "";
+  return mcpServer(typeof ask.detail?.tool === "string" ? ask.detail.tool : "");
+}
+
+/** A standing rule in the operator's words: the one tool, or every tool of a server. */
+export function ruleWords(rule: string): string {
+  const server = mcpServer(rule);
+  if (server) return t("staff.rules.tool", { tool: rule.slice(`mcp__${server}__`.length), server });
+  const whole = /^mcp__([^_].*)$/.exec(rule);
+  return whole && !whole[1].includes("__") ? t("staff.rules.server", { server: whole[1] }) : rule;
+}
+
 /** The requests of this member that wait for an answer, oldest first: the one waiting longest is the one on top. */
 export function openRequests<T extends Pick<Ask, "resolved_at" | "created_at"> & { staff_id: string | null }>(asks: T[], staffId: string): T[] {
   return asks.filter((a) => a.staff_id === staffId && !a.resolved_at).sort((a, b) => a.created_at.localeCompare(b.created_at));

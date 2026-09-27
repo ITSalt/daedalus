@@ -218,6 +218,13 @@ class FakeAgent:
             else:
                 await self.on_tool_denied("Bash", {"command": arg}, tool_id)
                 await self.assistant(f"Understood, I did not run {arg}.")
+        elif kind == "mcpperm":
+            server, _, name = arg.partition(":")
+            full = f"mcp__{server}__{name}"
+            tool_id = "toolu_" + new_id().replace("-", "")[:24]
+            decision = await self.permission(full, {"url": f"https://example.test/{name}"}, name, tool_id)
+            self.log("mcp_permission", tool=full, decision=decision)
+            await self.assistant(f"{name}: {'ran' if decision.startswith('allow') else 'rejected'}")
         elif kind == "ask":
             spec = ask_arguments(arg)
             tool_id = "toolu_" + new_id().replace("-", "")[:24]

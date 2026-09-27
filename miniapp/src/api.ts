@@ -864,11 +864,13 @@ export type WaitingQuestion = Ask & {
   multi: boolean;
   host: boolean;
   always: boolean;
+  /** The MCP server whose every tool "Always" can allow at once, or empty. */
+  always_server?: string;
   urgent: boolean;
 };
 
 /** One answer of a batch sent from the list. */
-export type QuestionAnswer = { ask_id: string; selected?: string[]; text?: string; note?: string; allow?: boolean; always?: boolean };
+export type QuestionAnswer = { ask_id: string; selected?: string[]; text?: string; note?: string; allow?: boolean; always?: boolean; server?: boolean };
 
 /** What the host did with one answer of a batch. */
 export type QuestionOutcome = {
@@ -915,6 +917,8 @@ export type HarnessCapabilities = {
   companion: boolean;
   tested_versions: [string, string];
   supported_major: number;
+  /** The host keeps an "Always" for an MCP tool as the member's rule, and one may cover a whole server. */
+  standing_rules?: boolean;
 };
 
 /** Whether the host still hears a staff member (`daedalus/harness/health.py`). */
@@ -941,8 +945,13 @@ export type StaffSessionView = {
   channel?: Record<string, unknown>;
   health?: ChannelHealth | null;
   requests?: Ask[];
+  /** The operator's standing grants to the member ("Always"), as its CLI's allow rules. */
+  rules?: StandingRule[];
   usage?: { input_tokens?: number; output_tokens?: number; cache_read_tokens?: number; cost_usd?: number | null; window_used_pct?: number | null; transcript_ref?: string; [k: string]: unknown } | null;
 };
+
+/** One standing grant: `mcp__<server>__<tool>` for one tool, `mcp__<server>` for every tool of a server. */
+export type StandingRule = { rule: string; created_at: string; created_by: string };
 
 /** One turn of a command-line member's transcript, read from its CLI's own store. */
 export type StaffTurn = {

@@ -81,10 +81,11 @@ def register(api: FastAPI, app: Application, auth: Callable[..., Any]) -> None:
         """The member's live session with what its runtime knows: the status and what it waits for,
         the terminal, the launch (CLI, version, model, mode, worktree, branch, task), what the CLI
         can do, what each channel last said (``channel``) and the verdict on them (``health``), the
-        requests open, the spend."""
+        requests open, the spend. ``rules`` are the operator's standing grants to the member, live
+        session or not."""
         member = await member_of(staff_id)
         session = await manager.staff.live(staff_id)
-        out: dict[str, Any] = {"staff": member.view(), "session": session.view() if session is not None else None}
+        out: dict[str, Any] = {"staff": member.view(), "session": session.view() if session is not None else None, "rules": await manager.staff.allow_rules(staff_id)}
         if session is None:
             return out
         caps = CAPABILITIES.get(member.harness)
@@ -112,6 +113,15 @@ def register(api: FastAPI, app: Application, auth: Callable[..., Any]) -> None:
         out["requests"] = [a.view() for a in await manager.asks.open_for(member.project_id) if a.staff_session_id == session.id]
         out["usage"] = session.usage or None
         return out
+
+    @api.delete("/api/staff/{staff_id}/rules/{rule}")
+    async def revoke_staff_rule(staff_id: str, rule: str, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        """Take back a standing grant. The member's next launch goes without it; a session running now
+        keeps it until it ends, since the CLI takes no rule back from outside."""
+        member = await member_of(staff_id)
+        if not await manager.staff.revoke_rule(member.id, rule):
+            raise HTTPException(404, f"{member.name} has no standing grant {rule!r}")
+        return {"rules": await manager.staff.allow_rules(member.id)}
 
     @api.post("/api/staff/{staff_id}/messages")
     async def post_staff_message(staff_id: str, body: MessageBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:

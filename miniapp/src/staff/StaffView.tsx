@@ -14,7 +14,7 @@
 // so Claude Code, Codex, OpenCode, pi and Grok Build are drawn by the same code.
 
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, type Ask, type HarnessCapabilities, type StaffChanges, type StaffEventRow, type StaffMessage, type StaffSessionView, type TerminalView as TerminalRow } from "../api";
+import { api, type Ask, type HarnessCapabilities, type StaffChanges, type StaffEventRow, type StaffMessage, type StaffSessionView, type StandingRule, type TerminalView as TerminalRow } from "../api";
 import { Sheet } from "../dialogs";
 import { useEvent } from "../events";
 import { relTime, tokens, usd } from "../format";
@@ -36,7 +36,7 @@ import { BrowserTab } from "../browser/BrowserPanel";
 import { deviceSaving, useBrowsers } from "../browser/data";
 import { BrowserHeadButton } from "../browser/phone";
 import { BrowserPip } from "../browser/pip";
-import { attention, canAlways, channelWords, composerWhen, defaultMode, keyboardBlocks, listRows, nowChoice, openRequests, outboxRows, turnFacts, type StaffViewMode } from "./model";
+import { alwaysServer, attention, canAlways, channelWords, composerWhen, defaultMode, keyboardBlocks, listRows, nowChoice, openRequests, outboxRows, ruleWords, turnFacts, type StaffViewMode } from "./model";
 
 const enc = encodeURIComponent;
 const MODE_KEY = "daedalus.staff.view";
@@ -303,7 +303,7 @@ function PermissionBar({ projectId, staffId, caps, toast }: { projectId: string;
             <span className="staff-request-id mono">#{ask.short_id}</span>
           </div>
           {ask.routed_to === "orchestrator" && <div className="staff-request-routed">{t("perm.routed.orchestrator")}</div>}
-          <AskAnswers ask={ask} projectId={projectId} toast={toast} always={canAlways(ask, caps)} />
+          <AskAnswers ask={ask} projectId={projectId} toast={toast} always={canAlways(ask, caps)} server={alwaysServer(ask, caps)} />
         </section>
       ))}
     </div>
@@ -396,7 +396,7 @@ function StaffPanel({ projectId, staffId, name, view, notes, instructions, taskI
       </div>
       <div className={`panel-body staff-panel-body ${tab === "browser" ? "tab-browser" : ""}`}>
         {tab === "browser" && browser}
-        {tab === "session" && <SessionTab staffId={staffId} view={view} messages={<MessagesSection staffId={staffId} name={name} messages={messages} reveal={reveal} toast={toast} />} />}
+        {tab === "session" && <SessionTab staffId={staffId} view={view} toast={toast} messages={<MessagesSection staffId={staffId} name={name} messages={messages} reveal={reveal} toast={toast} />} />}
         {tab === "changes" && <ChangesTab projectId={projectId} staffId={staffId} taskId={taskId} />}
         {tab === "notes" && (
           <div className="staff-notes">
@@ -459,7 +459,7 @@ function MessagesSection({ staffId, name, messages, reveal, toast }: { staffId: 
   );
 }
 
-function SessionTab({ staffId, view, messages }: { staffId: string; view: StaffSessionView | null; messages: ReactNode }) {
+function SessionTab({ staffId, view, messages, toast }: { staffId: string; view: StaffSessionView | null; messages: ReactNode; toast: (text: string) => void }) {
   const key = `/api/staff/${enc(staffId)}/events?limit=40`;
   const { data } = useQuery<{ events: StaffEventRow[] }>(view?.session ? key : null, { pollMs: 15000, staleMs: 3000 });
   useEvent(["staff."], (event) => {
@@ -481,6 +481,7 @@ function SessionTab({ staffId, view, messages }: { staffId: string; view: StaffS
         </section>
       )}
       {messages}
+      {(view?.rules?.length ?? 0) > 0 && <RulesSection staffId={staffId} rules={view!.rules!} toast={toast} />}
       <section className="staff-aside-section">
         <div className="staff-aside-label">{t("staff.transcript")}</div>
         <div className="staff-aside-line mono truncate">{view?.session?.cli_session_id || "—"}</div>
@@ -503,6 +504,40 @@ function SessionTab({ staffId, view, messages }: { staffId: string; view: StaffS
         </ul>
       </section>
     </div>
+  );
+}
+
+/** The operator's standing grants to the member ("Always"), each revocable. A revoked one leaves the
+ *  member's next launch; the CLI running now keeps it, having no way to be told. */
+function RulesSection({ staffId, rules, toast }: { staffId: string; rules: StandingRule[]; toast: (text: string) => void }) {
+  const [busy, setBusy] = useState("");
+  async function revoke(rule: string) {
+    if (busy) return;
+    setBusy(rule);
+    try {
+      await api.delete(`/api/staff/${enc(staffId)}/rules/${enc(rule)}`);
+      toast(t("staff.rules.revoked"));
+    } catch (e) {
+      toast(errorText(e));
+    } finally {
+      setBusy("");
+      invalidate(`/api/staff/${enc(staffId)}/session`);
+    }
+  }
+  return (
+    <section className="staff-aside-section staff-rules-section" data-section="rules">
+      <div className="staff-aside-label">{t("staff.rules")}</div>
+      <ul className="staff-rules">
+        {rules.map((r) => (
+          <li key={r.rule} className="staff-rule" data-rule={r.rule}>
+            <Icon name="shield" size={13} />
+            <span className="staff-rule-text truncate" title={r.rule}>{ruleWords(r.rule)}</span>
+            <button className="btn small ghost" disabled={busy === r.rule} onClick={() => void revoke(r.rule)}>{t("staff.rules.revoke")}</button>
+          </li>
+        ))}
+      </ul>
+      <div className="staff-aside-line sub">{t("staff.rules.why")}</div>
+    </section>
   );
 }
 

@@ -28,9 +28,37 @@ ended, ``interrupt`` after stopping the turn. Named by timing because that is th
 chooses; how a CLI manages each is its capability's ``steer``."""
 DeliveryState = Literal["queued", "written", "submitted", "acknowledged", "failed"]
 
-ANSWER_CHOICES = ("allow_once", "allow_always", "deny", "deny_with_note")
+ANSWER_CHOICES = ("allow_once", "allow_always", "allow_always_server", "deny", "deny_with_note")
 """What a permission answer can be, whatever words the CLI's dialog uses for it. A question is
-answered with one of its own options by label, or with free text."""
+answered with one of its own options by label, or with free text. ``allow_always_server`` is
+"always" for every tool of the MCP server the asked tool belongs to (see ``standing_rule``)."""
+
+StandingScope = Literal["tool", "server"]
+
+
+def mcp_server(tool: str) -> str:
+    """The MCP server of a tool named ``mcp__<server>__<tool>``, or empty for any other tool.
+
+    Split the way Claude Code splits it: the server is what lies between the first and the second
+    ``__``, and the tool is the rest, which may itself hold ``__``. A server name never does, since
+    the CLI folds every character outside ``[A-Za-z0-9_-]`` of it to one underscore."""
+    prefix, _, rest = tool.partition("__")
+    server, sep, name = rest.partition("__")
+    return server if prefix == "mcp" and server and sep and name else ""
+
+
+def standing_rule(tool: str, scope: StandingScope) -> str | None:
+    """The allow rule an "Always" for ``tool`` leaves behind, or ``None`` when it leaves none.
+
+    Only an MCP tool gets one. ``mcp__<server>__<tool>`` names the one tool and ``mcp__<server>``
+    every tool of that server (Claude Code 2.1: a rule whose tool part is absent matches the whole
+    server). A built-in tool gets none: a bare ``Bash`` or ``Write`` rule would let through every
+    command or every file, far more than the one call the operator looked at, so its "Always" stays
+    what the CLI's own dialog offers."""
+    server = mcp_server(tool)
+    if not server:
+        return None
+    return f"mcp__{server}" if scope == "server" else tool
 
 
 class ScreenClass(StrEnum):
@@ -260,6 +288,9 @@ class LaunchSpec:
     tool_sets: tuple[ToolSetSpec, ...] = ()
     """Daedalus's tools beyond the team's that this launch offers (the browser's), each through an
     MCP entry of its own."""
+    allow_rules: tuple[str, ...] = ()
+    """The standing grants the operator gave this member ("Always"), as the CLI's allow rules
+    (``standing_rule``). Written into every launch, so a grant outlives the session it was given in."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -590,10 +621,13 @@ __all__ = [
     "ScreenClass",
     "SendMode",
     "StaffEvent",
+    "StandingScope",
     "TerminalPort",
     "ToolSetSpec",
     "ToolUse",
     "Turn",
     "TurnUsage",
     "UpdateResult",
+    "mcp_server",
+    "standing_rule",
 ]

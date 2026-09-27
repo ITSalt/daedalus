@@ -20,7 +20,8 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from daedalus.extensions.staff import AlreadyAnswered
-from daedalus.harness.capabilities import CAPABILITIES
+from daedalus.harness.capabilities import CAPABILITIES, Capabilities
+from daedalus.harness.contract import mcp_server
 from daedalus.stores.staff import Ask, StaffError
 
 if TYPE_CHECKING:
@@ -39,6 +40,13 @@ class Unanswerable(ValueError):
 
 def _options(ask: Ask) -> list[str]:
     return [str(o) for o in ask.detail.get("options") or [] if isinstance(o, str)]
+
+
+def always_server(ask: Ask, caps: Capabilities | None) -> str:
+    """The MCP server whose every tool "always" could allow at once for this request, or empty."""
+    if ask.kind != "permission" or caps is None or not caps.standing_rules:
+        return ""
+    return mcp_server(str(ask.detail.get("tool") or ""))
 
 
 def section_of(ask: Ask) -> str:
@@ -69,6 +77,8 @@ async def _view(app: Application, ask: Ask, names: dict[str, str], members: dict
         # "Always" exists where the member's CLI has a standing grant to give; a Daedalus member's
         # gate has none.
         "always": ask.kind == "permission" and caps is not None and caps.permissions != "none",
+        # And "Always for all its tools" where the tool is an MCP server's and the CLI keeps rules.
+        "always_server": always_server(ask, caps),
         "urgent": bool(ask.detail.get("urgent")),
     }
 
@@ -102,7 +112,8 @@ def _shape(ask: Ask, item: dict[str, Any]) -> dict[str, Any]:
     if ask.kind == "permission":
         if not isinstance(allow, bool) or selected or text:
             raise Unanswerable("a permission is answered with allow or deny, and a reason if you like")
-        return {"allow": allow, "always": bool(item.get("always")) and allow, "note": note}
+        always = bool(item.get("always")) and allow
+        return {"allow": allow, "always": always, "server": always and bool(item.get("server")), "note": note}
     if ask.kind in ("folder", "project"):
         if text or note:
             raise Unanswerable(f"a {ask.kind} request is answered with one of its options, not in words")

@@ -1502,6 +1502,21 @@ CREATE UNIQUE INDEX sessions_share_slug ON sessions(share_slug);
 """)
 
 
+# The operator's standing grants to a command-line member: what "Always" allowed, as the CLI's own
+# allow rule (``mcp__browser__BrowserNavigate``, or ``mcp__browser`` for every tool of a server).
+# Kept by the host and written into each launch, because the CLI keeps a grant only for the session
+# it was given in, and the project folder where it would otherwise keep one is the operator's.
+MIGRATIONS.append("""
+CREATE TABLE staff_allow_rules (
+    staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+    rule TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL DEFAULT 'operator',
+    PRIMARY KEY (staff_id, rule)
+);
+""")
+
+
 CACHE_PAGES = -65536
 """Page cache, as negative kibibytes: 64 MiB. The default is two megabytes, which a session
 open walks straight through."""

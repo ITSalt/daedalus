@@ -19,7 +19,10 @@ and the fake CLI replays their shapes. What matters to the adapter:
   held reply decides with ``decision.behavior``; when the hold has gone, the answer is typed into
   the dialog — after the dialog is on screen, because the hook arrives about a quarter of a second
   before the dialog is drawn and keys typed at once land in the composer. The request names no tool
-  use, so the ``PreToolUse`` just before it (same tool, same input) gives its id.
+  use, so the ``PreToolUse`` just before it (same tool, same input) gives its id. An "always" for an
+  MCP tool rides on the held reply as ``updatedPermissions`` (an ``addRules`` for the session, the
+  shape the 2.1.283 bundle validates), naming the tool or its whole server (``mcp__<server>``); the
+  same rules are written into every later launch's ``permissions.allow``, which is where they last.
 - **Questions.** ``AskUserQuestion`` is answered structurally: a ``PreToolUse`` hook held for it
   replies ``allow`` with ``updatedInput.answers``, and the dialog never opens. When the hold has
   gone, the dialog is answered with the option's digit.
@@ -81,6 +84,7 @@ from daedalus.harness.contract import (
     Turn,
     TurnUsage,
     UpdateResult,
+    standing_rule,
 )
 from daedalus.harness.team import SKILL_PATH
 from daedalus.harness.tools import tooling
@@ -289,6 +293,8 @@ class ClaudeCodeAdapter:
         # The team's tools and the tools of each set that only read are Claude's to run unasked; the
         # others ask by the member's mode, and what the host judges sensitive is asked again there.
         allow = [*TEAM_TOOLS, *(f"mcp__{tools.server}__{name}" for tools in spec.tool_sets for name in tools.read_only)]
+        # The operator's standing grants to this member, given by "Always" in an earlier session.
+        allow += [rule for rule in spec.allow_rules if rule not in allow]
         settings: dict[str, Any] = {"hooks": hooks, "permissions": {"allow": allow}}
         if mode == "bypassPermissions":
             # The overlay's switch is honoured (measured): the warning would otherwise stop the launch.
@@ -503,13 +509,21 @@ class ClaudeCodeAdapter:
         if request.kind == "permission":
             allowed = answer.choice.startswith("allow")
             decision: dict[str, Any] = {"behavior": "allow"} if allowed else {"behavior": "deny", "message": answer.note or "The operator declined this."}
+            rule = standing_rule(request.tool, "server" if answer.choice == "allow_always_server" else "tool") if answer.choice.startswith("allow_always") else None
+            if rule is not None:
+                # Held for this session only: "localSettings" would write the rule into the project
+                # folder, which is the operator's repository, not the member's. The host keeps the
+                # grant and writes it into every later launch itself.
+                decision["updatedPermissions"] = [{"type": "addRules", "rules": [{"toolName": rule}], "behavior": "allow", "destination": "session"}]
+            # A built-in tool's "always" is a plain allow on the held hook: its only rule would be the
+            # whole tool (every command, every file), and an allow that asks again is the safe side.
             body: Any = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": decision}}
-            # The held hook carries a plain allow even for "always": its ``updatedPermissions`` form is
-            # not verified against the real CLI, and an allow that asks again later is the safe side.
             if request.reply_id and await term.reply(request.reply_id, body):
                 request.settled = True
                 return True
-            return await self._keys_for_permission(term, request, allowed, always=answer.choice == "allow_always")
+            # In the dialog "always" is its second row, for the one tool; a server-wide grant reaches
+            # this session no further, and the next launch carries it from the host's list.
+            return await self._keys_for_permission(term, request, allowed, always=answer.choice.startswith("allow_always"))
         labels = [str(o.get("label") or "") for q in request.questions[:1] for o in q.get("options") or [] if isinstance(o, dict)]
         chosen = answer.note if answer.choice == "text" else answer.choice
         answers = {str(q.get("question") or ""): chosen for q in request.questions}

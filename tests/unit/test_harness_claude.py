@@ -23,15 +23,28 @@ import pytest
 from daedalus.config import RuntimeConfig, Settings
 from daedalus.extensions.api import build_app
 from daedalus.extensions.harness import install as install_harness
+from daedalus.extensions.questions import always_server
 from daedalus.harness import ADAPTERS
+from daedalus.harness.capabilities import CAPABILITIES
 from daedalus.harness.claude import ClaudeCodeAdapter, composer, parse_transcript, unpasted
-from daedalus.harness.contract import LAUNCH_DIR, EventKind, HookPost, Launch, LaunchSpec, ScreenClass, StaffEvent
+from daedalus.harness.contract import (
+    LAUNCH_DIR,
+    EventKind,
+    HookPost,
+    Launch,
+    LaunchSpec,
+    ScreenClass,
+    StaffEvent,
+    mcp_server,
+    standing_rule,
+)
 from daedalus.harness.runtime import CliStaffRuntime, RuntimeEnvironment
 from daedalus.harness.selfcheck import session_check
 from daedalus.harness.team import SKILL_PATH, looks_like_question
 from daedalus.staff_runtime import FakeStaffRuntime, ReadRequest
 from daedalus.stores.database import Database
 from daedalus.stores.harness import HarnessStore
+from daedalus.stores.staff import StaffError
 from tests.support.fake_cli.tui import read_log
 from tests.unit.test_cli_staff_runtime import Stand, eventually, stand, terminals_service, trust
 
@@ -79,6 +92,29 @@ def test_the_adapter_is_registered_and_its_plan_puts_everything_in_the_launch() 
     assert mcp["env"] == {"DAEDALUS_ASK_HOLD_MS": "300000", "DAEDALUS_REPORT_HOLD_MS": "15000"}
     # Claude's own timeout on a team call is above the longest hold, so it never cuts a question short.
     assert int(plan.env["MCP_TOOL_TIMEOUT"]) > 300_000
+
+
+def test_an_always_leaves_a_rule_for_the_one_mcp_tool_or_its_whole_server_and_none_for_a_built_in_tool() -> None:
+    tool = "mcp__daedalus_browser__BrowserNavigate"
+    assert mcp_server(tool) == "daedalus_browser"
+    assert standing_rule(tool, "tool") == tool and standing_rule(tool, "server") == "mcp__daedalus_browser"
+    # The server is what lies between the first two "__", as Claude Code reads it; the tool may hold more.
+    assert standing_rule("mcp__shop__cart__add", "server") == "mcp__shop" and standing_rule("mcp__shop__cart__add", "tool") == "mcp__shop__cart__add"
+    # A built-in tool's only rule would be all of it (every command, every file): it gets none.
+    for built_in in ("Bash", "Write", "WebFetch", "mcp__", "mcp__shop", "mcp__shop__", "mcpx__shop__cart"):
+        assert standing_rule(built_in, "tool") is None and standing_rule(built_in, "server") is None and mcp_server(built_in) == "", built_in
+    # The list offers the server-wide answer only for an MCP tool of a CLI that keeps rules.
+    browser = SimpleNamespace(kind="permission", detail={"tool": tool})
+    assert always_server(browser, CAPABILITIES["claude"]) == "daedalus_browser"  # type: ignore[arg-type]
+    assert always_server(SimpleNamespace(kind="permission", detail={"tool": "Bash"}), CAPABILITIES["claude"]) == ""  # type: ignore[arg-type]
+    assert always_server(SimpleNamespace(kind="question", detail={"tool": tool}), CAPABILITIES["claude"]) == ""  # type: ignore[arg-type]
+    assert all(always_server(browser, CAPABILITIES[h]) == "" for h in CAPABILITIES if h != "claude")  # type: ignore[arg-type]
+
+
+def test_the_standing_rules_go_into_the_launchs_allow_list_once() -> None:
+    plan = ClaudeCodeAdapter().launch_plan(spec(allow_rules=("mcp__daedalus_browser", "mcp__daedalus_team__Report", "mcp__shop__cart_add")))
+    allow = json.loads(plan.files["settings.json"])["permissions"]["allow"]
+    assert allow == ["mcp__daedalus_team__Report", "mcp__daedalus_team__AskOrchestrator", "mcp__daedalus_browser", "mcp__shop__cart_add"]
 
 
 def test_modes_holds_and_resume() -> None:
@@ -341,6 +377,56 @@ async def test_always_is_the_dialogs_do_not_ask_again_row(settings: Settings, db
         await s.status_event(ada, "turn_done_unseen")
         [(kind, label)] = [(e["kind"], e["label"]) for e in log(s, "dialog_answered")]
         assert kind == "permission" and label.startswith("Yes, and don't ask again"), label
+
+
+async def test_always_for_a_whole_mcp_server_is_held_by_the_session_and_kept_for_the_next_launch(settings: Settings, db: Database) -> None:
+    async with stand(settings, db, **claude()) as s:
+        trust(s)
+        ada = await started(s, "mcpperm:daedalus_browser:BrowserNavigate;mcpperm:daedalus_browser:BrowserClick;mcpperm:shop:CartAdd;echo:done")
+        await s.status_event(ada, "permission")
+        [ask] = await s.manager.asks.open_for(s.project.id)
+        assert ask.detail["tool"] == "mcp__daedalus_browser__BrowserNavigate"
+        answered = await s.team.answer(ask.short_id, allow=True, always=True, server=True, by="operator")
+        assert answered["delivered"] is True and answered["ask"]["resolution"]["rule"] == "mcp__daedalus_browser"
+        decision = next(r["body"] for r in s.ptyd.replies if isinstance(r.get("body"), dict) and "hookSpecificOutput" in r["body"])["hookSpecificOutput"]["decision"]
+        # The session holds the rule; the project folder, where "localSettings" would write it, is left alone.
+        assert decision == {"behavior": "allow", "updatedPermissions": [{"type": "addRules", "rules": [{"toolName": "mcp__daedalus_browser"}], "behavior": "allow", "destination": "session"}]}
+        [kept] = await s.manager.staff.allow_rules(ada.id)
+        assert (kept["rule"], kept["created_by"]) == ("mcp__daedalus_browser", "operator") and kept["created_at"]
+
+        # Another tool of the same server runs unasked; another server's tool still asks.
+        async def next_ask() -> bool:
+            return len(await s.manager.asks.open_for(s.project.id)) == 1
+
+        await eventually(next_ask, "the other server's permission")
+        [other] = await s.manager.asks.open_for(s.project.id)
+        assert other.detail["tool"] == "mcp__shop__CartAdd"
+        # Only the one tool this time: its rule names it, not its server.
+        assert (await s.team.answer(other.short_id, allow=True, always=True, by="operator"))["ask"]["resolution"]["rule"] == "mcp__shop__CartAdd"
+        await s.status_event(ada, "turn_done_unseen")
+        asked = [(e["tool"], e["decision"]) for e in log(s, "mcp_permission")]
+        assert asked == [("mcp__daedalus_browser__BrowserNavigate", "allow_once"), ("mcp__daedalus_browser__BrowserClick", "allow_once"), ("mcp__shop__CartAdd", "allow_once")]
+        assert [r["rule"] for r in await s.manager.staff.allow_rules(ada.id)] == ["mcp__daedalus_browser", "mcp__shop__CartAdd"]
+        # A revoked grant leaves the list the next launch reads; one never given is not there to revoke.
+        assert await s.manager.staff.revoke_rule(ada.id, "mcp__shop__CartAdd") is True
+        assert await s.manager.staff.revoke_rule(ada.id, "mcp__shop__CartAdd") is False
+        assert [r["rule"] for r in await s.manager.staff.allow_rules(ada.id)] == ["mcp__daedalus_browser"]
+
+
+async def test_a_built_in_tools_always_keeps_no_rule_and_cannot_be_given_for_a_server(settings: Settings, db: Database) -> None:
+    async with stand(settings, db, **claude()) as s:
+        trust(s)
+        ada = await started(s, "perm:npm install grammy")
+        await s.status_event(ada, "permission")
+        [ask] = await s.manager.asks.open_for(s.project.id)
+        with pytest.raises(StaffError, match="not for a tool of an MCP server"):
+            await s.team.answer(ask.short_id, allow=True, always=True, server=True, by="operator")
+        assert (await s.manager.asks.get(ask.id)).open, "a refused shape answers nothing"  # type: ignore[union-attr]
+        answered = await s.team.answer(ask.short_id, allow=True, always=True, by="operator")
+        assert answered["delivered"] is True and "rule" not in answered["ask"]["resolution"]
+        decision = next(r["body"] for r in s.ptyd.replies if isinstance(r.get("body"), dict) and "hookSpecificOutput" in r["body"])["hookSpecificOutput"]["decision"]
+        assert decision == {"behavior": "allow"}
+        assert await s.manager.staff.allow_rules(ada.id) == []
 
 
 async def test_a_permission_answered_in_the_terminal_lets_its_held_hook_go(settings: Settings, db: Database) -> None:
@@ -924,3 +1010,9 @@ async def test_the_staff_views_routes(settings: Settings, db: Database, config: 
             changes = (await client.get(f"/api/staff/{ada.id}/changes", headers=headers)).json()
             assert changes["files"] == [] and changes["detail"] == "no worktree of its own"
             assert (await client.get("/api/staff/st-none/session", headers=headers)).status_code == 404
+            # The standing grants are listed with the session and revoked one by one.
+            assert view["rules"] == [] and view["capabilities"]["standing_rules"] is True
+            await s.manager.staff.grant_rule(ada.id, "mcp__daedalus_browser")
+            assert [r["rule"] for r in (await client.get(f"/api/staff/{ada.id}/session", headers=headers)).json()["rules"]] == ["mcp__daedalus_browser"]
+            assert (await client.delete(f"/api/staff/{ada.id}/rules/mcp__daedalus_browser", headers=headers)).json() == {"rules": []}
+            assert (await client.delete(f"/api/staff/{ada.id}/rules/mcp__daedalus_browser", headers=headers)).status_code == 404

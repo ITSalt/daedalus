@@ -298,3 +298,11 @@ async def test_the_title_migration_keeps_every_request_and_old_ones_read_by_thei
         assert (await AsksStore(db).get("ask-1")).heading == "Postgres or SQLite?"  # type: ignore[union-attr]
     finally:
         await db.close()
+
+
+def test_a_permissions_answer_carries_the_server_wide_always_only_with_always_and_allow() -> None:
+    permission: Any = SimpleNamespace(kind="permission", detail={"tool": "mcp__daedalus_browser__BrowserNavigate"})
+    assert questions._shape(permission, {"allow": True, "always": True, "server": True}) == {"allow": True, "always": True, "server": True, "note": ""}
+    # "server" means nothing on its own: an allow once, or a refusal, stays that.
+    assert questions._shape(permission, {"allow": True, "server": True})["server"] is False
+    assert questions._shape(permission, {"allow": False, "always": True, "server": True}) == {"allow": False, "always": False, "server": False, "note": ""}
