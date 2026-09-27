@@ -635,6 +635,10 @@ class ModeBody(BaseModel):
     """A configured mode name; null or "" = default behaviour."""
 
 
+class YagniBody(BaseModel):
+    on: bool
+
+
 class ForkBody(BaseModel):
     seq: int
     title: str | None = None
@@ -2057,6 +2061,7 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             # on its own instead of waiting for the session to be reopened.
             **manager.model_status(state),
             "mode": state.metadata.get("mode") or "",
+            "yagni": bool(state.metadata.get("yagni")),
             "usd_cap": state.metadata.get("usd_cap"),
             "brief": state.metadata.get("brief") or "",
             "spawned_by": state.metadata.get("spawned_by"),
@@ -3469,6 +3474,13 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             raise HTTPException(404, "no such session") from None
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+
+    @api.post("/api/sessions/{session_id}/yagni")
+    async def set_yagni(session_id: str, body: YagniBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        try:
+            return {"yagni": await manager.set_yagni(session_id, body.on)}
+        except KeyError:
+            raise HTTPException(404, "no such session") from None
 
     @api.post("/api/sessions/{session_id}/cap")
     async def set_session_cap(session_id: str, body: SessionCapBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:

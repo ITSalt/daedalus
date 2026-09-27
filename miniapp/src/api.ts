@@ -627,6 +627,8 @@ export type MessageView = {
   media?: MediaPresentation[];
   /** Set on the row that closes a run which produced no answer. */
   outcome?: RunOutcome | null;
+  /** The YAGNI switch this turn told the model about; the note itself is never shown. */
+  yagni?: "on" | "off" | null;
   text: string;
   thinking: string;
   tool_calls: { id: string; name: string; arguments: Record<string, unknown> }[];
@@ -671,6 +673,8 @@ export type SessionDetail = {
   fallback?: ModelFallback | null;
   messages: MessageView[];
   mode?: string;
+  /** YAGNI mode: the host tells the model in the next turn, never in the system prompt. */
+  yagni?: boolean;
   usd_cap?: number | null;
   brief?: string;
   spawned_by?: string | null;

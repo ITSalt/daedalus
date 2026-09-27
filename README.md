@@ -572,6 +572,7 @@ uv run pytest -q                                 # tests
 | `/rename <title>` | rename the session and its topic |
 | `/compact [focus]`, `/clear` | replace the history with a summary; start over with an empty history (files, brief and settings stay) |
 | `/model [preset]`, `/thinking …`, `/mode …` | model, thinking and mode for this session |
+| `/yagni [on\|off]` | ask for the smallest change that does the job; the next turn is told, the system prompt stays as it is |
 | `/loop [10m] <instruction>` | make this session a loop agent; `status`, `pause`, `resume`, `stop`, `remove` |
 | `/brief [text]`, `/cap <usd>` | standing instructions; spend cap for the session |
 | `/sessions`, `/status`, `/usage`, `/balance` | the numbered roster; what is running; spend; provider balances |

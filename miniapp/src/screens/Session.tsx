@@ -18,6 +18,7 @@ import { InlineMedia, mediaCopyText, splitMediaAnswer } from "../media";
 import { Answer, Composer, ComposerHandle } from "../composerbox";
 import { Approval, QueuedSteer, pendingApproval, readSteers, steersAfter } from "../composer";
 import { ModelChoice } from "../modelselect";
+import { ModeInfo, modeName } from "../modeselect";
 import { MoveSessionSheet } from "../projects";
 import { panelShortcut } from "../panel";
 import { Panel, usePanel, usePanelWidth } from "../panelhost";
@@ -151,7 +152,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
   const sessionTerminals = useSessionTerminals(id);
   const [detailsFocus, setDetailsFocus] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
-  const [modes, setModes] = useState<string[]>([]);
+  const [modes, setModes] = useState<ModeInfo[]>([]);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [commandResult, setCommandResult] = useState<{ line: string; text: string } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -186,11 +187,22 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
 
   async function setMode(mode: string) {
     try {
-      await api.post(`/api/sessions/${id}/mode`, { mode: mode === "default" ? null : mode });
-      toast(t("session.mode.toast", { mode }));
+      await api.post(`/api/sessions/${id}/mode`, { mode: mode === "default" || !mode ? null : mode });
+      toast(t("session.mode.toast", { mode: modeName(mode === "default" ? "" : mode) }));
       load();
     } catch (e) {
       toast(errorText(e));
+    }
+  }
+
+  async function setYagni(on: boolean) {
+    try {
+      await api.post(`/api/sessions/${id}/yagni`, { on });
+      toast(t(on ? "composer.yagni.toast.on" : "composer.yagni.toast.off"));
+      load();
+    } catch (e) {
+      toast(errorText(e));
+      load();
     }
   }
 
@@ -382,7 +394,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
 
   useEffect(() => {
     load();
-    api.get<Record<string, unknown>>("/api/modes").then((m) => setModes(Object.keys(m))).catch(() => setModes([]));
+    api.get<Record<string, { description?: string }>>("/api/modes").then((m) => setModes(Object.entries(m).map(([name, v]) => ({ name, description: v?.description ?? "" })))).catch(() => setModes([]));
     api.get<SlashCommand[]>("/api/commands").then(setCommands).catch(() => setCommands([]));
     api.get<AsrStatus>("/api/asr").then(setAsr).catch(() => setAsr(null));
     api.get<{ enabled?: boolean }>("/api/voice").then((v) => setVoice(!!v?.enabled)).catch(() => setVoice(false));
@@ -1175,6 +1187,11 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
             thinking={detail?.thinking}
             reasoningEffort={detail?.reasoning_effort}
             onChooseEffort={chooseEffort}
+            mode={detail?.mode ?? ""}
+            modes={modes}
+            yagni={!!detail?.yagni}
+            onChooseMode={setMode}
+            onYagni={setYagni}
             place={{ project: detail?.project?.name, workspace: detail?.workspace_name || detail?.workspace, system: !!(detail?.project?.system || detail?.project?.settings.system) }}
             idlePlaceholder={focusPlaceholder}
             context={detail?.context ?? null}
@@ -1225,7 +1242,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
                 id={id}
                 detail={detail}
                 busy={busy}
-                modes={modes}
+                modes={modes.map((m) => m.name)}
                 schedules={schedules}
                 provider={provider}
                 providerUsage={providerUsage}
@@ -1507,6 +1524,7 @@ const TurnView = memo(function TurnView({ turn, live, onTurnAction }: { turn: Tu
         <div className="msg-wrap">
           <div className="msg user">
             {inbound && <span className="msg-origin">{t("turn.origin.inbound", { source: inbound })}</span>}
+            {turn.user.yagni && <span className="msg-origin msg-yagni" title={t("turn.yagni.title")}>{t(turn.user.yagni === "on" ? "turn.yagni.on" : "turn.yagni.off")}</span>}
             <Md text={withoutAttachedList(turn.user.text)} cacheKey={live ? undefined : `u${seq ?? turn.key}`} />
           </div>
           <KeptFiles text={turn.user.text} onOpen={preview} />

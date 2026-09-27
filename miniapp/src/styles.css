@@ -389,6 +389,7 @@ a { color: var(--accent); text-decoration: none; }
 .msg.user p { margin:0; }
 .msg.user p + p { margin-top:6px; }
 .msg-origin { display:block; font-size:var(--fs-11); color:var(--fg-3); margin-bottom:2px; }
+.msg-origin.msg-yagni { display:flex; align-items:center; gap:var(--space-1); color:var(--accent); }
 
 .thinking-head { align-self:flex-start; display:flex; align-items:center; gap:8px; max-width:100%; min-width:0; background:none; border:0; border-radius:var(--radius-xs); color:var(--fg-2); font-size:var(--fs-14); min-height:28px; padding:2px 0; cursor:pointer; text-align:left; }
 .thinking-head .worked, .thinking-head .steps { white-space:nowrap; flex:none; }
@@ -2325,7 +2326,22 @@ input.field[type="range"] {
 .composer-row { align-items:center; flex-wrap:nowrap; gap:var(--space-1); }
 .composer-row > .iconbtn.plus { margin:0; border-radius:50%; }
 .composer-row .model-select { max-width:none; padding-inline:var(--space-2); gap:var(--space-1); border-radius:var(--radius-lg); background:var(--surface-2); }
-.composer-mode { display:inline-flex; align-items:center; flex:none; height:var(--ctl-h-sm); padding-inline:var(--space-2); border-radius:var(--radius-lg); background:var(--surface-2); color:var(--fg-2); font-size:var(--fs-13); }
+/* The mode chip stays on every width, a running phone included: it is the one place that says the
+   session plans, or holds to YAGNI, and the model chip is the one that gives way when the row is short. */
+.composer-mode { display:inline-flex; align-items:center; gap:var(--space-1); flex:0 1 auto; min-width:0; max-width:180px; height:var(--ctl-h-sm); padding-inline:var(--space-2); border:0; border-radius:var(--radius-lg); background:var(--surface-2); color:var(--fg-2); font:inherit; font-size:var(--fs-13); cursor:pointer; }
+.composer-mode:hover, .composer-mode.on { color:var(--fg); }
+.composer-mode .ic { flex:none; color:var(--fg-3); }
+.composer-mode.yagni { background:color-mix(in srgb, var(--accent) 14%, var(--surface-2)); }
+.composer-mode .mode-yagni { flex:none; color:var(--accent); font-size:var(--fs-11); font-weight:600; }
+.mode-menu { width:min(340px, 92vw); max-height:70vh; overflow-y:auto; }
+.mode-list { display:flex; flex-direction:column; }
+.mode-section { padding:var(--space-1) 10px; font-size:var(--fs-12); }
+.mode-row .model-text .sub { white-space:normal; }
+.mode-row[aria-checked="true"] > .ic { color:var(--accent); }
+.mode-switch { flex:none; position:relative; width:28px; height:16px; border-radius:8px; background:var(--line-strong); transition:background var(--t-fast); }
+.mode-switch i { position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--surface-1); transition:transform var(--t-fast); }
+.mode-switch.on { background:var(--accent); }
+.mode-switch.on i { transform:translateX(12px); }
 .composer-tools { margin-left:auto; gap:var(--space-1); }
 .composer-tools .roundbtn { margin-left:0; }
 .composer-tools .ctx-ring { display:inline-flex; flex:none; }
@@ -2338,7 +2354,7 @@ input.field[type="range"] {
 .composer-place-chip { display:inline-flex; align-items:center; gap:var(--space-1); min-width:0; color:var(--fg-3); font-size:var(--fs-11); }
 .composer-place-chip .ic { flex:none; }
 @container (max-width: 560px) {
-  .composer-mode { display:none; }
+  .composer-mode { max-width:112px; padding-inline:var(--space-1); }
   .effort-select { max-width:88px; padding-inline:var(--space-1); }
 }
 @media (max-width: 1023px) {
@@ -2399,8 +2415,7 @@ input.field[type="range"] {
   .msg-actions .iconbtn.small, .chat-head .iconbtn, .pagehead .iconbtn, .artifact-actions .iconbtn.small { min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
   .msg-actions .iconbtn.small { width:auto; gap:var(--space-2); padding-inline:var(--space-2); }
   .msg-actions { opacity:1; }
-  .composer-row .model-select { min-height:var(--row-h-touch); }
-  .composer-mode { display:none; }
+  .composer-row .model-select, .composer-row .composer-mode { min-height:var(--row-h-touch); }
   .composer-tools .ctx-ring { display:none; }
   .composer-row > .iconbtn, .composer-tools > .iconbtn, .composer-tools > .roundbtn { width:var(--row-h-touch); height:var(--row-h-touch); }
   .artifact-actions > button { display:none; }

@@ -9,6 +9,7 @@ import { fileGlyph, previewKind, canPreview } from "./preview";
 import { enterSends, errorText, fmtBytes, fmtTok, haptic } from "./ui";
 import { ModelChoice, ModelSelect } from "./modelselect";
 import { EffortSelect } from "./effortselect";
+import { ModeInfo, ModeSelect } from "./modeselect";
 import { blobToWav } from "./wav";
 import {
   Approval,
@@ -59,6 +60,12 @@ export type ComposerProps = {
   thinking?: boolean;
   reasoningEffort?: string;
   onChooseEffort?: (effort: string) => void;
+  /** The session's mode (empty: the plain agent), the configured ones, and the YAGNI switch. */
+  mode?: string;
+  modes?: ModeInfo[];
+  yagni?: boolean;
+  onChooseMode?: (mode: string) => void;
+  onYagni?: (on: boolean) => void;
   place?: ComposerPlace;
   /** What the empty field says while nothing runs, when the conversation is with someone in particular:
    *  "Write to the orchestrator…". Running and waiting keep their own words. */
@@ -442,7 +449,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               <button type="button" role="menuitem" onClick={() => void pasteFromClipboard()}><Icon name="copy" size={16} />{t("composer.paste")}</button>
             </Popover>
           )}
-          <span className="composer-mode">{t("composer.mode.agent")}</span>
+          {props.onChooseMode && props.onYagni
+            ? <ModeSelect mode={props.mode ?? ""} modes={props.modes ?? []} yagni={!!props.yagni} onChooseMode={props.onChooseMode} onYagni={props.onYagni} sheet={phone} />
+            : <span className="composer-mode">{t("composer.mode.agent")}</span>}
           {(!phone || status !== "running") && <ModelSelect model={props.model} fallback={props.fallback} open={modelOpen} onOpenChange={setModelOpen} onChoose={props.onChooseModel} sheet={phone}
             effort={phone ? props.reasoningEffort : undefined} thinking={props.thinking} onChooseEffort={phone ? props.onChooseEffort : undefined} />}
           <div className="composer-tools">

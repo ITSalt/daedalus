@@ -79,6 +79,12 @@ This chat is a window onto one session at a time. /new opens a topic in the boun
 /stop — stop the current run · /close — put the current session away (asks whether to delete the agent)
 """
 
+
+def yagni_argument(args: str, current: bool) -> bool | None:
+    """What ``/yagni`` asks for: ``on``, ``off``, or the other state with no argument; ``None`` for anything else."""
+    return {"": not current, "on": True, "off": False}.get(args.strip().lower())
+
+
 HELP_TAIL = """/main — the main orchestrator: in a group it lives in General; here it speaks under 🧭 Main, and a reply to one of its posts reaches it
 /rename &lt;title&gt; — rename this session (and its topic) · /compact [focus] — replace the history with a summary
 /delete &lt;id&gt; · /cleanup — delete a session; delete every session whose topic is already closed
@@ -86,7 +92,7 @@ HELP_TAIL = """/main — the main orchestrator: in a group it lives in General; 
 /usage · /balance — spend and provider balances
 /schedules · /schedule run|on|off|delete &lt;id&gt; — scheduled tasks
 /inbox [all|clear] · /heartbeat [on|off|run] · /doctor · /intents — inbox, the periodic check, health, standing intents
-/mode [quick|deep|careful|default] — limits and rules for this session
+/mode [quick|deep|careful|default] — limits and rules for this session · /yagni [on|off] — the smallest change that does the job
 /board [all] · /peer here &lt;name&gt;|list|forget &lt;name&gt; — the task board; name this session as a peer other sessions can ask
 /approval manual|auto · /verbosity 0|1|2 — self-change approval, chat detail
 /rebuild · /rollback [n] · /panic — supervisor operations
@@ -973,6 +979,7 @@ class TelegramFront:
         r.message.register(self.cmd_detach, Command("detach"))
         r.message.register(self.cmd_operator, Command("rebuild", "rollback", "panic", "schedules", "verbosity", "approval", "balance", "schedule", "inbox", "heartbeat", "doctor", "intents", "board", "peer", "allow"))
         r.message.register(self.cmd_mode, Command("mode"))
+        r.message.register(self.cmd_yagni, Command("yagni"))
         r.message.register(
             self.on_message,
             F.text | F.caption | F.document | F.photo | F.audio | F.video | F.voice | F.video_note | F.animation | F.sticker | F.location | F.contact | F.poll,
@@ -1610,6 +1617,20 @@ class TelegramFront:
             await message.answer(str(exc))
             return
         await message.answer(f"mode: {chosen or 'default'} (applies from the next run)")
+
+    async def cmd_yagni(self, message: Message, command: CommandObject) -> None:
+        if not self._is_owner(message.from_user.id if message.from_user else None):
+            return
+        state = await self._session_for_message(message)
+        if state is None or (self._is_general(message) and message.chat.type != "private"):
+            await message.answer("Use /yagni inside a session topic (or the private chat).")
+            return
+        wanted = yagni_argument(command.args or "", bool(state.metadata.get("yagni")))
+        if wanted is None:
+            await message.answer("usage: /yagni [on|off]")
+            return
+        await self.manager.set_yagni(state.session.id, wanted)
+        await message.answer(f"YAGNI: {'on' if wanted else 'off'} (the next turn is told)")
 
     async def cmd_status(self, message: Message) -> None:
         if not self._is_owner(message.from_user.id if message.from_user else None):

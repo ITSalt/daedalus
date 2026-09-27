@@ -323,8 +323,6 @@ export function Popover({ anchor, onClose, children, className, align = "left", 
     document.addEventListener("mousedown", onDown);
     document.addEventListener("touchstart", onDown);
     document.addEventListener("keydown", onKey);
-    const first = box.current?.querySelector<HTMLElement>("input, button:not(:disabled), [role='slider']");
-    first?.focus();
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
@@ -332,6 +330,13 @@ export function Popover({ anchor, onClose, children, className, align = "left", 
       if (document.activeElement === document.body || !document.activeElement) anchor?.focus();
     };
   }, [anchor, onClose]);
+  // The first control takes the keyboard once the box is placed. Focused any earlier, it is still
+  // `visibility: hidden` and the browser refuses: the focus stayed on the button that opened the menu,
+  // and the arrow keys started from nowhere.
+  const placed = pos !== null;
+  useEffect(() => {
+    if (placed) box.current?.querySelector<HTMLElement>("input, button:not(:disabled), [role='slider']")?.focus();
+  }, [placed]);
   return createPortal(
     <div ref={box} className={`menu pop ${className ?? ""}`} role="menu" aria-label={label} style={{ position: "fixed", top: pos?.top ?? 8, bottom: "auto", left: pos?.left ?? 8, right: "auto", maxHeight: pos?.maxHeight, visibility: pos ? "visible" : "hidden" }} onClick={(e) => e.stopPropagation()}>
       {children}

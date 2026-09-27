@@ -36,6 +36,7 @@ from api_stub import (  # noqa: E402
     DEFAULT_APP,
     FILE_TEXT,
     FOCUS_WORDS,
+    GATES,
     BoardStub,
     FocusStub,
     HarnessesStub,
@@ -223,8 +224,15 @@ def detail(id_: str) -> dict:
     # A project session works in the project root, and the server answers exactly that: the folder is
     # not a directory of the session's own, and its name is the folder's.
     workspace = s["workspace_path"]
+    # The composer's mode pictures (``ONLY=modes``): YAGNI on, the opening message marked as
+    # the one that told the agent, and a phone mid-run, where the mode chip has to stay.
+    yagni = id_ == S1 and getattr(stub, "yagni", False)
+    if yagni:
+        messages = [{**m, "yagni": "on"} if m["seq"] == 401 else m for m in messages]
+    running = id_ == S1 and getattr(stub, "running", False)
     return {
-        "id": id_, "title": s["title"], "status": "idle" if id_ != S4 else "waiting", "run_id": None, "compacting": None,
+        "id": id_, "title": s["title"], "status": "running" if running else "idle" if id_ != S4 else "waiting", "run_id": "r-modes" if running else None, "compacting": None,
+        "yagni": yagni,
         "workspace": workspace, "workspace_name": workspace.rsplit("/", 1)[-1], "workspace_own": s["workspace_own"],
         "project": project,
         "workspace_sessions": [{"id": S2, "title": "Bakery site: photos"}] if id_ == S1 else [{"id": S1, "title": "Bakery site"}] if id_ == S2 else [],
@@ -755,7 +763,7 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
     if rel == "/api/onboarding":
         return respond(route, FRESH if getattr(stub, "fresh", False) else ONBOARDING)
     if rel == "/api/modes":
-        return respond(route, {"quick": {}, "deep": {}, "careful": {}, "plan": {}})
+        return respond(route, GATES["/api/modes"])
     if rel == "/api/commands":
         return respond(route, [])
     if rel == "/api/voice":
@@ -1902,8 +1910,41 @@ def run_browser() -> int:
     return UNHANDLED.report()
 
 
+def open_modes(page: Page) -> None:
+    """The composer's mode chip, opened: the modes, and the YAGNI switch under them."""
+    page.locator(".composer .composer-mode").click()
+    page.wait_for_selector(".mode-menu .mode-row, .mode-sheet .mode-row", timeout=5000)
+
+
+def run_modes() -> int:
+    """The mode chip and its menu, with YAGNI on, on a desktop and on a phone (``ONLY=modes``)."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    stub.yagni = True  # type: ignore[attr-defined]
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(executable_path=CHROMIUM)
+            desk = browser.new_context(viewport=DESK, device_scale_factor=2, color_scheme="dark")
+            desk.add_init_script("try { localStorage.setItem('daedalus.session.panel', '0'); } catch (e) {}")
+            page = desk.new_page()
+            page.route("**/api/**", stub)
+            shot(page, "composer-modes", f"agents/{S1}", wait=".composer .composer-mode", before=open_modes)
+            desk.close()
+            phone = browser.new_context(viewport=PHONE, device_scale_factor=3, color_scheme="dark", is_mobile=True, has_touch=True)
+            page = phone.new_page()
+            page.route("**/api/**", stub)
+            shot(page, "phone-composer-modes", f"agents/{S1}", wait=".composer .composer-mode", before=open_modes)
+            stub.running = True  # type: ignore[attr-defined]
+            shot(page, "phone-composer-yagni", f"agents/{S1}", wait=".composer .composer-mode.yagni")
+            phone.close()
+            browser.close()
+    finally:
+        stub.yagni = False  # type: ignore[attr-defined]
+        stub.running = False  # type: ignore[attr-defined]
+    return UNHANDLED.report()
+
+
 if __name__ == "__main__":
     # Before anything is driven: is the address the built app, or whatever else holds the port?
     expect_app(BASE)
     only = os.environ.get("ONLY")
-    sys.exit(run_browser() if only == "browser" else run_harnesses() if only == "harnesses" else run_staff() if only == "staff" else run_terminals() if only == "terminals" else run_focus() if only == "focus" else run_phone() if only == "phone" else run_main() if only == "main" else run_notifications() if only == "notifications" else run_composer() if only == "composer" else run_voice() if only == "voice" else agents_shots() if only == "agents" else run_workspace() if only == "workspace" else run())
+    sys.exit(run_modes() if only == "modes" else run_browser() if only == "browser" else run_harnesses() if only == "harnesses" else run_staff() if only == "staff" else run_terminals() if only == "terminals" else run_focus() if only == "focus" else run_phone() if only == "phone" else run_main() if only == "main" else run_notifications() if only == "notifications" else run_composer() if only == "composer" else run_voice() if only == "voice" else agents_shots() if only == "agents" else run_workspace() if only == "workspace" else run())

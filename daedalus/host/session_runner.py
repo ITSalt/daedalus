@@ -2818,6 +2818,44 @@ class SessionManager:
         self._apply_tool_visibility_all()  # a running child also inherits a parent's narrower mode from the next call on
         return name
 
+    async def set_yagni(self, session_id: str, on: bool) -> bool:
+        """Switch YAGNI mode for a session; the next run's opening turn tells the model.
+
+        Only the flag is stored. What the model was last told is read off its working history when the
+        next turn starts (see ``_yagni_note``), so a compaction, a clear or a revert that took the
+        note away is noticed without each of them having to remember to say so.
+        """
+        state = await self.get_state(session_id)
+        if state is None:
+            raise KeyError(session_id)
+        for meta in (state.metadata, state.session.metadata):
+            if on:
+                meta["yagni"] = True
+            else:
+                meta.pop("yagni", None)
+        await self.sessions.update_metadata(session_id, state.session.metadata)
+        return on
+
+    async def _yagni_note(self, state: SessionState) -> str:
+        """The YAGNI note this turn has to carry, or ``""`` when the model already knows.
+
+        The last note in the working history is what the model was told; none counts as off. A host
+        compaction's summary leaves the turn context out, so after one the rules are restated while the
+        mode is on, and a switch on and back off before any turn says nothing at all.
+        """
+        wanted = bool(state.metadata.get("yagni"))
+        history = state.engine.history if state.engine is not None else await self.sessions.list_messages(state.session.id, TENANT, limit=10_000)
+        told = False
+        for message in reversed(history):
+            if message.role is not MessageRole.user:
+                continue
+            text = "".join(b.text for b in message.content_blocks if isinstance(b, TextBlock))
+            context = text[text.rfind(prompts.TURN_CONTEXT_OPEN):] if prompts.TURN_CONTEXT_OPEN in text else ""
+            if prompts.YAGNI_ON in context or prompts.YAGNI_OFF in context:
+                told = prompts.YAGNI_ON in context
+                break
+        return "" if told == wanted else prompts.yagni_note(wanted)
+
     def mode_for(self, state: SessionState) -> Any:
         name = str(state.metadata.get("mode") or "")
         if name:
@@ -3292,6 +3330,9 @@ class SessionManager:
         """
         # The core allows a user message one content block, so the context joins the text rather
         # than following it; a message with no text (an image alone) goes as it is.
+        at = next((i for i, block in enumerate(message.content_blocks) if isinstance(block, TextBlock)), None)
+        if at is None:
+            return message
         notes: str | None = None
         for hook in self.turn_notes_hooks:
             try:
@@ -3307,13 +3348,17 @@ class SessionManager:
         loop_state = str(state.metadata.get("loop_state") or "").strip()
         if loop_state:
             volatile.append("\n" + loop_state)  # the loop's counter and next wake-up change every run
+        yagni = await self._yagni_note(state)
+        if yagni:
+            volatile.append("\n- " + yagni)
         context = prompts.turn_context(notes="".join(volatile))
         blocks = list(message.content_blocks)
-        for i, block in enumerate(blocks):
-            if isinstance(block, TextBlock):
-                blocks[i] = TextBlock(text=f"{block.text.rstrip()}\n\n{context}")
-                return message.model_copy(update={"content_blocks": blocks})
-        return message
+        blocks[at] = TextBlock(text=f"{blocks[at].text.rstrip()}\n\n{context}")  # type: ignore[union-attr]
+        update: dict[str, Any] = {"content_blocks": blocks}
+        if yagni:
+            # The app draws the switch as a mark on the message instead of the note, which it never shows.
+            update["metadata"] = {**message.metadata, "daedalus.yagni": "on" if yagni.startswith(prompts.YAGNI_ON) else "off"}
+        return message.model_copy(update=update)
 
     async def _take_mcp_switched_off(self, state: SessionState) -> str:
         """The note for the MCP servers the operator switched off since the last turn, once; ``""`` for none.

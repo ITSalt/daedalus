@@ -32,7 +32,7 @@ from daedalus.host.prompts import split_headline
 from daedalus.host.run_outcome import OUTCOME_METADATA_KEY
 from daedalus.security import redact
 
-VIEW_VERSION = 6
+VIEW_VERSION = 7
 """Bumped whenever the shape below changes; stored views from an older version are recomputed. It
 covers this file only — what the redactor masks is covered by the key, by value and by shape, so a
 new secret format does not depend on anyone remembering this number."""
@@ -122,6 +122,9 @@ def message_view(message: Message) -> dict[str, Any]:
         "provider": str(produced.get("provider") or ""),
         "fallback": produced.get("fallback") if isinstance(produced.get("fallback"), dict) else None,
         "media": message.metadata.get("daedalus.media", []) if isinstance(message.metadata, dict) else [],
+        # The YAGNI switch this turn told the model about (``on``/``off``): the note itself is
+        # in the turn context, which no reader is shown, so the app marks the message instead.
+        "yagni": message.metadata.get("daedalus.yagni") if isinstance(message.metadata, dict) else None,
         # The closing line of a run that produced no answer (``run_outcome``): why it stopped and where.
         "outcome": message.metadata.get(OUTCOME_METADATA_KEY) if isinstance(message.metadata, dict) else None,
     }

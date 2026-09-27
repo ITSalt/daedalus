@@ -34,6 +34,8 @@ const SAME_IN_BOTH = [
   "comp.name.git",
   "comp.name.node",
   "comp.name.ripgrep",
+  // The name of the composer's switch is the principle's own acronym, which the operator reads as is in either language.
+  "composer.yagni",
   "fmt.cron.utc",
   // A CLI's own words for the account it is signed in with, and a dash where it is not installed.
   "harness.signin.absent",

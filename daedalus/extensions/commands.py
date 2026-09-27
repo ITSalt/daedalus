@@ -19,7 +19,7 @@ from daedalus.doctor import DoctorContext, render_text, run_checks
 from daedalus.extensions.notifications import format_entries
 from daedalus.host.prompts import DEFAULT_RULES
 from daedalus.security import redact
-from daedalus.transport.telegram.front import SESSION_LIST_LIMIT
+from daedalus.transport.telegram.front import SESSION_LIST_LIMIT, yagni_argument
 
 if TYPE_CHECKING:
     from daedalus.app import Application
@@ -43,6 +43,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("model", "[preset | provider/model | default]", "the model for this session (no argument: list)"),
     CommandSpec("thinking", "on|off|low|medium|high|xhigh", "thinking for this session"),
     CommandSpec("mode", "[quick|deep|careful|default]", "limits and rules for this session (no argument: list)"),
+    CommandSpec("yagni", "[on|off]", "YAGNI rules for this session: the smallest change that does the job (no argument: switch)"),
     CommandSpec("rename", "<title>", "rename this session and its topic"),
     CommandSpec("cap", "<usd | none>", "spend cap for this session over all of its runs"),
     CommandSpec("allow", "<key>", "let one call the policy refused through, once (the key is in the refusal)", confirm=True),
@@ -200,6 +201,12 @@ async def run_command(app: Application, session_id: str, line: str) -> str:  # n
         except ValueError as exc:
             return str(exc)
         return f"mode: {chosen or 'default'} (applies from the next run)"
+    if name == "yagni":
+        wanted = yagni_argument(args, bool(state.metadata.get("yagni")))
+        if wanted is None:
+            return "usage: /yagni [on|off]"
+        await manager.set_yagni(session_id, wanted)
+        return f"YAGNI: {'on' if wanted else 'off'} (the next turn is told)"
     if name == "cap":
         if args.lower() in ("none", "off", "", "-"):
             await manager.set_session_cap(session_id, None)

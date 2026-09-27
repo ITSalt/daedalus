@@ -180,7 +180,13 @@ GATES: dict[str, object] = {
     # Settings → Notifications: the host's defaults, and a machine to draw the terminal load bar for.
     "/api/notifications/preferences": notification_preferences(),
     "/api/terminals/load": terminal_load(),
-    "/api/modes": {},
+    # The built-in modes as a fresh installation configures them; the composer's mode chip lists them.
+    "/api/modes": {
+        "plan": {"description": "read and plan only; nothing is changed until the operator switches the mode"},
+        "quick": {"description": "short answers, few tool calls, cheap"},
+        "deep": {"description": "long autonomous work with a high budget"},
+        "careful": {"description": "ask before anything irreversible"},
+    },
     "/api/commands": [],
     "/api/asr": {"configured": False, "reason": "", "provider": "", "model": "", "max_seconds": 120, "autosend": False},
     "/api/proposals": [],
@@ -273,6 +279,9 @@ def answer_shared(method: str, path: str) -> tuple[int, str, str] | None:
     if path in GATES:
         return 200, "application/json", json.dumps(GATES[path])
     parts = path.split("/")
+    if method.upper() == "POST" and len(parts) == 5 and parts[2] == "sessions" and parts[4] in ("mode", "yagni"):
+        # The composer's mode chip: a harness that reads the switch back answers these itself.
+        return 200, "application/json", "{}"
     if len(parts) >= 5 and parts[2] == "sessions" and parts[4] == "tool-groups":
         # Every session's Details lists its tool groups; a change or a "Load now" answers the same list.
         return 200, "application/json", json.dumps(session_tool_groups())

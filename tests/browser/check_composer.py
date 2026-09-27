@@ -63,6 +63,8 @@ class Host:
         self.messages = [message(101, "user", "Check the run and tell me what the log says."), message(102, "assistant", "One slow query on the events table; the plan is below.")]
         self.steer_route = True
         self.n = 0
+        self.mode = ""
+        self.yagni = False
 
     def detail(self) -> dict:
         return {
@@ -70,7 +72,7 @@ class Host:
             "workspace_name": "ws", "workspace_own": True, "workspace_sessions": [], "pending": self.pending, "model": "Claude Opus 5", "provider": "claude",
             "project": {"id": "p", "name": "Project", "folders": folders("/workspace"), "settings": {"snapshots": True}},
             "configured_model": CONFIGURED, "effective_model": STANDBY if self.fallback else CONFIGURED, "fallback": self.fallback,
-            "thinking": self.thinking, "reasoning_effort": self.effort, "mode": "", "brief": "",
+            "thinking": self.thinking, "reasoning_effort": self.effort, "mode": self.mode, "yagni": self.yagni, "brief": "",
             "tools_off": [], "loop": None, "services": [], "subagents": [], "usage": {}, "context": {"tokens": 42000, "window": 200000, "messages": 38, "summaries": 1, "operator_turns": 6},
             "messages": self.messages,
         }
@@ -122,6 +124,12 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
                 HOST.effort = str(data["reasoning_effort"])
                 HOST.thinking = bool(data.get("thinking", True))
             return route.fulfill(status=200, content_type="application/json", body=json.dumps({"model": "DeepSeek Flash", "thinking": HOST.thinking, "reasoning_effort": HOST.effort}))
+        if rel == f"/api/sessions/{SESSION}/mode":
+            HOST.mode = str((data or {}).get("mode") or "")
+            return route.fulfill(status=200, content_type="application/json", body=json.dumps({"mode": HOST.mode}))
+        if rel == f"/api/sessions/{SESSION}/yagni":
+            HOST.yagni = bool((data or {}).get("on"))
+            return route.fulfill(status=200, content_type="application/json", body=json.dumps({"yagni": HOST.yagni}))
         if rel in (f"/api/sessions/{SESSION}/retry", f"/api/sessions/{SESSION}/revert"):
             seq = int(data["seq"])
             through = max(m["seq"] for m in HOST.messages)
@@ -611,6 +619,78 @@ def layout(browser) -> list[str]:  # type: ignore[no-untyped-def]
     return problems
 
 
+def modes(browser) -> list[str]:  # type: ignore[no-untyped-def]
+    """The mode chip: it lists the modes and the YAGNI switch, both reach the host, the chip
+    shows what the host says after a reload, and on a narrow phone it stays in the row mid-run."""
+    problems: list[str] = []
+    HOST.pending = None
+    HOST.status = "idle"
+    HOST.mode, HOST.yagni = "", False
+    HOST.messages = [message(101, "user", "Tidy the parser.", yagni="on"), message(102, "assistant", "Done, in three lines.")]
+    context = browser.new_context(viewport={"width": 1440, "height": 900}, color_scheme="dark")
+    context.add_init_script("try { localStorage.setItem('daedalus.session.panel', '0'); } catch (e) {}")
+    page = open_page(context)
+    chip = page.locator(".composer .composer-mode")
+    if chip.inner_text().strip() != "Agent":
+        problems.append(f"the mode chip reads {chip.inner_text()!r}, not Agent")
+    marker = page.locator(".msg.user .msg-yagni")
+    if marker.count() != 1 or "YAGNI on" not in marker.inner_text():
+        problems.append("the message that told the agent carries no YAGNI mark")
+    chip.click()
+    page.wait_for_selector(".mode-menu")
+    names = page.locator(".mode-menu [role='menuitemradio'] .truncate").all_inner_texts()
+    if names != ["Agent", "Plan", "Quick", "Deep", "Careful"]:
+        problems.append(f"the mode menu lists {names}")
+    page.locator(".mode-menu [role='menuitemradio']", has_text="Plan").click()
+    page.wait_for_selector(".mode-menu", state="detached")
+    if not posts("/mode") or posts("/mode")[-1][2] != {"mode": "plan"}:
+        problems.append(f"picking Plan posted {posts('/mode')[-1:]}")
+    page.wait_for_function("document.querySelector('.composer .composer-mode')?.textContent.startsWith('Plan')")
+    # The keyboard: the chip opens with Enter, the arrows walk the rows, Escape closes and the chip keeps focus.
+    chip.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_selector(".mode-menu")
+    page.keyboard.press("ArrowUp")
+    focused = page.evaluate("document.activeElement?.className || ''")
+    if "yagni-row" not in focused:
+        problems.append(f"ArrowUp from the first row lands on {focused!r}, not the switch")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(200)
+    if not posts("/yagni") or posts("/yagni")[-1][2] != {"on": True}:
+        problems.append(f"the switch posted {posts('/yagni')[-1:]}")
+    if page.locator(".mode-menu").count() != 1:
+        problems.append("the switch closed the menu")
+    page.keyboard.press("Escape")
+    page.wait_for_selector(".mode-menu", state="detached")
+    page.reload()
+    page.wait_for_selector(".composer .composer-mode")
+    page.wait_for_timeout(300)
+    if "yagni" not in (page.locator(".composer .composer-mode").get_attribute("class") or "").split():
+        problems.append("after a reload the chip does not show YAGNI on")
+    context.close()
+    # A narrow phone mid-run: the model chip gives way, the mode chip stays inside the row.
+    HOST.status = "running"
+    for width in (360, 390):
+        context = browser.new_context(viewport={"width": width, "height": 780}, is_mobile=True, has_touch=True, color_scheme="dark")
+        context.add_init_script("try { localStorage.setItem('daedalus.session.panel', '0'); } catch (e) {}")
+        page = open_page(context, phone=True)
+        box = page.locator(".composer .composer-mode").bounding_box()
+        row = page.locator(".composer-row").bounding_box()
+        print("phone mode chip", width, box, row)
+        if not box or not row or box["width"] < 24 or box["x"] + box["width"] > row["x"] + row["width"] + 1:
+            problems.append(f"{width}: the mode chip is missing or leaves the row while running")
+        page.locator(".composer .composer-mode").click()
+        page.wait_for_selector(".sheet.mode-sheet .yagni-row")
+        if page.locator(".sheet.mode-sheet .yagni-row").get_attribute("aria-checked") != "true":
+            problems.append(f"{width}: the phone's sheet does not show YAGNI on")
+        page.keyboard.press("Escape")
+        page.wait_for_selector(".sheet.mode-sheet", state="detached")
+        context.close()
+    HOST.status = "idle"
+    HOST.mode, HOST.yagni = "", False
+    return problems
+
+
 def run() -> int:
     problems: list[str] = []
     with sync_playwright() as p:
@@ -619,6 +699,7 @@ def run() -> int:
         problems += phone(browser)
         problems += failure_bar(browser)
         problems += layout(browser)
+        problems += modes(browser)
         browser.close()
     print("problems:", problems or "none")
     return 1 if problems else 0

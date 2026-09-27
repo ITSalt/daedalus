@@ -725,6 +725,33 @@ def without_turn_context(text: str) -> str:
     return TURN_CONTEXT_RE.sub("", text).rstrip()
 
 
+YAGNI_ON = "YAGNI mode is on"
+YAGNI_OFF = "YAGNI mode is off"
+"""The opening words of the two notes. The host finds what the model was last told by them, so they
+stay fixed while the rules after them may be rewritten."""
+
+YAGNI_RULES = (
+    "Before writing code, look for an existing helper or function in the codebase and reuse it — but first "
+    "check that it handles every input this task can give it (negative, zero, empty, malformed), and if it does "
+    "not, fix the helper itself. Prefer the standard library and platform features over new code or dependencies. "
+    "Build only what the task needs: the smallest diff that solves it, one-liners where they stay readable. Never "
+    "cut input validation, security checks, error handling at boundaries, or edge cases the task implies."
+)
+"""What YAGNI mode asks of the model. One constant, so the wording can be swapped whole. The check of
+the helper's inputs is there because without it a model reused the helper together with its bug."""
+
+
+def yagni_note(on: bool) -> str:
+    """The note the next turn carries when the operator switches YAGNI mode on or off.
+
+    It rides in the turn context of a user turn, never in the system prompt: a switch mid-session would
+    otherwise change the prompt's first bytes and throw away the provider's cache of the whole history.
+    """
+    if on:
+        return f"{YAGNI_ON}. {YAGNI_RULES}"
+    return f"{YAGNI_OFF}; the earlier YAGNI rules no longer apply."
+
+
 def turn_context(*, now: datetime | None = None, notes: str = "") -> str:
     """What changes between runs, written where it does not spoil the prompt cache.
 
@@ -746,4 +773,4 @@ def governance_section(path: Path) -> str:
     return ""
 
 
-__all__ = ["BOARD_HEADER", "BOARD_PARTS", "BOARD_PEERS", "BOARD_SERVICES", "BOARD_SUBAGENT", "BOARD_TASKS", "BOARD_TERMINALS", "BOARD_TWO_WAYS", "BOARD_WAKES", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY_HEADER", "HISTORY_HEADLINE", "HISTORY_PARTS", "HISTORY_SEARCH", "LOOP", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "group_instructions", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "tool_sections", "turn_context", "without_turn_context"]
+__all__ = ["BOARD_HEADER", "BOARD_PARTS", "BOARD_PEERS", "BOARD_SERVICES", "BOARD_SUBAGENT", "BOARD_TASKS", "BOARD_TERMINALS", "BOARD_TWO_WAYS", "BOARD_WAKES", "CONCIERGE", "DEFAULT_RULES", "DISPATCHER", "DISPATCHER_COMPACTION", "HEADLINE_RE", "HISTORY_HEADER", "HISTORY_HEADLINE", "HISTORY_PARTS", "HISTORY_SEARCH", "LOOP", "NOTIFY", "ORCHESTRATOR", "ORCHESTRATOR_COMPACTION", "PERSONA", "SCHEDULING", "SELF_DEVELOPMENT", "SELF_DEVELOPMENT_LOCAL", "YAGNI_OFF", "YAGNI_ON", "YAGNI_RULES", "group_instructions", "concierge_sections", "dispatcher_sections", "environment_section", "governance_section", "language_section", "orchestrator_sections", "rules_section", "self_development_section", "split_headline", "tool_sections", "turn_context", "without_turn_context", "yagni_note"]
