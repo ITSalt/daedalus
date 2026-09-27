@@ -1329,9 +1329,18 @@ class HarnessConfig(BaseModel):
     ack_timeout_s: float = Field(default=8.0, ge=1, le=120)
     """How long a submitted message may go unacknowledged before it is looked for on screen and in
     the transcript."""
-    enter_retries: int = Field(default=2, ge=0, le=5)
+    enter_retries: int = Field(default=3, ge=0, le=5)
     """Enters sent again when the composer still holds the message. Never more: a message that is
     neither in the composer nor in the transcript is reported failed, not resent."""
+    submit_settle_ms: int = Field(default=1000, ge=100, le=10_000)
+    """How long after an Enter the composer may still hold the message before that Enter counts as
+    lost and another is sent. Each retry waits twice as long as the one before it: a TUI that is
+    slow to take a prompt is given longer, never flooded with Enters."""
+    paste_confirm_s: float = Field(default=30.0, ge=1, le=300)
+    """How long a pasted message may take to show in the composer before it is reported as not
+    arrived. A TUI that has sat idle for a while, or runs on a loaded machine, has drawn a large
+    paste seconds late; the delivery gave up at five, pressed no Enter, and the message sat unsent in
+    the prompt with its receipt saying it never arrived."""
     enter_delay_base_ms: int = Field(default=400, ge=0, le=5000)
     enter_delay_per_kib_ms: int = Field(default=60, ge=0, le=1000)
     enter_delay_max_ms: int = Field(default=2000, ge=0, le=10_000)

@@ -13,11 +13,16 @@ that takes its messages in order and, for each:
    ``send``), or as a paste: the text (or, over the threshold, a one-line pointer to a file in the
    launch directory), a pause that grows with its size, a look at the composer to see the text
    arrived, then Enter.
-3. **waits for the acknowledgement** — the CLI saying it took the prompt (a hook naming the prompt,
-   a channel echoing the message's id). Without one it looks again: the text still in the composer
-   gets another Enter, a few times at most; the text found in the transcript is acknowledged late;
-   anything else is reported failed and never sent again blindly — a duplicate instruction is worse
-   than a missing one, because nobody notices it.
+3. **sees it submitted** — after each Enter the composer is read until it lets the text go. Text
+   still there after a short settle was not submitted (the Enter was lost, or came while the TUI was
+   still taking the paste) and gets another Enter, each after a longer wait, a few times at most.
+   ``submitted`` is reported only once the screen or the CLI has shown it, never for an Enter that
+   was merely typed.
+4. **waits for the acknowledgement** — the CLI saying it took the prompt (a hook naming the prompt,
+   a channel echoing the message's id). Without one it looks again: the text back in the composer
+   gets another Enter while retries remain; the text found in the transcript is acknowledged late;
+   nothing is ever pasted again blindly — a duplicate instruction is worse than a missing one,
+   because nobody notices it.
 
 Every step is a receipt state (``written``, ``submitted``, ``acknowledged``, ``failed``) reported
 through the team's ingress, and a fact in ``harness_deliveries``.
@@ -48,6 +53,8 @@ logger = logging.getLogger(__name__)
 WINDOW_POLL_S = 0.5
 """How often a waiting message looks at the session again when nothing woke it."""
 COMPOSER_POLL_S = 0.2
+SETTLE_MAX_S = 8.0
+"""The longest wait after one Enter, however many came before it."""
 KEYBOARD_RETRY_S = 1.0
 """After a person held the keyboard through a write's wait, the pause before trying again."""
 PASTES_MAX = 2
@@ -285,16 +292,37 @@ class DeliveryWorker:
             if pending.acknowledged.done():
                 await self._state(pending, "acknowledged")
                 return
-            await self._state(pending, "failed", error="the message did not appear in the command-line agent's composer")
+            await self._state(pending, "failed", error=f"the message did not appear in the command-line agent's composer within {cfg.paste_confirm_s:g} s; no Enter was sent")
             return
+        await self._submit(pending, text, via, cfg, human=human)
+
+    async def _submit(self, pending: Pending, text: str, via: str, cfg: HarnessConfig, *, human: bool, note: str = "") -> None:
+        """Enter until the composer lets the message go, then wait for the CLI's word that it took it.
+
+        A long paste once sat in Claude Code's prompt as "[Pasted text #3 +19 lines]" with nothing
+        sending it. Reporting ``submitted`` the moment an Enter was typed would have shown such a
+        message as sent; it is reported only when the screen shows the composer emptied, or the CLI
+        acknowledged the prompt."""
+        if pending.acknowledged is None:
+            pending.acknowledged = asyncio.get_running_loop().create_future()
+        settle = cfg.submit_settle_ms / 1000
         enters = 0
+        submitted = False
         while True:
-            await self._write(keys=["Enter"], human=human, note=f"submit {pending.message_id}".strip())
+            await self._write(keys=["Enter"], human=human, note=note or f"submit {pending.message_id}".strip())
             enters += 1
             if pending.message_id:
                 with contextlib.suppress(Exception):
                     await self.store.count_enter(pending.message_id)
-            if enters == 1:
+            seen = await self._taken(pending, text, settle)
+            if seen == "held":
+                if enters <= cfg.enter_retries:
+                    settle = min(settle * 2, SETTLE_MAX_S)
+                    continue  # the Enter was lost; the text is still there and nothing was submitted
+                await self._state(pending, "failed", error=f"the message is still in the command-line agent's composer after {enters} Enters; it was not submitted")
+                return
+            if not submitted:
+                submitted = True
                 await self._record(pending, Delivery(pending.message_id, "submitted", via=via))
                 await self._state(pending, "submitted")
             with contextlib.suppress(TimeoutError):
@@ -302,20 +330,46 @@ class DeliveryWorker:
             if pending.acknowledged.done():
                 await self._acknowledged(pending, via)
                 return
-            screen = await term.screen()
+            screen = await self.session.term.screen()
             if self.adapter.classify_screen(screen) is not ScreenClass.DIALOG and self.adapter.composer_holds(screen, text) and enters <= cfg.enter_retries:
-                continue  # the Enter was lost; the text is still there and nothing was submitted
+                continue  # the composer holds it again: what emptied it was not a submission
             if await self.in_transcript(self.session, text):
                 await self._acknowledged(pending, via)
                 return
-            await self._state(pending, "failed", error="the command-line agent did not take the message; it was not sent again")
+            # The composer let the message go on an Enter and the CLI has not said it took it. It
+            # stays ``submitted``, which is what is known; it is not typed again.
             return
+
+    async def _taken(self, pending: Pending, text: str, settle: float) -> str:
+        """After an Enter: ``acknowledged`` when the CLI said it took the prompt, ``cleared`` when the
+        composer no longer holds the text, ``held`` when it still does once ``settle`` has passed. A
+        dialog on the screen stops the clock: an Enter is never sent into one, and what it covers is
+        read once it has gone."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + settle
+        while True:
+            if pending.acknowledged is not None and pending.acknowledged.done():
+                return "acknowledged"
+            screen = await self.session.term.screen()
+            if self.adapter.classify_screen(screen) is ScreenClass.DIALOG:
+                await self._nudged(WINDOW_POLL_S)
+                deadline = loop.time() + settle
+                continue
+            if not self.adapter.composer_holds(screen, text):
+                return "cleared"
+            if loop.time() >= deadline:
+                return "held"
+            await asyncio.sleep(COMPOSER_POLL_S)
 
     async def _composer(self, pending: Pending, text: str, cfg: HarnessConfig) -> str:
         """``holds`` once the composer shows the text; ``lost`` when a dialog came and went and took
-        it; ``missing`` when it never showed."""
+        it; ``missing`` when it never showed.
+
+        The paste is given ``paste_confirm_s`` to show: a TUI has drawn a large paste seconds late,
+        and giving up at five left it sitting in the prompt with no Enter ever sent. After a dialog
+        the wait is the short one again: the dialog is what took the paste, and it is pasted anew."""
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + cfg.answer_confirm_s
+        deadline = loop.time() + cfg.paste_confirm_s
         dialog_seen = False
         while True:
             screen = await self.session.term.screen()
@@ -323,7 +377,7 @@ class DeliveryWorker:
                 # Never an Enter into a dialog; wait until it has gone, however long that is.
                 dialog_seen = True
                 await self._nudged(WINDOW_POLL_S)
-                deadline = loop.time() + cfg.answer_confirm_s
+                deadline = loop.time() + min(cfg.answer_confirm_s, cfg.paste_confirm_s)
                 continue
             if self.adapter.composer_holds(screen, text):
                 return "holds"
@@ -359,8 +413,9 @@ class DeliveryWorker:
     # -- after a restart -----------------------------------------------------------------------
 
     async def _reexamine(self, pending: Pending) -> None:
-        """A message a previous host had written or submitted: acknowledged if the CLI has it, one
-        Enter if it still sits in the composer, failed otherwise — never typed again."""
+        """A message a previous host had written or submitted: acknowledged if the CLI has it,
+        submitted like any other if it still sits in the composer, failed otherwise — never typed
+        again."""
         text = pending.sent_text or pending.text
         if await self.in_transcript(self.session, text):
             await self._state(pending, "acknowledged")
@@ -370,12 +425,8 @@ class DeliveryWorker:
             pending.acknowledged = asyncio.get_running_loop().create_future()
             pending.sent_text = text
             self.inflight = pending
-            await self._write(keys=["Enter"], human=pending.origin == "operator", note=f"submit {pending.message_id} after a restart")
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(asyncio.shield(pending.acknowledged), self.config().ack_timeout_s)
-            if pending.acknowledged.done() or await self.in_transcript(self.session, text):
-                await self._state(pending, "acknowledged")
-                return
+            await self._submit(pending, text, "paste", self.config(), human=pending.origin == "operator", note=f"submit {pending.message_id} after a restart")
+            return
         await self._state(pending, "failed", error="unknown after restart")
 
     # -- reporting -----------------------------------------------------------------------------
