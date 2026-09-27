@@ -174,8 +174,9 @@ async def test_a_compaction_does_not_fire_again_on_the_next_turn(settings: Setti
     manager = SessionManager(settings, config, db=db)
     await manager.start()
     state = await manager.create_session("repeat")
-    # Long turns, so the summary really is smaller than what it replaces — as it is in a real session.
-    history = [m for i in range(12) for m in (_op(f"ask {i}: " + "detail " * 400), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text=f"answer {i}: " + "words " * 400)]))]
+    # Long turns, so the summary really is smaller than what it replaces — as it is in a real session,
+    # where the agent's words far outnumber the operator's: the operator's are quoted whole.
+    history = [m for i in range(12) for m in (_op(f"ask {i}: " + "detail " * 40), Message(role=MessageRole.assistant, content_blocks=[TextBlock(text=f"answer {i}: " + "words " * 400)]))]
     await manager.sessions.replace_messages(state.session.id, "daedalus", history)
     await manager.sessions.append_transcript(state.session.id, history)
     _, preset = manager.config.preset()

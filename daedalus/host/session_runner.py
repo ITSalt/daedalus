@@ -24,6 +24,7 @@ from protocore.contracts.runtime_constants import LoopConstants
 from protocore.contracts.tool_registry import ToolVisibilityPolicy, policy_admits, tool_group_of
 from protocore.contracts.types import (
     COMPACTION_SUMMARY_METADATA_KEY,
+    OPERATOR_WORDS_METADATA_KEY,
     Message,
     MessageRole,
     Run,
@@ -1258,7 +1259,7 @@ class SessionManager:
         # Received queue messages are tagged at queue_update. Untagged user messages are core
         # recovery notices, not operator input; the live view and persisted sync must hide both.
         return [
-            m.model_copy(update={"metadata": {**m.metadata, "daedalus.origin": "core"}})
+            m.model_copy(update={"metadata": {**m.metadata, "daedalus.origin": "core", OPERATOR_WORDS_METADATA_KEY: False}})
             if m.role is MessageRole.user and "daedalus.origin" not in m.metadata and not m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY)
             else m
             for m in candidates
@@ -1731,7 +1732,12 @@ class SessionManager:
             summary = await self._summarise_history(provider, model, history, language=language, instructions=instructions, observability=observability, progress=lambda **f: self._compaction_progress(state, **f))
         await self._compaction_progress(state, stage="writing")
         # What the operator said is written by code, never by the summariser: rules do not decay.
-        summary = self.redactor.redact(summary + operator_quotes(history) + identifier_index(history) + verbatim_tail(history))
+        # Their room is a share of the window as well as a fixed bound: a summary that quoted every
+        # long message whole could itself fill the window past the trigger, and compact again each turn.
+        window = int((await self.context_status(state)).get("window") or 0)
+        share = min(OPERATOR_QUOTES_WINDOW_SHARE, self.config.compaction.auto_ratio / 4 or OPERATOR_QUOTES_WINDOW_SHARE)
+        room = min(OPERATOR_QUOTES_MAX_CHARS, int(window * CHARS_PER_TOKEN * share)) if window else OPERATOR_QUOTES_MAX_CHARS
+        summary = self.redactor.redact(summary + operator_quotes(history, room=room) + identifier_index(history) + verbatim_tail(history, room=room))
         busy = state.running and not (own_task_ok and state.task is asyncio.current_task())
         if busy or state.pending is not None:  # a run resumed from a snapshot meanwhile
             raise RuntimeError("the session became busy during compaction; nothing was changed")
@@ -1748,6 +1754,9 @@ class SessionManager:
             content_blocks=[TextBlock(text=f"<compacted-turn id='{reason}'>{summary}{archive_note}</compacted-turn>")],
             metadata={
                 COMPACTION_SUMMARY_METADATA_KEY: True,
+                # The operator's passages the summary quotes, named for the core's ledger and for the
+                # next compaction here, which would otherwise read this summary as a model's words.
+                OPERATOR_WORDS_METADATA_KEY: [text for _, text in operator_passages(history)][-OPERATOR_PASSAGES_KEPT:] or False,
                 "daedalus.compaction": {"reason": reason, "messages": len(history), "kept": len(tail), "at": datetime.now(UTC).isoformat()},
                 "daedalus.archived": {"from_seq": seqs[0], "to_seq": seqs[-1], "seqs": seqs} if seqs else {"seqs": []},
             },
@@ -2484,6 +2493,7 @@ class SessionManager:
         origin: str = "operator",
         client_message_id: str | None = None,
         via: str = "app",
+        operator_words: Sequence[str] | None = None,
     ) -> str:
         """Deliver input. Starts a run, or queues a follow-up when one is active.
 
@@ -2492,7 +2502,10 @@ class SessionManager:
         came through, which a free-text answer to a pending question reports as where it was answered.
         While a run is active the text is a steer unless ``follow_up`` asks for it to wait for the end
         of the turn (or the session's ``queue_mode`` says so); ``steer`` wins over both.
+        ``operator_words`` are the operator's passages a runtime note relays verbatim (an answer
+        among a wake-up's events): compaction quotes them, and nothing else of the note.
         """
+        words = operator_words_metadata(origin, text, operator_words)
         state = await self.get_state(session_id)
         if state is None:
             raise KeyError(session_id)
@@ -2573,7 +2586,7 @@ class SessionManager:
                     if client_message_id:
                         await self.live.consume(session_id, client_message_id, run_id=run_id, step_id="answer", message_seq=None)
                     return run_id
-                queued = {**new_queued_prompt("follow_up", body).to_dict(), "queued_at": datetime.now(UTC).isoformat()}
+                queued = {**new_queued_prompt("follow_up", body).to_dict(), "origin": origin, "operator_words": None if operator_words is None else list(operator_words), "queued_at": datetime.now(UTC).isoformat()}
                 if client_message_id:
                     queued["id"] = client_message_id
                     receipt, created = await self.live.accept(
@@ -2589,7 +2602,7 @@ class SessionManager:
                 else:
                     await self.live.enqueue(session_id, "follow_up", queued)
                 await self.sessions.append_transcript(
-                    session_id, [Message(role=MessageRole.user, content_blocks=[TextBlock(text=body)], metadata={"daedalus.delivery": "follow_up", "daedalus.origin": origin, "daedalus.queued": True, **({"daedalus.client_message_id": client_message_id} if client_message_id else {})})]
+                    session_id, [Message(role=MessageRole.user, content_blocks=[TextBlock(text=body)], metadata={"daedalus.delivery": "follow_up", "daedalus.origin": origin, **words, "daedalus.queued": True, **({"daedalus.client_message_id": client_message_id} if client_message_id else {})})]
                 )
                 return state.run_id or ""
             provider_id: str | None = None
@@ -2615,7 +2628,7 @@ class SessionManager:
                 # A message sent while the agent works is a steer: the core places it before the
                 # next model call (after the current tool batch). follow_up would wait for the end.
                 kind = "follow_up" if not steer and (follow_up or state.metadata.get("queue_mode") == "follow_up") else "steer"
-                queued = {**new_queued_prompt(kind, body).to_dict(), "origin": origin, "queued_at": datetime.now(UTC).isoformat()}
+                queued = {**new_queued_prompt(kind, body).to_dict(), "origin": origin, "operator_words": None if operator_words is None else list(operator_words), "queued_at": datetime.now(UTC).isoformat()}
                 if client_message_id:
                     queued["id"] = client_message_id
                     receipt, created = await self.live.accept(
@@ -2633,7 +2646,7 @@ class SessionManager:
                 # The core folds queued prompts into the model's history later (and compaction may
                 # rewrite them); the transcript keeps the operator's words as sent.
                 await self.sessions.append_transcript(
-                    session_id, [Message(role=MessageRole.user, content_blocks=[TextBlock(text=body)], metadata={"daedalus.delivery": kind, "daedalus.origin": origin, "daedalus.queued": True, **({"daedalus.client_message_id": client_message_id} if client_message_id else {})})]
+                    session_id, [Message(role=MessageRole.user, content_blocks=[TextBlock(text=body)], metadata={"daedalus.delivery": kind, "daedalus.origin": origin, **words, "daedalus.queued": True, **({"daedalus.client_message_id": client_message_id} if client_message_id else {})})]
                 )
                 if kind == "steer":
                     await self.steer_changed(session_id, reason="queued")
@@ -2693,7 +2706,7 @@ class SessionManager:
                 message = Message(
                     role=MessageRole.user,
                     content_blocks=[TextBlock(text=body)],
-                    metadata={"daedalus.origin": origin, **({"daedalus.client_message_id": client_message_id} if client_message_id else {}), **({"image_refs": [{"ref": ref, "mime": mime} for ref, mime in image_refs]} if image_refs else {})},
+                    metadata={"daedalus.origin": origin, **words, **({"daedalus.client_message_id": client_message_id} if client_message_id else {}), **({"image_refs": [{"ref": ref, "mime": mime} for ref, mime in image_refs]} if image_refs else {})},
                 )
                 # Only what cannot be sent at all is compacted here — a model whose window is smaller
                 # than the history was built for. The ratio-based compaction happens between runs
@@ -2842,7 +2855,8 @@ class SessionManager:
         state.engine.history.append(
             Message(
                 role=MessageRole.tool,
-                content_blocks=[ToolResultBlock(tool_call_id=pending.tool_call_id, content=result)],
+                # The operator's reply to the model's question: the core's ledger quotes it whole.
+                content_blocks=[ToolResultBlock(tool_call_id=pending.tool_call_id, content=result, metadata={OPERATOR_WORDS_METADATA_KEY: source in ("user", "operator")})],
             )
         )
         state.engine.clear_pending_approval(pending.tool_call_id)
@@ -3405,11 +3419,16 @@ class SessionManager:
             volatile.append("\n- " + yagni)
         context = prompts.turn_context(notes="".join(volatile))
         blocks = list(message.content_blocks)
-        blocks[at] = TextBlock(text=f"{blocks[at].text.rstrip()}\n\n{context}")  # type: ignore[union-attr]
+        said = blocks[at].text  # type: ignore[union-attr]
+        blocks[at] = TextBlock(text=f"{said.rstrip()}\n\n{context}")
         update: dict[str, Any] = {"content_blocks": blocks}
+        if message.metadata.get(OPERATOR_WORDS_METADATA_KEY) in (None, True):
+            # The context is the host's, not the operator's: without a mark the core would quote the
+            # board, the clock and the YAGNI note as the operator's words when it compacts.
+            update["metadata"] = {**message.metadata, **operator_words_metadata(str(message.metadata.get("daedalus.origin") or "operator"), prompts.without_turn_context(said))}
         if yagni:
             # The app draws the switch as a mark on the message instead of the note, which it never shows.
-            update["metadata"] = {**message.metadata, "daedalus.yagni": "on" if yagni.startswith(prompts.YAGNI_ON) else "off"}
+            update["metadata"] = {**update.get("metadata", message.metadata), "daedalus.yagni": "on" if yagni.startswith(prompts.YAGNI_ON) else "off"}
         return message.model_copy(update=update)
 
     async def _take_mcp_switched_off(self, state: SessionState) -> str:
@@ -3760,7 +3779,7 @@ class SessionManager:
         origins = {str(item.get("origin") or "operator") for item in items}
         # The transcript already holds each item as it was sent; this copy only opens the run and stays hidden.
         origin = "operator" if "operator" in origins else next(iter(origins))
-        message = Message(role=MessageRole.user, content_blocks=[TextBlock(text="\n\n".join(texts))], metadata={"daedalus.origin": origin, "daedalus.delivery": "drained"})
+        message = Message(role=MessageRole.user, content_blocks=[TextBlock(text="\n\n".join(texts))], metadata={"daedalus.origin": origin, "daedalus.delivery": "drained", **_merged_words(items)})
         await self.sessions.append_transcript(state.session.id, [message])
         seqs = await self.sessions.transcript_seqs(state.session.id, [self.sessions.transcript_key(message)])
         await self.checkpoint(state, kind="before", seq=seqs[0] if seqs else None)
@@ -3900,6 +3919,12 @@ class SessionManager:
                 items = [item for kind in ("steer", "follow_up") for item in queued[kind] if item.get("id") in placed]
                 origin = str(items[0].get("origin") or "operator") if items else "operator"
                 message.metadata.update({"daedalus.origin": origin, "daedalus.delivery": event.payload.get("kind"), "daedalus.run_id": event.run_id})
+                if items:
+                    message.metadata.update(_merged_words(items))
+                else:
+                    # A placed prompt the queue no longer lists: its words are the operator's only
+                    # when the operator sent it, and the text as placed is the best copy there is.
+                    message.metadata.update(operator_words_metadata(origin, prompts.without_turn_context(message.text)))
                 for client_message_id in placed:
                     if await self.live.receipt(state.session.id, str(client_message_id)) is not None:
                         await self.live.consume(
@@ -5055,8 +5080,78 @@ row: a provider that stalled for a while should not leave a long session uncompa
 COMPACTION_RETRY_MAX_SECONDS = 6 * 3600.0
 COMPACTION_MIN_FREED = 0.1
 """A compaction that took less than this share off the prompt counts as having freed nothing."""
-OPERATOR_QUOTE_CHARS = 400
-"""Older operator messages are quoted by code, each clipped to this many characters, so a rule never depends on the summariser."""
+OPERATOR_QUOTES_MAX_CHARS = 60_000
+"""Room for the operator's words a compaction quotes by code. Each passage is quoted whole; past this
+room the oldest are named as left out, and a single passage longer than all of it is cut with a
+marker, both pointing at the archived turns. They were once clipped silently at 400 characters."""
+OPERATOR_QUOTES_WINDOW_SHARE = 0.1
+"""The share of the model's window each of the two quote sections may take, and never more than a
+quarter of the trigger's ratio: together they stay under half of what starts a compaction."""
+OPERATOR_PASSAGES_KEPT = 400
+"""Passages a summary carries forward in its metadata for the next compaction to quote again."""
+ARCHIVE_POINTER = "HistoryExpand over the archived turns named at the end of this summary returns them verbatim"
+
+
+def operator_words_metadata(origin: str, text: str, passages: Sequence[str] | None = None) -> dict[str, Any]:
+    """The core's mark of whose words a user turn carries, for a message this host delivers.
+
+    The core takes any plain user turn to be the operator's, and would quote a wake-up's event
+    list or a reminder as the operator's instruction when it compacts. So a message from the
+    operator names their text, a runtime note names the operator's passages it relays (an answer
+    inside a batch of events), and one that relays none says so. ``passages`` given overrides the
+    origin: a note the host writes on the operator's behalf names only the words they gave."""
+    if passages is None:
+        words = [text.strip()] if origin == "operator" and text.strip() else []
+    else:
+        words = [passage.strip() for passage in passages if passage and passage.strip()]
+    return {OPERATOR_WORDS_METADATA_KEY: words or False}
+
+
+def _merged_words(items: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """The mark for one message made of several queued items, each with its own origin."""
+    words: list[str] = []
+    for item in items:
+        marked = operator_words_metadata(str(item.get("origin") or "operator"), str(item.get("text") or ""), item.get("operator_words"))
+        words += marked[OPERATOR_WORDS_METADATA_KEY] or []
+    return {OPERATOR_WORDS_METADATA_KEY: words or False}
+
+
+def operator_passages(history: Sequence[Message]) -> list[tuple[Message, str]]:
+    """Every passage of the operator's in ``history``, oldest first, each whole.
+
+    What a message marks decides (see :func:`operator_words_metadata`); an unmarked user turn
+    counts when the operator sent it. A tool result marked as the operator's reply — the answer to
+    a question the model asked — counts as well, and so do the passages an earlier summary carried
+    forward, so a second compaction quotes what the first one did. An answer that arrived inside a
+    wake-up's events was once left to the summariser, which paraphrased it."""
+    found: list[tuple[Message, str]] = []
+    for m in history:
+        if is_ledger(m):
+            continue
+        marked = m.metadata.get(OPERATOR_WORDS_METADATA_KEY)
+        if isinstance(marked, list):
+            found += [(m, passage.strip()) for passage in marked if isinstance(passage, str) and passage.strip()]
+        elif m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY):
+            continue
+        elif marked is True or (marked is None and m.role is MessageRole.user and m.metadata.get("daedalus.origin") == "operator"):
+            text = prompts.without_turn_context("".join(b.text for b in m.content_blocks if isinstance(b, TextBlock))).strip()
+            if text:
+                found.append((m, text))
+        for block in m.content_blocks:
+            if isinstance(block, ToolResultBlock) and (block.metadata or {}).get(OPERATOR_WORDS_METADATA_KEY) is True and (block.content or "").strip():
+                found.append((m, block.content.strip()))
+    unique: dict[str, tuple[Message, str]] = {}
+    for m, text in found:
+        unique.pop(text, None)  # a passage said again counts where it was said last
+        unique[text] = (m, text)
+    return list(unique.values())
+
+
+def _quoted(text: str, room: int) -> str:
+    """A passage as a list item, its later lines indented; cut only past ``room``, and then with a marker."""
+    if len(text) > room:
+        text = f"{text[:room].rstrip()} [truncated {len(text) - room} chars — full text: {ARCHIVE_POINTER}]"
+    return "- " + "\n  ".join(text.splitlines())
 
 
 def validate_summary_sections(summary: str) -> str:
@@ -5073,27 +5168,28 @@ def validate_summary_sections(summary: str) -> str:
     return ""
 
 
-def operator_quotes(history: Sequence[Message], *, skip_last: int = VERBATIM_TAIL_MESSAGES, clip: int = OPERATOR_QUOTE_CHARS) -> str:
-    """Every older operator message, quoted by code: constraints survive compaction unchanged.
+def operator_quotes(history: Sequence[Message], *, skip_last: int = VERBATIM_TAIL_MESSAGES, room: int = OPERATOR_QUOTES_MAX_CHARS) -> str:
+    """Every older passage of the operator's, quoted whole by code: constraints survive compaction unchanged.
 
     The summariser is asked to quote rules too, but a model paraphrases under pressure; this
-    section is written without it. The most recent ``skip_last`` operator messages are left to
-    :func:`verbatim_tail`, which prints them whole.
+    section is written without it. The most recent ``skip_last`` passages are left to
+    :func:`verbatim_tail`. Past ``room`` the oldest are named as left out, never clipped.
     """
-    operator = [
-        m for m in history
-        if m.role is MessageRole.user and m.metadata.get("daedalus.origin") == "operator" and not m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY)
-    ]
-    older = operator[:-skip_last] if skip_last else operator
+    passages = [text for _, text in operator_passages(history)]
+    older = passages[:-skip_last] if skip_last else passages
     lines: list[str] = []
-    seen: set[str] = set()
-    for m in older:
-        text = " ".join(prompts.without_turn_context("".join(b.text for b in m.content_blocks if isinstance(b, TextBlock))).split())
-        if not text or text in seen:
+    left = room
+    omitted = 0
+    for text in reversed(older):
+        if len(text) > left and lines:
+            omitted += 1
             continue
-        seen.add(text)
-        lines.append("- " + (text[:clip] + "…" if len(text) > clip else text))
-    return ("\n\n## Operator said (verbatim, oldest first)\n" + "\n".join(lines)) if lines else ""
+        lines.append(_quoted(text, max(left, 0)))
+        left -= len(text)
+    if not lines:
+        return ""
+    head = [f"- [{omitted} older passages are left out here for room — {ARCHIVE_POINTER}]"] if omitted else []
+    return "\n\n## Operator said (verbatim, oldest first)\n" + "\n".join(head + list(reversed(lines)))
 
 
 IDENTIFIER_RE = re.compile(
@@ -5162,19 +5258,15 @@ def compaction_cut(history: Sequence[Message], keep_recent: int) -> int:
     return cut
 
 
-def verbatim_tail(history: Sequence[Message], count: int = VERBATIM_TAIL_MESSAGES) -> str:
-    """The operator's last messages, appended by code so the summary can never lose their wording."""
-    operator = [
-        m for m in history
-        if m.role is MessageRole.user and m.metadata.get("daedalus.origin") == "operator" and not m.metadata.get(COMPACTION_SUMMARY_METADATA_KEY)
-    ]
-    tail = operator[-count:]
+def verbatim_tail(history: Sequence[Message], count: int = VERBATIM_TAIL_MESSAGES, *, room: int = OPERATOR_QUOTES_MAX_CHARS) -> str:
+    """The operator's last passages, appended by code so the summary can never lose their wording.
+    Each has an equal share of ``room``; past it, it is cut with a marker, never silently."""
+    tail = operator_passages(history)[-count:]
     if not tail:
         return ""
     lines = ["", "", "## Recent operator messages (verbatim)"]
-    for m in tail:
-        text = prompts.without_turn_context("".join(b.text for b in m.content_blocks if isinstance(b, TextBlock))).strip()
-        lines.append(f"- [{m.created_at.strftime('%Y-%m-%d %H:%M')}] {text[:1500]}")
+    for m, text in tail:
+        lines.append(_quoted(f"[{m.created_at.strftime('%Y-%m-%d %H:%M')}] {text}", max(1, room // len(tail))))
     return "\n".join(lines)
 
 

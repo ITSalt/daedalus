@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from protocore.contracts.types import Message, MessageRole, TextBlock
+from protocore.contracts.types import OPERATOR_WORDS_METADATA_KEY, Message, MessageRole, TextBlock
 
 from daedalus.config import NoModelConfigured
 from daedalus.extensions import orchestrator_ops, orchestrator_team, wakeups
@@ -224,6 +224,9 @@ class Orchestrators:
         self.manager: SessionManager = app.manager
         self._locks: dict[str, asyncio.Lock] = {}
         self.queues: dict[str, WakeQueue] = {}
+        self._operator_words: dict[str, list[str]] = {}
+        """The operator's passages each rendered batch relays, by the batch's text, for its delivery
+        to name them to compaction; a batch's text is only ever delivered as rendered."""
         self._models: dict[str, str] = {}
         """The model each enabled project's orchestrator runs, by project: read on every engine build,
         which is synchronous, so it is kept here and written with every change of the setting."""
@@ -861,12 +864,16 @@ class Orchestrators:
         # can list again, and the operator's words are nowhere else the orchestrator looks.
         shown = [event for index, event in enumerate(events) if index < limit or event.type in ANSWER_EVENTS]
         lines: list[str] = []
+        words: list[str] = []
         for event in shown:
             try:
                 # A batch of answers is one event and one wake-up, but each answer is a line of its
                 # own, worded as a single answer is: the orchestrator reads them the same way, and
                 # the app's event card draws them the same way.
                 said = await self.batch_lines(project, event) if event.type == "ask.batch" else [await self.line(project, event)]
+                if event.type in ANSWER_EVENTS:
+                    answered = await self._batch_asks(event.payload) if event.type == "ask.batch" else [await self._ask_for_event(event.payload)]
+                    words += [passage for ask in answered if ask is not None for passage in self._answer_words(ask)]
             except Exception:  # noqa: BLE001 — an event that cannot be described is still named
                 logger.warning("could not describe %s for the orchestrator", event.type, exc_info=True)
                 said = [event.type]
@@ -874,7 +881,12 @@ class Orchestrators:
         if len(events) > len(shown):
             lines.append(f"- … and {len(events) - len(shown)} more (Team, Tasks)")
         first = self._clock(events[0].at) if events else ""
-        return f"[events · {name} · {len(lines)} since {first}]\n" + "\n".join(lines)
+        text = f"[events · {name} · {len(lines)} since {first}]\n" + "\n".join(lines)
+        if words:
+            self._operator_words[text] = words
+            while len(self._operator_words) > 64:  # a batch rendered and never delivered is not kept for ever
+                self._operator_words.pop(next(iter(self._operator_words)))
+        return text
 
     async def batch_lines(self, project: Project | None, event: AppEvent) -> list[str]:
         return [await self._answer_line(ask) for ask in await self._batch_asks(event.payload)]
@@ -972,6 +984,16 @@ class Orchestrators:
         return {"operator": "the operator", "system": "the board", "agent": "an agent"}.get(actor, "someone")
 
     @staticmethod
+    def _answer_words(ask: Ask) -> list[str]:
+        """What the operator gave as an answer, each part as they gave it: the option they chose,
+        the answer they typed, the note or reason beside it."""
+        r = ask.resolution
+        if ask.resolved_by in (None, "system", "orchestrator") or ask.kind == "folder":
+            return []
+        parts = [", ".join(str(s) for s in r.get("selected") or []) if ask.kind != "permission" else "", str(r.get("text") or ""), str(r.get("note") or "")]
+        return [part.strip() for part in dict.fromkeys(parts) if part.strip()]
+
+    @staticmethod
     def _answer_text(ask: Ask) -> str:
         r = ask.resolution
         if ask.kind == "permission":
@@ -1061,7 +1083,15 @@ class Orchestrators:
         session_id = self.session_of(project)
         if not session_id:
             raise RuntimeError("the project has no orchestrator session")
-        await self.manager.submit(session_id, text, origin="events", as_answer=False, steer=steer, follow_up=not steer)
+        # The operator's answers among the events are named, so compaction quotes them whole and
+        # takes the rest of the batch for the host's news it is.
+        words = self._operator_words.pop(text, [])
+        try:
+            await self.manager.submit(session_id, text, origin="events", as_answer=False, steer=steer, follow_up=not steer, operator_words=words)
+        except Exception:
+            if words:
+                self._operator_words[text] = words  # the queue delivers the same text again
+            raise
 
     async def _capped(self, project_id: str, wait_seconds: float) -> None:
         notifications = self.app.notifications
@@ -1152,7 +1182,7 @@ class Orchestrators:
         app draws it as one."""
         if not session_id:
             return
-        note = Message(role=MessageRole.user, content_blocks=[TextBlock(text=text)], metadata={"daedalus.origin": "events", "daedalus.notice": True})
+        note = Message(role=MessageRole.user, content_blocks=[TextBlock(text=text)], metadata={"daedalus.origin": "events", "daedalus.notice": True, OPERATOR_WORDS_METADATA_KEY: False})
         try:
             await self.manager.sessions.append_transcript(session_id, [note])
         except Exception:  # noqa: BLE001 — the notification still says it

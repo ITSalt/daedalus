@@ -152,7 +152,9 @@ class DaedalusStaffRuntime:
         else:
             await self.manager.refuse(session_id, key, via=via)
             note = f"[the {decision.by} refused request {key}{reason}] Do not retry it; do the task another way, or report what it leaves undone."
-        await self.manager.submit(session_id, note, as_answer=False, follow_up=True, origin=decision.by)
+        # Only the reason is the operator's; the rest of the note is the host's instruction.
+        words = [decision.text.strip()] if decision.by == "operator" and decision.text and decision.text.strip() else []
+        await self.manager.submit(session_id, note, as_answer=False, follow_up=True, origin=decision.by, operator_words=words)
 
     async def read(self, live: LiveSession, req: ReadRequest) -> ReadPage:
         session_id = self._session(live)
