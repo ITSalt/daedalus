@@ -306,6 +306,7 @@ class CliSession:
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
     last_signal: float = 0.0
     quiet_checked: float = 0.0
+    idle_checked: float = 0.0
     stopping: bool = False
     finished: bool = False
     changed: asyncio.Event = field(default_factory=asyncio.Event)
@@ -940,6 +941,8 @@ class CliStaffRuntime:
         live = await self.lookup(session.staff_session_id)
         if live is None or live.session.status not in (StaffState.WORKING.value, StaffState.NO_SIGNAL.value):
             return
+        if await self._settled_idle(session, cfg):
+            return
         if live.session.status == StaffState.WORKING.value and not await self.ingress.expects_signal(live):
             # Working without a task still being worked (handed in for review, done, or none at all):
             # its quiet is nobody's alarm. A session already shown silent is still read below, since
@@ -958,6 +961,25 @@ class CliStaffRuntime:
             await self._apply(session, StaffEvent(EventKind.QUIET, _now(), {"after_s": cfg.no_signal_after_s}, launch_id=session.launch.launch_id))
         else:
             await self._reconcile_screen(session)
+
+    async def _settled_idle(self, session: CliSession, cfg: HarnessConfig) -> bool:
+        """Whether a session the host holds as working turned out to sit at an idle prompt, and was
+        settled so. Read once per ``idle_settle_s`` without a signal, whatever the terminal prints and
+        whether or not a task is expected of it; only an idle verdict acts, the rest is left to the
+        silence check."""
+        now = self.clock()
+        if now - max(session.last_signal, session.idle_checked) < cfg.idle_settle_s:
+            return False
+        session.idle_checked = now
+        if await self._screen_verdict(session) is not ScreenClass.IDLE_COMPOSER:
+            return False
+        logger.info(
+            "%s shows an idle prompt %.0f s after its last signal while its turn was held as running: the turn end was missed, and it is taken from the screen",
+            session.staff_session_id,
+            now - session.last_signal,
+        )
+        await self._apply(session, StaffEvent(EventKind.RECONCILED, _now(), {"screen": ScreenClass.IDLE_COMPOSER.value}, launch_id=session.launch.launch_id))
+        return True
 
     async def _reconcile_screen(self, session: CliSession) -> None:
         """Two readings ``reconcile_gap_ms`` apart. A turn end is inferred only from two identical

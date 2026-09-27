@@ -1321,6 +1321,11 @@ class HarnessConfig(BaseModel):
     screen checked; what the screen cannot settle is shown as silent, never as failed."""
     reconcile_gap_ms: int = Field(default=1500, ge=200, le=10_000)
     """Between the two screen readings that must agree before a turn end is inferred from the screen."""
+    idle_settle_s: int = Field(default=60, ge=5, le=3600)
+    """A session shown working whose CLI has sent no signal for this long has its screen read, output
+    or not; an idle prompt read twice the same ends the turn. A missed turn end otherwise waited for
+    ``no_signal_after_s`` of a silent terminal, which a status line that redraws never gives, and a
+    member sat "working" at an empty prompt with its next task queued behind a turn long over."""
     ready_timeout_s: float = Field(default=30.0, ge=5, le=600)
     """How long a launched CLI may take to say it is ready before the session is shown as failed,
     with the screen it was stuck on; the terminal is left running for the operator to look at."""

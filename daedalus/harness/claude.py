@@ -28,6 +28,13 @@ and the fake CLI replays their shapes. What matters to the adapter:
   between the two rules above the footer; a paste over 800 characters or four lines shows there as
   ``[Pasted text #N]``, and is submitted — to the hook and to the transcript — wrapped in
   ``<pasted_content id="…">`` tags, which :func:`unpasted` takes off again.
+- **Turns.** Every turn opens with ``UserPromptSubmit`` (a message, a queued steer, a background
+  task's notification) and closes with ``Stop``. Tool hooks between a ``Stop`` and the next prompt
+  are not a turn: Claude fires some seconds after a turn has ended, and taking them for work kept a
+  finished member "working" for as long as nobody looked, with its next task held behind the turn.
+- **The idle screen.** The composer drawn with no spinner working above it. The footer's
+  "? for shortcuts" is not proof either way: a status line of the operator's own or a permission mode
+  replaces it, and then an idle Claude was never recognised from its screen at all.
 - **Interrupt.** One Esc (two open the rewind menu). No hook says the turn stopped; the screen's
   "Interrupted" line does, and the adapter reports it.
 - **The prompt after variadic options.** ``--add-dir`` and ``--mcp-config`` take every following
@@ -114,8 +121,10 @@ DIALOG_MARKERS = (
     "Enter to select",
     "Type something.",
 )
-IDLE_HINT = "? for shortcuts"
 BUSY_HINT = "esc to interrupt"
+_WORKING = re.compile(r"^\s*[·✢✳✶✻✽]\s+\S.*(…|Retrying in)")
+"""The spinner line of a turn at work ("✶ Brewing… (12s · ↓ 1k tokens)", "✻ Connection refused … Retrying
+in 3s"); a finished turn leaves "✻ Brewed for 3m 5s", with no ellipsis."""
 PASTE_MARKER = "[Pasted text #"
 _PASTED_OPEN = re.compile(r'<pasted_content id="[^"]*">\n?')
 _PASTED_CLOSE = re.compile(r'\n?</pasted_content(?: id="[^"]*")?>')
@@ -204,6 +213,9 @@ class _Launch:
     """A PreToolUse's tool and input to its tool-use id: the permission request that follows names neither."""
     requests: dict[str, _Request] = field(default_factory=dict)
     count: int = 0
+    turn_open: bool = True
+    """A prompt opened a turn and no ``Stop`` has closed it. True at the start: the first prompt may
+    have gone on the command line, and a launch taken up after a restart may be mid-turn."""
 
 
 @register
@@ -394,6 +406,8 @@ class ClaudeCodeAdapter:
         if name == "SessionStart":
             return [StaffEvent(EventKind.TRANSCRIPT, at, {"ref": body.get("transcript_path") or "", "session_ref": body.get("session_id") or ""}), StaffEvent(EventKind.READY, at, {"source": body.get("source") or ""})]
         if name == "UserPromptSubmit":
+            if state is not None:
+                state.turn_open = True
             prompt = unpasted(str(body.get("prompt") or ""))
             if prompt.lstrip().startswith("<task-notification>"):
                 # A background task of the CLI finished and it takes that up by itself: a turn, but
@@ -413,6 +427,8 @@ class ClaudeCodeAdapter:
                 return [StaffEvent(EventKind.QUESTION_ASKED, at, {"tool": tool, "summary": text[:200], "text": text, "options": options}, native_id=ref)]
             if tool_id:
                 state.tool_uses[self._key(tool, tool_input)] = tool_id
+            if not state.turn_open:
+                return [StaffEvent(EventKind.ACTIVITY, at, {"hook": name, "tool": tool, "between_turns": True})]
             return [StaffEvent(EventKind.TOOL_STARTED, at, {"tool": tool}, native_id=tool_id)]
         if name == "PermissionRequest":
             state.count += 1
@@ -422,7 +438,11 @@ class ClaudeCodeAdapter:
             return [StaffEvent(EventKind.PERMISSION_REQUESTED, at, {"tool": tool, "summary": summary, "options": ["allow_once", "deny"]}, native_id=ref)]
         if name in ("PostToolUse", "PostToolUseFailure", "PermissionDenied"):
             events = [StaffEvent(EventKind.REQUEST_RESOLVED, at, {}, native_id=tool_id)] if tool_id in state.requests else []
+            if not state.turn_open:
+                return [*events, StaffEvent(EventKind.ACTIVITY, at, {"hook": name, "tool": tool, "between_turns": True})]
             return [*events, StaffEvent(EventKind.TOOL_FINISHED, at, {"tool": tool, "ok": name == "PostToolUse"}, native_id=tool_id)]
+        if name in ("Stop", "StopFailure") and state is not None:
+            state.turn_open = False
         if name == "Stop":
             # A turn that ended has nothing waiting any more, whoever settled it.
             events = [StaffEvent(EventKind.REQUEST_RESOLVED, at, {}, native_id=ref) for ref in state.requests]
@@ -544,10 +564,14 @@ class ClaudeCodeAdapter:
         bottom = _tail(text, 24)
         if any(marker in bottom for marker in DIALOG_MARKERS):
             return ScreenClass.DIALOG
-        footer = _tail(text, 3)
-        if BUSY_HINT in footer:
+        lines = text.splitlines()
+        rules = [i for i, line in enumerate(lines) if _RULE.match(line)]
+        # The spinner sits a few lines above the composer's top rule (a recap or a queued message may
+        # come between), the busy hint in it or in the footer.
+        near = "\n".join(lines[max(0, rules[-2] - 8) :]) if len(rules) >= 2 else _tail(text, 3)
+        if BUSY_HINT in near or any(_WORKING.match(line) for line in near.splitlines()):
             return ScreenClass.BUSY
-        if IDLE_HINT in footer and composer(text) is not None:
+        if composer(text) is not None:
             return ScreenClass.IDLE_COMPOSER
         return ScreenClass.UNKNOWN
 
