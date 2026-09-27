@@ -172,7 +172,7 @@ A single tool result is clipped to a limit you set; the twenty results already b
 
 <sub>Diagram sources: <code>docs/diagrams/</code> is rendered from the mermaid text kept beside the README.</sub>
 
-The diagram is the full stack with every profile on. A default install is **two** of those containers, from one image: the agent, and the key proxy that holds the provider keys. SearXNG, the rebuilder and the local Bot API server are the three profiles, off unless you ask for them. The agent container has no provider keys and no docker socket; the supervisor and the governance rules are mounted read-only. Services the agent hosts (a demo site, a dev server) listen on a published port range and can be shared through your domain — to anyone, or to whoever holds a key — without opening another port.
+The diagram is the full stack with every profile on. A default install is **two** of those containers, from one image: the agent, and the key proxy that holds the provider keys. SearXNG, the rebuilder and the local Bot API server are the three profiles, off unless you ask for them. The agent container has no provider keys and no docker socket; the supervisor and the governance rules are mounted read-only. Services the agent hosts (a demo site, a dev server) listen on a published port range and can be shared through your domain — to anyone, or to whoever holds a key — without opening another port. A dialog is shared the same way, from its menu: only in the app, by a private link, or by anyone who has the link. The page shows the messages and the pictures in them, and it keeps updating until sharing is turned off. Tool calls, files and thinking stay in the app.
 
 **In native mode the boxes are the same and the containers are not there.** The supervisor and the key proxy are two processes the launcher starts, the key proxy on `127.0.0.1` instead of a private network, and the workspaces and the state are files in the installation's own folder instead of volumes. The supervisor is the same program either way: it has never known what a container is.
 
@@ -522,7 +522,7 @@ rather than at the IP, which is not a name a key can belong to.
 
 1. Send `/start` to the bot in a private chat. That chat is a window onto one session at a time: `/new <title>` starts a session and writes to it, `/sessions` numbers them, `/use <n|title>` switches, `/close` puts one away. Every other session — a scheduled task, a loop agent, an agent you spawned — still speaks in the same chat, with its name above its words, and a question of any of them is answered back into it. Nothing else is needed.
 2. Optional, for a chat of its own per session: create a supergroup with topics, add the bot as an administrator with *manage topics*, and send `/bind` there. One topic is then one session, and topics you create by hand are adopted too. Mini App → Settings → Chat switches between the two shapes.
-3. Open the app with `/app`. Set `MINIAPP_PUBLIC_URL` to an HTTPS address that proxies to port 8765 and register it as the bot's menu button in @BotFather; the same address serves the browser version (sign in with Telegram's login widget) and the shared services under `/s/…`.
+3. Open the app with `/app`. Set `MINIAPP_PUBLIC_URL` to an HTTPS address that proxies to port 8765 and register it as the bot's menu button in @BotFather; the same address serves the browser version (sign in with Telegram's login widget), the shared services under `/s/…`, and a dialog shared from its menu under `/c/…`.
 
 ### Let your agent install it
 

@@ -656,6 +656,8 @@ export type SessionDetail = {
   subagents?: SubagentView[];
   /** Whether this session currently sends to and receives from its own Telegram topic. */
   telegram_linked?: boolean;
+  /** Who can open this dialog from outside the app. Absent on a bot that does not share dialogs yet. */
+  share?: ShareView;
   context?: {
     tokens: number;
     estimated?: boolean;

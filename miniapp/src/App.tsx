@@ -63,6 +63,13 @@ const ProjectSidebar = chunk(retried(() => import("./project/ProjectSidebar").th
 const ProjectTabs = lazy(retried(() => import("./project/phone").then((m) => ({ default: m.ProjectTabs }))));
 const MainScreen = chunk(retried(() => import("./main/MainScreen").then((m) => ({ default: m.MainScreen }))));
 const OnboardingScreen = lazy(retried(() => import("./screens/AddModel").then((m) => ({ default: m.OnboardingScreen }))));
+const SharedDialog = lazy(retried(() => import("./screens/Shared").then((m) => ({ default: m.SharedDialog }))));
+
+/** A shared dialog lives at /app/c/<slug>. It is a page of its own, not a screen of the signed-in shell. */
+function sharedSlug(): string | null {
+  const match = /^\/app\/c\/([^/]+)\/?$/.exec(window.location.pathname);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 /** The conversation is what the operator opens next, whatever screen they landed on: fetch it while the browser is idle. */
 function prefetchSession(): void {
@@ -422,6 +429,17 @@ export function App() {
       ...terminalItems,
     ];
   };
+
+  const shared = sharedSlug();
+  if (shared) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<div className="shared"><div className="empty">{t("common.loading")}</div></div>}>
+          <SharedDialog slug={shared} />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   if (authed === null) return <div className="app"><div className="empty">{t("common.loading")}</div></div>;
   if (authed === false) {

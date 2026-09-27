@@ -1491,6 +1491,17 @@ CREATE INDEX browser_audit_by_at ON browser_audit(at);
 """)
 
 
+# A dialog can be opened from outside the app the way a service can: not at all, by anyone who
+# has the link, or by whoever also has its key. The slug is random. It stays when sharing is
+# turned off, so the same link works again, and it is the only secret of a public share.
+MIGRATIONS.append("""
+ALTER TABLE sessions ADD COLUMN share_mode TEXT NOT NULL DEFAULT 'local';
+ALTER TABLE sessions ADD COLUMN share_slug TEXT;
+ALTER TABLE sessions ADD COLUMN share_key TEXT;
+CREATE UNIQUE INDEX sessions_share_slug ON sessions(share_slug);
+""")
+
+
 CACHE_PAGES = -65536
 """Page cache, as negative kibibytes: 64 MiB. The default is two megabytes, which a session
 open walks straight through."""

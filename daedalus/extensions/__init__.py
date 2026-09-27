@@ -37,6 +37,7 @@ EXTENSIONS = (
     "daedalus.extensions.dispatcher_projects",
     "daedalus.extensions.loops",
     "daedalus.extensions.services",
+    "daedalus.extensions.dialog_share",
     "daedalus.extensions.balance",
     "daedalus.extensions.voice",
     "daedalus.extensions.terminals",

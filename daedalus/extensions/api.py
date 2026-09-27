@@ -26,12 +26,19 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
-from urllib.parse import parse_qsl, urlencode
+from urllib.parse import parse_qsl, quote, urlencode
 
 import httpx
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from protocore.contracts.memory import MemoryScope
 from protocore.contracts.types import ToolResultBlock, ToolUseBlock
@@ -1198,6 +1205,16 @@ def build_app(app: Application, api_token: str) -> FastAPI:
     # still leaves the process the moment it arrives.
     api.add_middleware(GZipMiddleware, minimum_size=GZIP_MIN_BYTES)
 
+    @api.middleware("http")
+    async def shared_dialog_pages_stay_out_of_indexes(request: Request, call_next: Any) -> Any:
+        # The address bar ends on /app/c/<slug>, which is the app shell. The shell is a static file,
+        # so the noindex has to be added on the way out; the dialog itself is fetched separately.
+        response = await call_next(request)
+        if request.url.path.startswith("/app/c/"):
+            response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @api.exception_handler(TerminalError)
     async def terminal_refusal(_: Request, exc: TerminalError) -> JSONResponse:
         # ``detail`` stays the sentence the app already shows for any refusal; ``code`` and the
@@ -2042,6 +2059,7 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             "leader_title": leader.session.title if leader is not None else None,
             "subagents": subagents,
             "telegram_linked": bool(app.front is not None and await app.front.binding_for_session(session_id)),
+            "share": await app.extensions["dialogs"].for_session(session_id) if "dialogs" in app.extensions else {"mode": "local", "slug": None, "key": None, "url": None, "public_base": ""},
             "verifications": dict(await app.db.fetchone("SELECT count(*) total, sum(passed) passed FROM verifications WHERE session_id = ?", (session_id,)) or {}),
             "messages": messages,
             "first_seq": first_seq,
@@ -3651,6 +3669,109 @@ def build_app(app: Application, api_token: str) -> FastAPI:
             return await services.share(session_id, name, body.mode, rotate_key=body.rotate_key)  # type: ignore[attr-defined]
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+
+    @api.post("/api/sessions/{session_id}/share")
+    async def session_dialog_share(session_id: str, body: ShareBody, _: dict[str, Any] = Depends(auth)) -> dict[str, Any]:
+        """local: only in the app · public: anyone with the link · key: whoever opens the link that carries the key."""
+        dialogs = app.extensions.get("dialogs")
+        if dialogs is None:
+            raise HTTPException(503, "sharing is not installed")
+        try:
+            return await dialogs.share(session_id, body.mode, rotate_key=body.rotate_key)  # type: ignore[attr-defined]
+        except KeyError as exc:
+            raise HTTPException(404, "no such session") from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    # -- a shared dialog: /c/<slug> is the page, and the messages are read with no login ---------
+    # The same address the services use. No auth dependency: public mode is open to anyone, key mode
+    # to whoever presents the key (once in the query, then in a cookie scoped to the slug).
+
+    noindex = {"X-Robots-Tag": "noindex, nofollow, noarchive", "Cache-Control": "no-store"}
+
+    def _share_refusal(request: Request, status: int) -> HTMLResponse:
+        russian = (request.headers.get("accept-language") or "").lower().startswith("ru")
+        if status == 403:
+            text = "Для этой ссылки нужен ключ." if russian else "This link needs its key."
+        else:
+            text = "Этот диалог не открыт." if russian else "This dialog is not shared."
+        title = "Общий диалог" if russian else "Shared dialog"
+        lang = "ru" if russian else "en"
+        body = (
+            f"<!DOCTYPE html><html lang=\"{lang}\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            f"<meta name=\"robots\" content=\"noindex\"><title>{title}</title></head>"
+            "<body style=\"margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0b0d;color:#ececee;"
+            f"font:15px/1.5 sans-serif;padding:24px;text-align:center\"><p>{text}</p></body></html>"
+        )
+        return HTMLResponse(body, status_code=status, headers=noindex)
+
+    async def _shared_dialog(slug: str, request: Request) -> tuple[dict[str, Any], str | None]:
+        """The share row, and a key from the query that still has to be moved into a cookie."""
+        dialogs = app.extensions.get("dialogs")
+        row = await dialogs.by_slug(slug) if dialogs is not None else None  # type: ignore[attr-defined]
+        if row is None or (row.get("share_mode") or "local") not in ("public", "key"):
+            raise HTTPException(404, "nothing is shared here")
+        query_key = request.query_params.get("key")
+        if row["share_mode"] == "key" and query_key is not None:
+            if not dialogs.allows(row, query_key):  # type: ignore[attr-defined]
+                raise HTTPException(403, "wrong key")
+            return row, query_key
+        presented = request.cookies.get(SHARE_COOKIE_PREFIX + slug) or request.headers.get("x-share-key")
+        if not dialogs.allows(row, presented):  # type: ignore[attr-defined]
+            raise HTTPException(403, "this dialog needs its key: open the link that carries ?key=…")
+        return row, None
+
+    @api.get("/c/{slug}/robots.txt")
+    async def dialog_robots(slug: str) -> PlainTextResponse:
+        """Crawlers that reach a shared dialog anyway are told to leave."""
+        return PlainTextResponse("User-agent: *\nDisallow: /\n", headers={"X-Robots-Tag": "noindex, nofollow"})
+
+    @api.get("/c/{slug}/transcript")
+    async def dialog_transcript(slug: str, request: Request) -> JSONResponse:
+        dialogs = app.extensions.get("dialogs")
+        row, _key = await _shared_dialog(slug, request)
+        if dialogs is None:
+            raise HTTPException(404, "nothing is shared here")
+        try:
+            page = await dialogs.page(row["id"], slug)  # type: ignore[attr-defined]
+        except KeyError as exc:
+            raise HTTPException(404, "nothing is shared here") from exc
+        except RuntimeError as exc:
+            raise HTTPException(503, "sharing is not available") from exc
+        return JSONResponse(page, headers=noindex)
+
+    @api.get("/c/{slug}/media/{presentation_id}/{item_id}")
+    async def dialog_media(slug: str, presentation_id: str, item_id: str, request: Request) -> Response:
+        dialogs = app.extensions.get("dialogs")
+        row, _key = await _shared_dialog(slug, request)
+        found = await dialogs.media(row["id"], presentation_id, item_id) if dialogs is not None else None  # type: ignore[attr-defined]
+        if found is None:
+            raise HTTPException(404, "no such media")
+        mime, location = found
+        if location.startswith(("https://", "http://")):
+            return RedirectResponse(location, status_code=302, headers=noindex)
+        return FileResponse(location, media_type=mime, content_disposition_type="inline", headers={**noindex, "X-Content-Type-Options": "nosniff"})
+
+    @api.get("/c/{slug}")
+    async def dialog_page(slug: str, request: Request) -> Response:
+        try:
+            _row, key = await _shared_dialog(slug, request)
+        except HTTPException as exc:
+            return _share_refusal(request, exc.status_code if exc.status_code in (403, 404) else 404)
+        response = RedirectResponse("/app/c/" + quote(slug, safe=""), status_code=303, headers=noindex)
+        if key:
+            # The key leaves the address after the first open, so a link copied from the page does not carry it.
+            response.set_cookie(
+                SHARE_COOKIE_PREFIX + slug,
+                key,
+                httponly=True,
+                samesite="lax",
+                path=f"/c/{slug}",
+                max_age=30 * 86400,
+                secure=request.url.scheme == "https",
+            )
+        return response
 
     # -- shared services: the site proxies /s/<slug>/… to the service's port --------------
     # The reverse proxy in front of the API already makes the site public; a shared service rides on the

@@ -38,6 +38,7 @@ import { StaffHeader, StaffMessages, useMember } from "../project/staff";
 import { BriefPage, FoldersPage, WakeupsPage } from "../project/pages";
 import { ProjectBoard } from "../board/ProjectBoard";
 import { useMain } from "../main/data";
+import { ShareSheet } from "../share";
 import { deviceSaving, useBrowsers } from "../browser/data";
 import { BrowserTab } from "../browser/BrowserPanel";
 import { BrowserPip } from "../browser/pip";
@@ -100,6 +101,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
   if (!liveRef.current) liveRef.current = createLiveStore();
   const live = liveRef.current;
   const [moving, setMoving] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const composer = useRef<ComposerHandle>(null);
   // The right panel: the route carries the open tab and the previewed file for the pane the URL
   // names; the second pane of a dual view keeps its panel to itself. Phones host it in a sheet.
@@ -1061,6 +1063,11 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
         ) : null}
         {offline && <span className="head-status offline">{t("session.reconnecting")}</span>}
         <div className="head-actions">
+          {detail?.share && detail.share.mode !== "local" && (
+            <button type="button" className={`chip ${detail.share.mode === "public" ? "bad" : "attn"}`} onClick={() => setSharing(true)}>
+              {t(detail.share.mode === "public" ? "session.share.chip.public" : "session.share.chip.key")}
+            </button>
+          )}
           {detail && ((detail.subagents?.length ?? 0) > 0 || detail.subagent_of) && (
             <SubagentsMenu detail={detail} onOpen={onOpen} />
           )}
@@ -1094,6 +1101,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
                 : []),
               ...(onSplit ? [{ label: t("session.split"), icon: "split" as IconName, onSelect: onSplit }] : []),
               "-",
+              { label: t("session.share"), icon: "share", onSelect: () => setSharing(true) },
               { label: t("session.export"), icon: "download", onSelect: exportMarkdown },
               { label: t("session.compact"), icon: "compact", onSelect: compact, disabled: busy },
               ...(detail?.telegram_linked ? [{ label: t("session.telegram.detach"), icon: "unlink" as IconName, onSelect: detachTelegram }] : []),
@@ -1262,6 +1270,8 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
       )}
 
       {moving && detail && <MoveSessionSheet sessionId={id} current={detail.project.id} currentOwn={!!detail.workspace_own} onClose={() => setMoving(false)} onMoved={() => load(true)} toast={toast} />}
+
+      {sharing && <ShareSheet sessionId={id} share={detail?.share} onClose={() => setSharing(false)} onChanged={(share) => setDetail((current) => (current ? { ...current, share } : current))} toast={toast} />}
 
       {preview && <FilePreview src={preview} onClose={() => setPreview(null)} />}
 
