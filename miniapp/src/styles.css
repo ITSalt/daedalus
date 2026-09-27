@@ -964,6 +964,25 @@ input.field, select.field, textarea.field {
 .toolrow input { width: 18px; height: 18px; margin: 0; accent-color: var(--info); }
 .toolrow .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* tool groups: the installation's modes in Settings → Tools, and one session's in its Details */
+.tgroup { padding: 10px 0; border-top: 1px solid var(--line); display: grid; gap: 4px; min-width: 0; }
+.tgroups .section-title + .sub { margin-bottom: 4px; }
+.tgroup-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.tgroup-name { font-size: var(--fs-14); }
+.tgroup-use { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tgroup-bar { flex: 0 0 96px; height: 4px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.tgroup-bar > span { display: block; height: 100%; background: var(--accent); }
+.tgroup-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.tgroup-load button { min-height: var(--ctl-h-sm); }
+.tgroup-default.changed { color: var(--warn); }
+.tgroup-note { margin-top: 8px; }
+.stgroups { display: grid; gap: 2px; }
+.stgroups > .sub { margin-bottom: 4px; }
+.stgroup .chip { flex: none; }
+.stgroup-name { text-align: left; color: var(--fg); }
+.stgroup-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.stgroup-body > .sub:first-child { flex-basis: 100%; }
+
 /* loops */
 .badge.loop { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); margin-left: 8px; vertical-align: 2px; white-space: nowrap; }
 .badge.loop.paused { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }

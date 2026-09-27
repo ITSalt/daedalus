@@ -48,6 +48,7 @@ from api_stub import (  # noqa: E402
     folders,
     fulfil_shared,
     notification_preferences,
+    session_tool_groups,
 )
 
 BASE = os.environ.get("APP_URL", DEFAULT_APP)
@@ -725,6 +726,8 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
             return respond(route, {"enabled": [], "servers": []})
         if tail == "tools":
             return respond(route, [])
+        if tail.startswith("tool-groups"):
+            return respond(route, session_tool_groups())
         return respond(route, {})
     if rel.startswith("/api/usage/provider/"):
         return respond(route, PROVIDER_USAGE)
@@ -935,6 +938,22 @@ def open_phone_panel(page: Page) -> None:
     page.wait_for_selector(".panel-sheet .panel-tab", timeout=5000)
     page.locator(".panel-sheet .panel-tab[data-tab='files']").click()
     page.wait_for_selector(".panel-sheet .filerow", timeout=5000)
+
+
+def open_tool_groups(page: Page) -> None:
+    """The session's Details on its tool groups: which the agent has loaded, which wait on demand."""
+    page.locator(".panel-tab[data-tab='details']").first.click()
+    page.wait_for_selector(".stgroups .stgroup", timeout=5000)
+    page.locator(".stgroups").first.scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
+
+
+def open_phone_tool_groups(page: Page) -> None:
+    page.get_by_role("button", name=word("actions"), exact=True).click()
+    page.get_by_role("menuitem", name=word("details"), exact=True).click()
+    page.wait_for_selector(".panel-sheet .stgroups .stgroup", timeout=5000)
+    page.locator(".panel-sheet .stgroups").first.scroll_into_view_if_needed()
+    page.wait_for_timeout(300)
 
 
 def open_share(page: Page) -> None:
@@ -1718,6 +1737,8 @@ def run() -> int:
         shot(page, "components", "settings/components", wait=".comp-grid .comp-card", settle=500)
         shot(page, "settings-notifications", "settings/notifications", wait=".nmatrix", settle=600)
         shot(page, "settings-terminals", "settings/terminals", wait=".loadbar-track", settle=600)
+        shot(page, "settings-tools", "settings/tools", wait=".tgroups .tgroup", settle=500)
+        shot(page, "session-tool-groups", f"agents/{S1}", wait=".chat-scroll .timeline", before=open_tool_groups, settle=300)
         # And the same install where the owner met its absence: under the two lines on the voice card
         # that say the browser is doing the listening and the speaking.
         stub.nospeech = True  # type: ignore[attr-defined]
@@ -1745,6 +1766,8 @@ def run() -> int:
         shot(page, "phone-more", "agents", before=open_more)
         shot(page, "phone-team", f"project/{P1}/team", wait=".phone-staff-row")
         shot(page, "phone-settings-notifications", "settings/notifications", wait=".nrows .nrow", before=open_first_kind, settle=500)
+        shot(page, "phone-settings-tools", "settings/tools", wait=".tgroups .tgroup", settle=500)
+        shot(page, "phone-session-tool-groups", f"agents/{S1}", wait=".chat-scroll .timeline", before=open_phone_tool_groups, settle=300)
         stub.fresh = True  # type: ignore[attr-defined]
         shot(page, "phone-add-model", "agents", wait=".addmodel", before=pick_a_model, settle=600)
         stub.fresh = False  # type: ignore[attr-defined]

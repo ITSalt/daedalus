@@ -11,6 +11,7 @@ import { clock, shortDateTime, untilShort } from "./format";
 import { Icon } from "./icons";
 import { confirmAsync, errorText, fmtTok } from "./ui";
 import { plural, t } from "./i18n";
+import { SessionToolGroups } from "./toolgroupsview";
 
 export type DetailsActions = {
   rename: (title: string) => void;
@@ -198,6 +199,10 @@ export function SessionDetails({ ids, id, detail, busy, modes, schedules, provid
 
       <Section ids={ids} id="mcp" label={t("session.mcp")}>
         <McpPanel sessionId={id} toast={toast} />
+      </Section>
+
+      <Section ids={ids} id="toolgroups" label={t("session.toolgroups")}>
+        <SessionToolGroups sessionId={id} toast={toast} />
       </Section>
 
       <Section ids={ids} id="tools" label={t("session.tools")}>

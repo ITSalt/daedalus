@@ -27,6 +27,7 @@ import { navigate, pathFor, projectHome, projectSessionPath, useRoute } from "..
 import { useMedia } from "../shell";
 import { Windowed } from "../virtual";
 import { DICT, plural, t } from "../i18n";
+import { groupDetail, groupName, searchedGroup } from "../toolgroups";
 import { usePresenceScope } from "../presence";
 import { endsTerminals, TerminalButton, TerminalDock, TerminalFull, TerminalSheet, useSessionTerminals, useTerminalDock } from "../terminal/dock";
 import { insideTerminal } from "../terminal/keys";
@@ -1824,6 +1825,17 @@ function describe(item: ToolItem, workspace?: string): { verb: string; family: s
       return { verb: t("tool.StaySilent"), family: "StaySilent", detail: str("note").slice(0, 60), icon: "dot" };
     case "HistorySearch":
       return { verb: verb("HistorySearch", r), family: "search", detail: str("query"), icon: "search" };
+    case "ToolSearch": {
+      // A search that loaded a group says which, and how many tools came with it; the query is what
+      // the model typed, and the group is what the reader wants to know it now has.
+      const loaded = item.groups?.length ? item.groups : null;
+      const asked = searchedGroup(a);
+      if (loaded || asked) {
+        const detail = loaded ? loaded.map((g) => groupDetail(g.group, g.tools)).join(", ") : groupName(asked);
+        return { verb: t(`tool.grouploaded.${r ? "on" : "off"}`), family: "ToolSearch", detail, icon: "wrench" };
+      }
+      return { verb: verb("ToolSearch", r), family: "ToolSearch", detail: str("query") || str("select"), icon: "search" };
+    }
     case "HistoryExpand":
       return { verb: t("tool.HistoryExpand"), family: "HistoryExpand", detail: t("tool.HistoryExpand.range", { from: str("from_seq"), to: str("to_seq") }), icon: "file" };
     default: {
@@ -1885,6 +1897,11 @@ function ActivityList({ items, compact, onRetry }: { items: Activity[]; compact:
       i = j;
       continue;
     }
+    if (it.kind === "group") {
+      out.push(<GroupLoadRow key={`g${i}`} group={it.group} tools={it.tools} />);
+      i++;
+      continue;
+    }
     // The orchestrator's own steps are one row each, named in the project's words: "Task created ·
     // Photos" twice says more than "Called Tasks 2 times".
     if (steps && stepDescription(it)) {
@@ -1902,6 +1919,19 @@ function ActivityList({ items, compact, onRetry }: { items: Activity[]; compact:
     i = j;
   }
   return <>{out}</>;
+}
+
+/** "Loaded tool group: Browser (12 tools)" — a group the run loaded by calling one of its tools by name. */
+function GroupLoadRow({ group, tools }: { group: string; tools: number }) {
+  return (
+    <div className="act-wrap">
+      <div className="act grouploaded">
+        <Icon name="wrench" size={16} />
+        <span className="verb">{t("tool.grouploaded.off")}</span>
+        <span className="detail">{groupDetail(group, tools)}</span>
+      </div>
+    </div>
+  );
 }
 
 function ToolGroup({ family, group }: { family: string; group: ToolItem[] }) {

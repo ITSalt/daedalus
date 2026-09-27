@@ -27,6 +27,7 @@ import { Capabilities, componentsNeedAttention } from "../capabilities";
 import { NotificationSettings } from "./NotificationSettings";
 import { TerminalCap } from "./TerminalCap";
 import { BrowserSettingsTab } from "./BrowserSettings";
+import { ToolGroupsSettings } from "../toolgroupsview";
 
 const DEFAULT_KINDS = ["deepseek", "openrouter", "opencode", "vllm", "llamacpp", "openai_compat"];
 /** Self-hosted endpoints: temperature is a sampling pin, not a vendor default. */
@@ -565,11 +566,12 @@ function SearchBlock({ s, save }: { s: Settings; save: (patch: any) => Promise<v
   );
 }
 
-function ToolsTab({ s, save }: { s: Settings; save: (patch: any) => Promise<void> }) {
+function ToolsTab({ s, save, toast }: { s: Settings; save: (patch: any) => Promise<void>; toast: (t: string) => void }) {
   const web = s.tools.web;
   const asr = s.asr;
   return (
     <>
+      <ToolGroupsSettings toast={toast} />
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>{t("settings.asr.title")}</div>
         <div className="sub">{t("settings.asr.sub")}</div>
@@ -1245,7 +1247,7 @@ export function SettingsScreen({ toast, section }: { toast: (t: string) => void;
       case "browser":
         return <BrowserSettingsTab s={s} save={save} toast={toast} />;
       case "tools":
-        return <ToolsTab s={s} save={save} />;
+        return <ToolsTab s={s} save={save} toast={toast} />;
       case "voice":
         return (
           <>

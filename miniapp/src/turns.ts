@@ -8,21 +8,25 @@
 
 import type { MediaPresentation, MessageView, ModelFallback, RunOutcome } from "./api";
 
-export type LiveTool = { id: string; name: string; args: string; result?: string; error?: boolean; startedAt?: number; endedAt?: number };
+/** A group of tools a run loaded, as `tool_group_loaded` said: which, how many, and how. */
+export type GroupLoad = { group: string; tools: number; via: string };
+export type LiveTool = { id: string; name: string; args: string; result?: string; error?: boolean; startedAt?: number; endedAt?: number; groups?: GroupLoad[] };
 /**
  * `ended` is the model's own full stop: the last `message_stop` of the run said `end_turn`, so the
  * answer on the screen is the whole answer. The text stays until the written copy takes its place,
  * but nothing about the turn is live any more — no cursor under it, no dots over it — however long
  * the session takes to report itself idle afterwards.
  */
-export type LiveState = { runId?: string; text: string; thinking: string; tools: LiveTool[]; startedAt: number | null; lastActivityAt: number | null; ended: boolean; model: string; fallback: ModelFallback | null };
+export type LiveState = { runId?: string; text: string; thinking: string; tools: LiveTool[]; startedAt: number | null; lastActivityAt: number | null; ended: boolean; model: string; fallback: ModelFallback | null; groups?: GroupLoad[] };
 export const EMPTY_LIVE: LiveState = { text: "", thinking: "", tools: [], startedAt: null, lastActivityAt: null, ended: false, model: "", fallback: null };
 
-export type ToolItem = { kind: "tool"; id: string; name: string; args: Record<string, unknown>; result?: string; error?: boolean; running: boolean; length?: number; clipped?: boolean; /** How long the step took, when both ends of it are known. */ ms?: number };
+export type ToolItem = { kind: "tool"; id: string; name: string; args: Record<string, unknown>; result?: string; error?: boolean; running: boolean; length?: number; clipped?: boolean; /** How long the step took, when both ends of it are known. */ ms?: number; /** The groups a ToolSearch call loaded, while the run that made it streams. */ groups?: GroupLoad[] };
 export type NoteItem = { kind: "note"; text: string; seq?: number };
 export type ThinkItem = { kind: "thinking"; text: string };
 export type SummaryItem = { kind: "summary"; text: string; reason: string };
-export type Activity = ToolItem | NoteItem | ThinkItem | SummaryItem;
+/** A group the run loaded without a search of its own to show for it: a held-back tool called by name. */
+export type GroupItem = { kind: "group"; group: string; tools: number };
+export type Activity = ToolItem | NoteItem | ThinkItem | SummaryItem | GroupItem;
 
 export type Turn = {
   runId?: string;
@@ -219,7 +223,7 @@ export function applyLive(base: Turn | null, live: LiveState, now: number): Turn
       t.pendingTools--;
       // The stream carries the whole result, so what came over it is never cut short.
       const ms = lt.startedAt && lt.endedAt ? lt.endedAt - lt.startedAt : a.ms;
-      return { ...a, result: lt.result, error: lt.error, running: false, length: lt.result.length, clipped: false, ms };
+      return { ...a, result: lt.result, error: lt.error, running: false, length: lt.result.length, clipped: false, ms, groups: lt.groups };
     });
   }
   const fresh = live.tools.filter((lt) => !t.toolIds.includes(lt.id));
@@ -234,8 +238,13 @@ export function applyLive(base: Turn | null, live: LiveState, now: number): Turn
   for (const lt of fresh) {
     const running = lt.result === undefined;
     if (running) t.pendingTools++;
-    t.activity.push({ kind: "tool", id: lt.id, name: lt.name, args: parseArgs(lt.args), result: lt.result, error: lt.error, running, length: lt.result?.length, clipped: false, ms: lt.startedAt && lt.endedAt ? lt.endedAt - lt.startedAt : undefined });
+    t.activity.push({ kind: "tool", id: lt.id, name: lt.name, args: parseArgs(lt.args), result: lt.result, error: lt.error, running, length: lt.result?.length, clipped: false, ms: lt.startedAt && lt.endedAt ? lt.endedAt - lt.startedAt : undefined, groups: lt.groups });
   }
+  // A search's loads are on its own step; the rest — a held-back tool called by its name — get a line.
+  // The run's seed is not announced here: carried groups would repeat the line at every message.
+  const annotated = new Map(live.tools.filter((lt) => lt.groups?.length).map((lt) => [lt.id, lt.groups]));
+  if (annotated.size) t.activity = t.activity.map((a) => (a.kind === "tool" && !a.groups && annotated.has(a.id) ? { ...a, groups: annotated.get(a.id) } : a));
+  for (const g of live.groups ?? []) t.activity.push({ kind: "group", group: g.group, tools: g.tools });
   if (live.text) t.answer = stripHeadline(live.text);
   if (live.model) {
     t.model = live.model;
@@ -506,6 +515,16 @@ export function liveAfter(state: LiveState, event: string, p: Record<string, any
   }
   if (event === "tool_use_start") return { ...state, tools: [...state.tools, { id: p.tool_call_id, name: p.tool_name, args: "", startedAt: meaningful }], lastActivityAt: meaningful };
   if (event === "tool_use_stop") return { ...state, tools: state.tools.map((t) => (t.id === p.tool_call_id ? { ...t, args: JSON.stringify(p.final_input ?? {}) } : t)), lastActivityAt: meaningful };
+  if (event === "tool_group_loaded") {
+    const load: GroupLoad = { group: String(p.group ?? ""), tools: Array.isArray(p.tools) ? p.tools.length : 0, via: String(p.via ?? "") };
+    if (!load.group || load.via === "seed") return state;
+    if (load.via === "direct_call") return { ...state, groups: [...(state.groups ?? []), load], lastActivityAt: meaningful };
+    // Loaded by a ToolSearch call: the event follows that call's result, so it is the newest search.
+    const at = state.tools.map((t) => t.name).lastIndexOf("ToolSearch");
+    if (at < 0) return { ...state, groups: [...(state.groups ?? []), load], lastActivityAt: meaningful };
+    const tools = state.tools.map((t, i) => (i === at ? { ...t, groups: [...(t.groups ?? []).filter((g) => g.group !== load.group), load] } : t));
+    return { ...state, tools, lastActivityAt: meaningful };
+  }
   if (event === "tool_result") return { ...state, tools: state.tools.map((t) => (t.id === p.tool_call_id ? { ...t, result: String(p.content ?? p.output ?? ""), error: !!p.is_error, endedAt: meaningful } : t)), lastActivityAt: meaningful };
   // A message that ended to make a tool call is not the end of the turn: the run goes on.
   if (event === "message_stop" && (p.stop_reason === "end_turn" || p.stop_reason === "max_tokens")) return { ...state, ended: true, lastActivityAt: meaningful };

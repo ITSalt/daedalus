@@ -557,6 +557,34 @@ export type ProviderUsage = {
 
 export type ToolInfo = { name: string; description: string; group: string };
 
+/** How a group of host tools reaches a run: always in the tool list, while it fits, or loaded on demand. */
+export type ToolGroupLoad = "eager" | "auto" | "lazy";
+
+/** One host tool group for Settings → Tools: `load` is the installation's current mode, `default` the shipped one. */
+export type ToolGroupInfo = {
+  name: string;
+  description: string;
+  tools: string[];
+  tokens: number;
+  default: ToolGroupLoad;
+  load: ToolGroupLoad;
+  usage: { sessions: number; runs: number; calls: number };
+};
+
+/** `GET /api/tool-groups`: the groups and the month of use their share is measured against. */
+export type ToolGroupCatalogue = { days: number; sessions: number; runs: number; groups: ToolGroupInfo[] };
+
+/** A group as one session has it. `pending`: loaded at the session's next run. */
+export type SessionToolGroup = {
+  name: string;
+  description: string;
+  tools: number;
+  load: ToolGroupLoad;
+  source: "default" | "settings" | "session";
+  state: "off" | "loaded" | "deferred" | "advertised";
+  pending: boolean;
+};
+
 export type SubagentView = { session_id: string; name: string | null; running: boolean; status: string; model: string; kept?: boolean };
 
 /** A model answering in place of the configured one: what it replaced, what took over, and why. */

@@ -105,7 +105,46 @@ def browser_load(*, running: int = 1, cap: int = 2, total: int = 62 * GIB, avail
     }
 
 
+def _group(name: str, description: str, tools: list[str], tokens: int, default: str, sessions: int, runs: int, calls: int, load: str | None = None) -> dict[str, object]:
+    return {"name": name, "description": description, "tools": tools, "tokens": tokens, "default": default, "load": load or default, "usage": {"sessions": sessions, "runs": runs, "calls": calls}}
+
+
+TOOL_GROUP_CATALOGUE: dict[str, object] = {
+    "days": 30,
+    "sessions": 151,
+    "runs": 894,
+    "groups": [
+        _group("agents", "Hand work to other agents", ["AskPeer", "PeerList", "SpawnAgent", "SubAgent", "SubAgentList", "SubAgentSend"], 1480, "auto", 8, 31, 243),
+        _group("board", "The session's task board", ["BoardAdd", "BoardGet", "BoardList", "BoardUpdate"], 910, "auto", 20, 64, 394),
+        _group("browser", "Drive a real browser", [f"Browser{n}" for n in ("Act", "Close", "Dialog", "Download", "Handoff", "Look", "Navigate", "Open", "Snapshot", "Tabs", "Text", "Wait")], 1690, "lazy", 2, 3, 9),
+        _group("docs", "The documentation of this version", ["DocsRead", "DocsSearch"], 160, "lazy", 1, 1, 2),
+        _group("learning", "Look back on your own work", ["LearningReport", "SkillDraft"], 330, "lazy", 2, 2, 3),
+        _group("loop", "The standing task of a loop agent", ["LoopNext", "LoopPause", "LoopResume", "LoopStatus", "LoopStop"], 520, "lazy", 2, 2, 2),
+        _group("mcp", "MCP servers for this session", ["McpDisable", "McpEnable", "McpList"], 420, "auto", 16, 18, 30),
+        _group("mcp_oauth", "Sign in to an MCP server", ["McpOAuthBegin", "McpOAuthDisconnect", "McpOAuthFinish", "McpOAuthStatus"], 390, "lazy", 0, 0, 0),
+        _group("scheduling", "Work that runs later or on an event", ["IntentCreate", "IntentDelete", "IntentList", "ScheduleCreate", "ScheduleDelete", "ScheduleList"], 1260, "lazy", 3, 10, 42, load="eager"),
+        _group("self_development", "Change your own code", ["SelfApply", "SelfPropose", "SelfRebuild", "SelfRollback", "SelfWorkspace"], 900, "lazy", 3, 27, 53),
+        _group("services", "Processes that outlive the turn", ["ServiceList", "ServiceLogs", "ServiceStart", "ServiceStop"], 700, "auto", 17, 40, 136),
+    ],
+}
+"""``GET /api/tool-groups``: every host group, shaped like one month of a real installation's use."""
+
+
+def session_tool_groups() -> dict[str, object]:
+    """``GET /api/sessions/<id>/tool-groups`` for a session that loaded the browser and holds the rare groups back."""
+    states = {"browser": "loaded", "board": "advertised", "agents": "advertised", "services": "advertised", "mcp": "advertised", "scheduling": "advertised", "mcp_oauth": "off"}
+    groups = TOOL_GROUP_CATALOGUE["groups"]
+    assert isinstance(groups, list)
+    return {"groups": [
+        {"name": g["name"], "description": g["description"], "tools": len(g["tools"]), "load": g["load"], "source": "session" if g["name"] == "board" else "default",
+         "state": states.get(g["name"], "deferred"), "pending": False}
+        for g in groups
+    ]}
+
+
 GATES: dict[str, object] = {
+    # Settings → Tools opens on the tool groups.
+    "/api/tool-groups": TOOL_GROUP_CATALOGUE,
     "/api/maintenance": {"notice": None},
     "/api/conversation-search/settings": {"mode": "off", "paused": False, "reason": "off", "busy": False, "indexed": 0, "pending": 0, "label": "Multilingual E5 Small", "size_bytes": 135429554, "licence": "MIT", "installed": False},
     # Drawn before any screen: no model means the whole app is the "Add a model" flow.
@@ -228,6 +267,12 @@ def answer_shared(method: str, path: str) -> tuple[int, str, str] | None:
         return 404, "application/json", json.dumps({"detail": "no such notification"})
     if path in GATES:
         return 200, "application/json", json.dumps(GATES[path])
+    parts = path.split("/")
+    if len(parts) >= 5 and parts[2] == "sessions" and parts[4] == "tool-groups":
+        # Every session's Details lists its tool groups; a change or a "Load now" answers the same list.
+        return 200, "application/json", json.dumps(session_tool_groups())
+    if method.upper() == "PUT" and len(parts) == 4 and parts[2] == "tool-groups":
+        return 200, "application/json", json.dumps(TOOL_GROUP_CATALOGUE)
     if method.upper() == "GET" and path == "/api/files":
         # Handles a harness did not invent name no file: the chat draws no card for them.
         return 200, "application/json", json.dumps({"files": []})
@@ -314,7 +359,7 @@ def expect_app(base: str) -> None:
 
 
 
-__all__ = ["CAPABILITIES", "CATALOG", "HarnessesStub", "answer_batch", "question_view", "DEFAULT_APP", "DEFAULT_PORT", "ENVIRONMENTS", "EVENTS", "FOCUS_WORDS", "GATES", "NOTIFICATION_CATEGORIES", "BoardStub", "FocusStub", "TeamStub", "Unhandled", "answer_shared", "event_stream_hello", "expect_app", "folder", "folders", "fulfil_shared", "notification_preferences", "serve_shared_post", "terminal_load"]
+__all__ = ["CAPABILITIES", "CATALOG", "HarnessesStub", "answer_batch", "question_view", "DEFAULT_APP", "DEFAULT_PORT", "ENVIRONMENTS", "EVENTS", "FOCUS_WORDS", "GATES", "NOTIFICATION_CATEGORIES", "TOOL_GROUP_CATALOGUE", "BoardStub", "FocusStub", "TeamStub", "Unhandled", "answer_shared", "event_stream_hello", "expect_app", "folder", "folders", "fulfil_shared", "notification_preferences", "serve_shared_post", "session_tool_groups", "terminal_load"]
 
 # What the harness manager reports for the container: Claude Code installed and signed in, Codex
 # installed but signed out, the rest absent. Enough for the hiring form to show one command-line agent
