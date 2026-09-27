@@ -28,6 +28,7 @@ import { NotificationSettings } from "./NotificationSettings";
 import { TerminalCap } from "./TerminalCap";
 import { BrowserSettingsTab } from "./BrowserSettings";
 import { ToolGroupsSettings } from "../toolgroupsview";
+import { CompactionModelSelect } from "../compactionmodel";
 
 const DEFAULT_KINDS = ["deepseek", "openrouter", "opencode", "vllm", "llamacpp", "openai_compat"];
 /** Self-hosted endpoints: temperature is a sampling pin, not a vendor default. */
@@ -1246,6 +1247,8 @@ export function SettingsScreen({ toast, section }: { toast: (t: string) => void;
               <NumField label={t("settings.compaction.keep")} value={s.compaction?.keep_recent_messages ?? 6} min={0} onSave={(v) => save({ compaction: { ...s.compaction, keep_recent_messages: v } })} />
               <NumField label={t("settings.compaction.words")} value={s.compaction?.max_words ?? 1200} min={200} step={100} onSave={(v) => save({ compaction: { ...s.compaction, max_words: v } })} />
               <NumField label={t("settings.compaction.core")} value={s.compaction?.core_trigger_ratio ?? 0.85} min={0.1} step={0.05} onSave={(v) => save({ compaction: { ...s.compaction, core_trigger_ratio: v } })} hint={t("settings.compaction.core.hint")} />
+              <CompactionModelSelect presets={s.presets} value={s.compaction?.preset ?? ""} onSave={(preset) => save({ compaction: { ...s.compaction, preset } })} />
+              <NumField label={t("settings.compaction.timeout")} value={s.compaction?.call_timeout_seconds ?? 90} min={10} step={10} onSave={(v) => save({ compaction: { ...s.compaction, call_timeout_seconds: v } })} hint={t("settings.compaction.timeout.hint")} />
             </div>
             <label className="field">{t("settings.balance.thresholds")}</label>
             <input className="field" defaultValue={s.balance.thresholds_usd.join(", ")} onBlur={(e) => save({ balance: { ...s.balance, thresholds_usd: e.target.value.split(",").map(Number).filter((n) => !Number.isNaN(n)) } })} />

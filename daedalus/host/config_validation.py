@@ -78,6 +78,23 @@ def _group(path: str) -> Literal["provider", "mcp", "runtime"]:
     return "runtime"
 
 
+UNKNOWN_REFERENCE_PATHS = frozenset({"compaction.preset"})
+"""Problems on these paths name something that does not exist, not a malformed value; the save answers 422."""
+
+
+def _dangling_references(current: RuntimeConfig, candidate: RuntimeConfig) -> list[ConfigProblem]:
+    """A newly chosen preset id that names no configured preset.
+
+    Only a change is refused. A preset chosen earlier and deleted since stays in the configuration on
+    purpose — the runtime summarises with the session's own model until it is replaced, and the app
+    shows it as missing — so every unrelated save that carries the section along must still pass.
+    """
+    chosen = candidate.compaction.preset
+    if not chosen or chosen == current.compaction.preset or chosen in candidate.presets:
+        return []
+    return [ConfigProblem(group="runtime", path="compaction.preset", message=f"no such model preset {chosen!r} for the summary model; pick one from Settings → Models")]
+
+
 def validate_candidate(current: RuntimeConfig, raw: dict[str, Any], *, base_revision: str) -> tuple[ConfigValidation, RuntimeConfig | None]:
     current_revision = config_revision(current)
     if base_revision != current_revision:
@@ -90,6 +107,9 @@ def validate_candidate(current: RuntimeConfig, raw: dict[str, Any], *, base_revi
             path = ".".join(str(part) for part in error["loc"])
             problems.append(ConfigProblem(group=_group(path), path=path, message=str(error["msg"])[:500]))
         return ConfigValidation(base_revision=current_revision, valid=False, problems=problems), None
+    dangling = _dangling_references(current, candidate)
+    if dangling:
+        return ConfigValidation(base_revision=current_revision, valid=False, problems=dangling), None
     before = _flatten(current.model_dump(mode="json"))
     after = _flatten(candidate.model_dump(mode="json"))
     changes = [EffectiveConfigChange(path=path, apply_at=_apply_at(path)) for path in sorted(set(before) | set(after)) if before.get(path) != after.get(path)]
@@ -102,4 +122,4 @@ def validate_candidate(current: RuntimeConfig, raw: dict[str, Any], *, base_revi
     ), candidate
 
 
-__all__ = ["ConfigConflict", "ConfigProblem", "ConfigValidation", "EffectiveConfigChange", "config_revision", "validate_candidate"]
+__all__ = ["UNKNOWN_REFERENCE_PATHS", "ConfigConflict", "ConfigProblem", "ConfigValidation", "EffectiveConfigChange", "config_revision", "validate_candidate"]

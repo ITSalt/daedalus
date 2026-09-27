@@ -74,7 +74,7 @@ from daedalus.extensions.voice import model_options, tts_configured
 from daedalus.harness.capabilities import CAPABILITIES
 from daedalus.host import capabilities, component_install, launcher_bridge
 from daedalus.host import components as component_list
-from daedalus.host.config_validation import ConfigConflict, config_revision, validate_candidate
+from daedalus.host.config_validation import UNKNOWN_REFERENCE_PATHS, ConfigConflict, config_revision, validate_candidate
 from daedalus.host.dependencies import DependencyPlanner
 from daedalus.host.events import EventFilter, event_stream, streamed_types
 from daedalus.host.policy import sealed_root
@@ -5489,7 +5489,11 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         if report.stale:
             raise HTTPException(409, {"message": "settings changed in another window", "current_revision": report.base_revision})
         if not report.valid or new_config is None:
-            raise HTTPException(400, {"problems": [problem.model_dump(mode="json") for problem in report.problems]})
+            problems = [problem.model_dump(mode="json") for problem in report.problems]
+            if report.problems and all(problem.path in UNKNOWN_REFERENCE_PATHS for problem in report.problems):
+                # A well-formed id that names nothing: 422 with the message as the detail, so the app shows it as it is.
+                raise HTTPException(422, "; ".join(problem.message for problem in report.problems))
+            raise HTTPException(400, {"problems": problems})
         switching_to_topics = app.front is not None and app.front.private_mode() and new_config.telegram.session_mode() == "topics"
         try:
             await app.save_config(new_config, expected_revision=body.base_revision)

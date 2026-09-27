@@ -2043,6 +2043,19 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "settings.compaction.words": { en: "Summary budget (words)", ru: "Объём выжимки (слов)" },
   "settings.compaction.core": { en: "Core mid-run trigger (share)", ru: "Порог ядра внутри запуска (доля)" },
   "settings.compaction.core.hint": { en: "the core's own incremental compaction inside a long run", ru: "постепенное сжатие самого ядра внутри длинного запуска" },
+  "settings.compaction.model": { en: "Summary model", ru: "Модель для выжимки" },
+  "settings.compaction.model.own": { en: "The session's own model", ru: "Модель самой сессии" },
+  "settings.compaction.model.missing": { en: "{id} · missing", ru: "{id} · нет такой" },
+  "settings.compaction.model.missing.hint": {
+    en: "That preset no longer exists; compaction uses the session's own model until another is picked.",
+    ru: "Такой модели больше нет; сжатие идёт на модели сессии, пока не выбрана другая.",
+  },
+  "settings.compaction.model.hint": {
+    en: "A fast model without reasoning (a flash model, say) makes compaction take seconds instead of minutes.",
+    ru: "Быстрая модель без рассуждений (например, flash) сжимает за секунды, а не за минуты.",
+  },
+  "settings.compaction.timeout": { en: "Summary call timeout (seconds)", ru: "Таймаут вызова выжимки (секунды)" },
+  "settings.compaction.timeout.hint": { en: "a call that runs out is retried once with twice the time", ru: "не успевший вызов повторяется один раз с удвоенным временем" },
   "settings.balance.thresholds": { en: "Balance alert thresholds (USD, comma-separated)", ru: "Пороги предупреждений о балансе (USD, через запятую)" },
   "settings.balance.poll": { en: "Balance poll interval (seconds)", ru: "Как часто проверять баланс (секунды)" },
 

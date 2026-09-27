@@ -422,7 +422,7 @@ SETTINGS = {
     "limits": {"max_iterations": 200, "tool_timeout_seconds": 900, "usd_per_run": 5, "usd_total": 0, "usd_total_per_provider": {}, "total_since": ""},
     "balance": {"enabled": True, "poll_seconds": 60, "thresholds_usd": [5, 2, 0.5]},
     "scheduler": {"topic_mode": "per_task", "catch_up_missed": True},
-    "compaction": {"auto_ratio": 0.7, "keep_recent_messages": 6, "max_words": 900, "chunk_tokens": 30000, "min_messages": 12, "core_trigger_ratio": 0.85},
+    "compaction": {"auto_ratio": 0.7, "keep_recent_messages": 6, "max_words": 900, "chunk_tokens": 30000, "min_messages": 12, "call_timeout_seconds": 90, "core_trigger_ratio": 0.85, "preset": ""},
     "telegram": {"verbosity": 1, "reactions": True, "topic_status_emoji": True, "stale_after_seconds": 600, "max_inbound_file_mb": 200, "forward_unknown_commands": True, "slow_tool_seconds": 30},
     "terminals": {"running_cap": 20},
 }
@@ -760,6 +760,9 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
         return respond(route, PROJECTS)
     if rel == "/api/settings":
         return respond(route, SETTINGS)
+    if rel == "/api/limits/spend":
+        # Settings → Limits reads it for the spend beside each cap; without it the whole section fails to draw.
+        return respond(route, {"since": "", "total": {"spent_usd": 3.42, "unmetered": 0, "cap_usd": 0}, "per_provider": {}})
     if rel == "/api/onboarding":
         return respond(route, FRESH if getattr(stub, "fresh", False) else ONBOARDING)
     if rel == "/api/modes":

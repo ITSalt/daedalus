@@ -96,3 +96,33 @@ async def test_failed_manager_reload_restores_the_last_working_file(tmp_path) ->
     assert RuntimeConfig.load(settings.config_path) == old
     with pytest.raises(ConfigConflict):
         await application.save_config(candidate, expected_revision="stale")
+
+
+def test_the_summary_model_names_a_configured_preset_or_is_refused(tmp_path) -> None:
+    # The summariser's preset is chosen in Settings. An id that names no preset is refused with 422
+    # and a message the app shows as it is; a preset deleted after it was chosen is kept (the runtime
+    # falls back to the session's own model), so a later save of another field still passes.
+    app = FakeApp(tmp_path, native=True)
+    raw = app.config.model_dump(mode="json")
+    raw["presets"] = {"flash": {"provider": "deepseek", "model": "deepseek-flash", "label": "Flash"}}
+    app.config = RuntimeConfig.model_validate(raw)
+    with TestClient(build_app(app, "tok")) as client:
+        view = client.get("/api/settings", headers=HEAD).json()
+        assert view["compaction"]["preset"] == ""
+        report = client.post("/api/settings/validate", headers=HEAD, json={"base_revision": view["revision"], "candidate": {"compaction": {"preset": "nowhere"}}}).json()
+        assert not report["valid"] and report["problems"][0]["path"] == "compaction.preset"
+        refused = client.put("/api/settings", headers=HEAD, json={"base_revision": view["revision"], "compaction": {"preset": "nowhere"}})
+        assert refused.status_code == 422
+        assert "no such model preset 'nowhere'" in refused.json()["detail"]
+        assert app.config.compaction.preset == ""
+
+        saved = client.put("/api/settings", headers=HEAD, json={"base_revision": view["revision"], "compaction": {"preset": "flash"}})
+        assert saved.status_code == 200 and saved.json()["compaction"]["preset"] == "flash"
+        assert app.config.compaction.preset == "flash"
+
+        gone = client.delete("/api/presets/flash", headers=HEAD)
+        assert gone.status_code == 200 and gone.json()["compaction"]["preset"] == "flash"
+        again = client.put("/api/settings", headers=HEAD, json={"base_revision": gone.json()["revision"], "compaction": {"preset": "flash", "max_words": 900}})
+        assert again.status_code == 200 and app.config.compaction.max_words == 900
+        cleared = client.put("/api/settings", headers=HEAD, json={"base_revision": again.json()["revision"], "compaction": {"preset": ""}})
+        assert cleared.status_code == 200 and app.config.compaction.preset == ""
