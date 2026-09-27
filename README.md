@@ -16,14 +16,14 @@
   <img alt="Docker Compose" src="https://img.shields.io/badge/deploy-docker%20compose-2496ed.svg" />
   <img alt="Telegram" src="https://img.shields.io/badge/chat-Telegram-26a5e4.svg" />
   <img alt="React" src="https://img.shields.io/badge/app-React%2019-61dafb.svg" />
-  <img alt="tests" src="https://img.shields.io/badge/tests-680%2B-4ade80.svg" />
+  <img alt="tests" src="https://img.shields.io/badge/tests-3000%2B-4ade80.svg" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/session.png" alt="A session: the agent's steps, an image it looked at, the file it sent, and the panel beside it with the session's details — model, context, quota, cron, services, subagents" width="100%" />
+  <img src="docs/screenshots/session-browser.png" alt="A session: the agent's answer with its checks and the files it sent, and beside it the agent's own browser, live, with the actions it took" width="100%" />
 </p>
 
-> Built on [protocore](https://github.com/ascorblack-labs/protocore-community), an open agent core (ReAct loop, tools, context compaction, snapshots and resumable runs, memory, skills). The copy it runs on is [protocore-exp](https://github.com/ascorblack/protocore-exp).
+> Built on [protocore](https://github.com/ascorblack-labs/protocore-community), an open agent core (ReAct loop, tools, context compaction, snapshots and resumable runs, memory, skills). The copy it runs on is [protocore-exp](https://github.com/anchor-inference/protocore-exp).
 
 ---
 
@@ -37,128 +37,53 @@ It is built to run for weeks: sessions survive restarts, runs resume from snapsh
 
 ## What you get
 
-<table>
-<tr>
-<td width="33%" valign="top">
+- **💬 Telegram-native** — every session has its own workspace and speaks in the chat under its own name, in the private chat or in a forum topic each; files, voice notes, inline-button questions and answers that stream as they are written.
+- **🖥️ A real web app** — agents, live transcripts, a file browser with previews, two sessions side by side, a ⌘K palette on a desk and four tabs on a phone; installable as a PWA.
+- **🖥️ An app, not a deployment** — one download opens a window of its own on macOS, Linux and Windows; native mode needs no Docker at all and is ready four seconds after launch.
+- **🛠️ Real tools** — shell, files, search, web fetch and search, a vision model, a Chromium you watch and take over, verification runs, MCP servers, skills loaded on demand.
+- **📁 Projects** — add a folder of your own and the agents started in it work there; a path that leads out of it is refused, not followed.
+- **🧭 Orchestration** — a main orchestrator hands work to each project's orchestrator, which runs a team of staff (Daedalus agents or command-line agents such as Claude Code and Codex) and asks you only what it has to.
+- **🔁 Autonomy on a leash** — loops, cron tasks, a heartbeat and boards, each run bounded by turn, spend and time limits; a provider outage pauses work instead of ending it.
+- **🧬 Self-development** — the agent changes its own code in a worktree and a pull request you approve in the chat, and a bad build is rolled back on its own.
+- **🔐 Keys it never sees** — provider keys live in a key proxy that stops paying once the daily budget is spent; ChatGPT, Claude Code and SuperGrok logins work as providers too.
+- **🧾 Evidence you can open** — an answer cites files and checks as chips that open at the lines it named; a change to the agent's own code needs a receipt that covers it.
+- **🎙️ Voice (beta)** — a fast concierge that answers out loud and hands anything substantial to an agent while you keep talking.
 
-**💬 Telegram-native**<br/>
-Every session has its own workspace and speaks in the chat under its own name — in the private chat alone, or in a forum topic each when you bind a group. Files in, files out, voice notes transcribed, questions as inline buttons, answers as rich messages that stream while they are written.
-
-</td>
-<td width="33%" valign="top">
-
-**🖥️ A real web app**<br/>
-Every screen is an address under `/app`: agents, live transcripts, the files an agent sends you attached under its answer, a file browser with previews (images, Markdown, CSV, PDF, Word, Excel), the files and receipts an answer cites as chips that open the file at the lines it named, two sessions side by side, drag-and-drop and clipboard attachments, a microphone. Four tabs on a phone, a rail and a ⌘K palette on a desk. Installable as a PWA.
-
-</td>
-<td width="33%" valign="top">
-
-**🛠️ Real tools**<br/>
-Shell, files, search, web fetch and search (keyless out of the box, self-hosted SearXNG behind a profile), a vision model for images, verification runs, MCP servers per session, skills the agent loads on demand.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**🔁 Autonomy that stays on a leash**<br/>
-Loop agents wake up on an interval or when they say so; cron tasks run in fresh or standing sessions; a heartbeat checks in; every agent keeps its own task board and an inbox keeps you informed. Every run has turn, spend and time limits, and a provider outage pauses the work instead of ending it.
-
-</td>
-<td valign="top">
-
-**🧬 Self-development**<br/>
-The agent edits its host or its core in a git worktree, opens a PR, you approve or reject with a reason in the chat. The supervisor pulls, runs preflight and restarts — and rolls back a bad build on its own. On an installation with no GitHub token the same editing stays local; on one that should not change itself at all, the whole subsystem is absent.
-
-</td>
-<td valign="top">
-
-**🔐 Keys it never sees**<br/>
-Provider keys live in a key proxy — a second container in Docker mode, a second process on `127.0.0.1` natively — that injects them into upstream calls and stops paying once the daily budget is spent. The agent's own process never holds one. Your ChatGPT, Claude Code and SuperGrok logins work as providers too, with their quota windows on screen.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**🎙️ Voice (beta)**<br/>
-Talk to a small fast model that answers out loud in a second, hands anything substantial to an agent session while you keep talking, and tells you when one finishes. See *Voice mode* below.
-
-</td>
-<td valign="top">
-
-**📁 Projects**<br/>
-Add a folder of your own — a repository, a directory of documents — and the agents you start in it work there. Every path they resolve is checked against that folder and one that leads out is refused, not followed: the file tools, the file browser, the preview, the download and the files they send you. `Exec` runs in the folder and is bounded by the sandbox where one is on and by the policy rules where it is not. Several agents share one project and see the same files; an agent started without one still gets a scratch directory of its own, as before. One folder may belong to several projects — it is one place on disk, and each project's rules bind its own agents — but folders never nest: a folder inside another project's, or around it, is refused. When an orchestrator asks for a folder, the request is a card in its chat; an approval that cannot be carried out says why there and in a notification.
-
-</td>
-<td valign="top">
-
-**🖥️ An app, not a deployment**<br/>
-One download opens a window of its own on macOS, Linux and Windows — the system's web view, or a browser window with nothing around it, decided at run time and never a hard failure. Native mode needs no Docker at all: about 100 MB into a folder the launcher owns, and four seconds from launch to the app.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-**🧾 Evidence you can open**<br/>
-An answer that cites a file or a check carries it as a chip: click it and the file opens at the lines it named. `Verify` records a receipt against a criterion, and a change to the agent's own code cannot be applied without one that covers the bytes in it.
-
-</td>
-<td valign="top">
-
-**📦 A context that stays bounded**<br/>
-A single tool result is clipped to a limit you set; the twenty results already behind it are trimmed to their heads as the turn moves past them, in batches, so the request stops growing without the transcript losing anything. The stored history keeps every result whole — only the copy sent to the model is cut.
-
-</td>
-<td valign="top">
-
-**🧩 An installation that says what it is**<br/>
-`GET /api/capabilities` answers what *this* install can do — which self-development mode it resolved and why, whether a change is waiting for a restart — and the app, the prompt, the tool registry and the doctor all read that one answer. A tool the installation cannot honour is not registered at all, so the model is never offered a name that fails.
-
-</td>
-</tr>
-</table>
+Each of these at full length: [docs/FEATURES.md](docs/FEATURES.md).
 
 ## How it looks
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/bots.png" alt="Agents grouped by workspace: a fork under its origin, subagents under their leader, a loop with its cadence" /></td>
-<td width="50%"><img src="docs/screenshots/dual.png" alt="Two sessions side by side on a wide screen" /></td>
+<td width="50%"><img src="docs/screenshots/main.png" alt="The main orchestrator's chat: dispatches to project orchestrators, their progress, and the Questions tab with what waits for the operator" /></td>
+<td width="50%"><img src="docs/screenshots/composer-modes.png" alt="A session's answer with its checks, and the composer's mode chip open: Agent, Plan, Quick, Deep, Careful and the YAGNI switch" /></td>
 </tr>
 <tr>
-<td align="center"><sub>Agents — grouped by workspace; a fork sits under its origin, subagents under their leader, a loop shows its cadence</sub></td>
-<td align="center"><sub>Two sessions side by side; each pane has its own files and settings</sub></td>
+<td align="center"><sub>Orchestration — the main chat hands work to projects, and what waits for you is one Questions tab</sub></td>
+<td align="center"><sub>A session and its mode: plan first, work fast, go deep, or ask before anything irreversible</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/session-tool-groups.png" alt="A session with the panel on its Details tab: the tool groups the agent has in front of it, loaded, always on, or on demand" /></td>
+<td><img src="docs/screenshots/projects.png" alt="Projects: the folders you added, the agents working in each, and one folder not mounted yet" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Tool groups — what the agent carries in this session, and what it loads only when it needs it</sub></td>
+<td align="center"><sub>Projects — a folder you add is where its agents work, and the only place they can reach</sub></td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/usage.png" alt="Usage: spend, subscription quota windows, balances, per-session cost" /></td>
-<td><img src="docs/screenshots/memory.png" alt="Memory: what the agent remembered, global and per session, editable" /></td>
-</tr>
-<tr>
-<td align="center"><sub>Usage — metered spend, subscription windows, balances with alert thresholds</sub></td>
-<td align="center"><sub>Memory — what the agent remembered, global and per session; edit, add, forget in bulk</sub></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/session-panel-preview.png" alt="The panel on its Preview tab: a Markdown file from the workspace, with the breadcrumb and the history buttons" /></td>
 <td><img src="docs/screenshots/board.png" alt="The task board" /></td>
 </tr>
 <tr>
-<td align="center"><sub>The panel — files, previews and uploads beside the conversation</sub></td>
+<td align="center"><sub>Usage — metered spend, subscription windows, balances with alert thresholds</sub></td>
 <td align="center"><sub>The boards the agents keep: every task says whose it is</sub></td>
-</tr>
-<tr>
-<td colspan="2"><img src="docs/screenshots/projects.png" alt="Projects: the folders you added, the agents working in each, and one folder not mounted yet" /></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><sub>Projects — a folder you add is where its agents work, and the only place they can reach</sub></td>
 </tr>
 </table>
 
 <p align="center">
   <img src="docs/screenshots/phone-bots.png" width="30%" alt="Phone: agents" />
-  <img src="docs/screenshots/phone-session.png" width="30%" alt="Phone: a session" />
-  <img src="docs/screenshots/phone-memory.png" width="30%" alt="Phone: memory" />
+  <img src="docs/screenshots/phone-composer-modes.png" width="30%" alt="Phone: a session with the mode sheet open" />
+  <img src="docs/screenshots/phone-browser.png" width="30%" alt="Phone: the agent's browser" />
 </p>
 <p align="center"><sub>The same app on a phone — inside Telegram as a Mini App, or in any browser</sub></p>
 
@@ -185,7 +110,6 @@ Where a run happens: a session works either in a **project** — a folder you ad
 What makes long sessions work: the **transcript** retains messages through compaction, while the **working history** the model sees is shortened into summaries (with `HistoryExpand` to read the originals back). **Regenerate** permanently deletes the selected assistant message and everything after it, then answers again in the same session. **Revert** permanently deletes the selected user message and its tail, and restores files only if an existing checkpoint is available. Neither action creates a backup or a branch. **Fork** explicitly creates a separate session from an earlier point; `/clear` starts a fresh working history while retaining the transcript and files.
 
 What makes them survive: runs resume from snapshots after a restart; a run the provider dropped is retried in place by the core and, when the provider stays down, driven again by the host after a wait that doubles per failure (`ops.provider_retry_*`, 30 s to 10 min, six attempts); a context overflow is compacted and the turn driven again; the core's own wind-down notice never outlives the run it was written for.
-
 ## Self-development
 
 <p align="center"><img src="docs/diagrams/selfdev.png" alt="Self-development: worktree → edit → pull request → your approval in the chat → merge → rebuild → rollback on a failed preflight" width="100%" /></p>
@@ -200,30 +124,7 @@ The PR text passes a public-text gate (nothing about your machine leaks into a p
 | `local` | the agent edits the checkout this installation runs from; there is no fork and no PR, and the change applies after a restart | a writable git checkout of the host and the core |
 | `off` | the agent does not change its own code | — |
 
-**Local mode, step by step.** This is what a desktop install does, and it is the owner's rule that the
-desktop version can improve itself too. The agent works in a worktree exactly as above and runs the same
-checks; instead of `SelfPropose` it calls `SelfApply`, which fast-forwards its commits onto the checkout's
-own branch — one readable line of history, no remote, and its `Co-authored-by: Daedalus` trailer intact,
-because nothing here is published. The app then shows **"Changes are ready — restart to apply"** with the
-summary and a **Restart** button; the launcher's status page shows the same and its **Restart to apply**
-goes the same way. The restart is not a leap of faith: the supervisor checks out that commit into a
-detached worktree of its own, runs `uv sync` (only if `uv.lock` or `pyproject.toml` changed, in either
-repository), `compileall`, `daedalus check` and the smoke tests there — in a virtualenv of its own, so a
-change that is refused has touched nothing the running bot imports — and stops the running bot only once
-they pass. The launcher's plain **Stop** and **Start**, and closing the window and opening it again, are a
-different thing: they bring the stack back up on whatever the checkout holds, with none of that run. They
-are how you start over, not how you apply a change. A change that fails is taken back out of the checkout and the app says why. A
-change that passes the checks but cannot stay up — three starts dying within ten minutes — puts the last
-known-good commit back by itself, and the app says that too; the commit is still in the checkout's
-history, on the branch the agent committed it to. A change to the `Dockerfile` or the system packages is
-applied as far as a restart can take it and says plainly that the rest needs a new image.
-
-The same gates decide in both modes: a changed host module needs a passing `Verify` receipt that covers
-the bytes in the branch, an `execution_path` that names the code running it, and a summary that says what
-a large change replaces. What local mode drops is the review — there is no reviewer and nothing is
-published — so the restart is where you see the change, and the rollback is what catches what you did not.
-
-What follows the mode: the `Self*` tools (absent in `off`, `SelfWorkspace` and `SelfApply` in `local`, the pull-request four in `server`), the self-development extension, `/api/proposals`, `POST /api/self/restart`, the Changes screen and the restart banner in the app, the self-development part of the system prompt, and the doctor's GitHub checks. `GET /api/capabilities` and `daedalus doctor` both say which mode is running and why. Setting the mode explicitly overrides the resolution; the doctor then warns about whatever the chosen mode is missing. A change of mode takes effect on the next restart.
+How local mode checks a change before it restarts on it, the gates both modes share, and what else follows the mode: [docs/SELF-DEVELOPMENT.md](docs/SELF-DEVELOPMENT.md).
 
 ## The toolbox
 
@@ -252,60 +153,27 @@ or **deny**. A denial is final. An *ask* is a denial you can lift: the refusal c
 *Allow once* in the app or `/allow <key>` in the chat lets that one exact call through, once.
 
 The built-in rules are in the repository (`daedalus/host/policy.py`), so they change only through a
-reviewed change: fork bombs, `mkfs`/`shutdown`, `dd` onto a raw device, a recursive delete or `chmod`
-of a system path, writing into one, pushing from the operator's checkouts. Your own rules in
-`config.toml` can add denials and questions and can never lift a built-in one.
-
-Two more exist **only on a native install**, where the agent is a process of your own user rather
-than something in a container:
-
-- **the installation's own files are refused, to read as well as to write** — the provider keys, the
-  state database, the secret that opens the restart channel, the launcher's executable and the
-  runtime it runs out of. Through `Exec` as well: the rule reads the paths in the command, so `cat`,
-  `cp` and a redirection are the same refusal as the file tools;
-- **a path in your home folder, outside every project and outside the installation, asks.** Inside a
-  project, a workspace or the checkouts it does not — that is where the work is.
-
-Beside the policy: a **project** contains every path a session *resolves* (`..`, an absolute path
-elsewhere and a symlink out of the tree are one refusal, checked on the real path). That is the file
-tools, the file browser, the preview, the download and `SendFile` — the one point a path becomes a
-place. It is not the body of a shell command: `Exec` runs in the project folder and what it reaches
-from there is what the sandbox allows, and where no sandbox is on, what the policy rules allow. On a
-native install those rules refuse the installation's own files outright and ask before a path in your
-home folder outside every project is touched; in a container they do not fire at all, and the
-container's edge is the boundary instead — so a session of one project can read another project's
-folder through `Exec` unless a sandbox is switched on. Tools an MCP server provides are the server's
-own and pass through none of this: a filesystem server pointed at a folder outside the project
-reaches it. The **egress allowlist** turns an unknown host into a question and logs every host either
-way; the **spend caps**
-are the supervisor's, from its own environment, and the agent cannot edit them; `GOVERNANCE.md` — the
-rules the agent always sees — is a protected path it cannot write, and a read-only mount on top of
-that in a container. `daedalus doctor` prints what this installation's boundary actually is in one
-line, and the desktop launcher's status page prints the same one.
+reviewed change; your own rules in `config.toml` can add denials and questions and can never lift a
+built-in one. A **project** contains every path a session resolves, the **spend caps** belong to a
+supervisor the agent cannot edit, and `daedalus doctor` prints what this installation's boundary
+actually is in one line. The native-only rules, what a project does and does not contain, and the
+egress allowlist: [docs/POLICY.md](docs/POLICY.md).
 
 ## Run it
 
 Two programs, three ways in. **The desktop app is the one to start with**; the server install is the
-same stack with a domain in front of it.
+same stack with a domain in front of it. Everything below is in full in [docs/INSTALL.md](docs/INSTALL.md).
 
-### 1. The desktop app
-
-One download, one folder, and everything the installation owns is inside that folder — including, in
-native mode, the Python it runs on. Nothing is installed system-wide and nothing is put anywhere
-else, so uninstalling is deleting the folder.
+**The desktop app** — one download, one folder, nothing installed system-wide:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/anchor-inference/daedalus/main/desktop/install.sh | sh
 ```
 
-That takes the newest `desktop-v*` release, checks it against the release's `SHA256SUMS`, and
-unpacks it into `./Daedalus`. By hand, take the archive for your machine from the
-[releases](https://github.com/anchor-inference/daedalus/releases): `Daedalus-macOS.zip` holds
-`Daedalus.app` for both kinds of Mac and is opened with a double-click,
-`daedalus-desktop-linux-<arch>.tar.gz` and `daedalus-desktop-windows-amd64.zip` hold the executable.
-
-Open it and a page asks the one question that matters, with what each answer costs written beside it
-(`--mode native` / `--mode docker` answers it from a script):
+That takes the newest `desktop-v*` release, checks it against its `SHA256SUMS` and unpacks it into
+`./Daedalus`; the archives are also on the [releases](https://github.com/anchor-inference/daedalus/releases)
+page. Open it, choose **native** (no Docker, about 100 MB, 4 s warm) or **Docker**, give it a provider
+key and a daily cap, and it hands you the app. [desktop/README.md](desktop/README.md) has the rest.
 
 | | **Native** — no Docker | **Docker** |
 |---|---|---|
@@ -313,23 +181,11 @@ Open it and a page asks the one question that matters, with what each answer cos
 | First run fetches | **103 MB** on Linux, ~96 MB on macOS, ~148 MB on Windows — a pinned `uv`, a CPython, `rg` and the app's environment, each checked against the hash its publisher published | **114 MB** to pull one image (478 MB unpacked), plus Docker itself: a ~600 MB application with a VM disk behind it |
 | Ready in | 26 s from an empty folder, **4.3 s** warm | seconds, once Docker is up |
 | The agent is | a process under the launcher, which keeps it alive and stops it on quit | a container that comes back with the machine |
-| Isolation | the policy rules, and bubblewrap on Linux where it can actually run — see [what each gives up](#what-each-gives-up) | the container's own edge |
+| Isolation | the policy rules, and bubblewrap on Linux where it can actually run — see [what each gives up](docs/INSTALL.md#what-each-gives-up) | the container's own edge |
 
-Then it opens a window of its own — the system's web view on macOS and Windows, a browser window
-with no tabs or address bar on Linux, the default browser if neither — asks for a provider key and a
-daily cap, and hands you the app. [desktop/README.md](desktop/README.md) has the folder layout, the
-window's three fallbacks, the disk each mode takes, projects in Docker mode, local self-development,
-release signing and uninstalling.
-
-### 2. A server
-
-The same stack with Compose in front of it: one published image, three containers from it (the agent,
-the key proxy and the terminals), and every other piece behind a profile that is off unless you ask
-for it.
-
-Requirements: Docker with Compose, and at least one model API key **or** a ChatGPT / Claude Code /
-SuperGrok login on the host. **Telegram is optional**: with a bot token you get the chat as a front;
-without one the app in the browser is the whole interface.
+**A server** — Docker with Compose, and one model API key **or** a ChatGPT / Claude Code / SuperGrok
+login on the host. Telegram is optional: without a bot token the app in the browser is the whole
+interface.
 
 ```bash
 git clone https://github.com/anchor-inference/daedalus
@@ -337,198 +193,18 @@ cd daedalus
 bash deploy/setup.sh            # asks for the values, writes .env and ../daedalus-secrets/keyproxy.env, starts the stack
 ```
 
-Or have a coding agent do it: [`docs/AGENT-SETUP.md`](docs/AGENT-SETUP.md) is written for one, every
-step a command with the output it must see. [Let your agent install it](#let-your-agent-install-it)
-below has the paragraph to paste.
-
-By hand instead: clone `protocore-exp` next to this repository, copy `deploy/env.example` to `.env` and
-`deploy/keyproxy.env.example` to `../daedalus-secrets/keyproxy.env` (provider keys go there, outside the
-checkout, `chmod 600`), then `docker compose -f deploy/compose.yaml --env-file .env up -d --build`.
+Every other piece is a profile, off unless you ask for it:
 
 | `--profile` | What it starts | Cost |
 |---|---|---|
 | `telegram` | the local Bot API server: files up to 2 GB instead of 20 MB (it needs `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` from https://my.telegram.org/apps) | ~66 MB |
 | `search` | a self-hosted SearXNG. Without it `WebSearch` goes to DuckDuckGo directly; with it, SearXNG is the backend the tool falls back to | ~382 MB |
 | `selfdev` | the rebuilder, the only container that can reach Docker. Needed only to build a new agent image, which is what a change to the image's own recipe asks for | ~237 MB |
-| `browser` | the agent's browser: `browserd` and Chromium from the `:browser` image target, on a network of its own ([below](#the-agents-browser)) | the `:browser` tag |
+| `browser` | the agent's browser: `browserd` and Chromium from the `:browser` image target, on a network of its own ([more](docs/INSTALL.md#the-agents-browser)) | the `:browser` tag |
 
-The browser skills — driving a page with Playwright, drawing with Pillow — are not in the default
-image either: they are two thirds of one and most sessions never open a page. Run the `:browser` tag
-instead (`ghcr.io/ascorblack/daedalus:browser`, 368 MB to pull) where they are wanted; without it the
-skills say so instead of writing scripts that cannot run, and `daedalus doctor` says it too.
-
-### Terminals
-
-The shells the app opens in the container run in a third container, the `terminals` service: the same
-image started as `ptyd`, the terminal daemon. It is a service of its own so the terminals outlive the
-agent. What survives what:
-
-| | Container terminals |
-|---|---|
-| `docker restart deploy-daedalus-1`, a self-development rebuild (`up -d --no-deps daedalus`), the agent's own restart | keep running; the app reattaches |
-| `docker compose up -d terminals` after the image changed, or **Update** in the app | end — every one of them |
-| `docker compose down`, a reboot | end |
-
-- **The first deploy that has it needs `docker compose -f deploy/compose.yaml --env-file .env up -d --build`**,
-  not a restart of the agent's container: the service is new, the agent gains a volume, and an image
-  built before the service existed has no daemon in it. Until then `daedalus doctor` reports the
-  container terminals as not installed and names that command.
-- **Updating the daemon.** A deploy never recreates the service, so after a rebuild the image can hold a
-  newer `ptyd` than the one running. The app and the doctor say so, and the update — recreating the
-  service, which ends every container terminal — is the operator's, with the count of what it ends
-  shown first. The app's button asks the `selfdev` rebuilder to do it; without that profile, run
-  `docker compose -f deploy/compose.yaml --env-file .env up -d terminals` on the server.
-- **Ports.** A server started in a terminal (a dev server, a preview) listens in `TERMINALS_PORT_RANGE`,
-  `8120–8139` by default, published on every interface like the agent's own `8100–8119`, and reached
-  at `SERVICES_PUBLIC_HOST:<port>`. The two ranges must not overlap.
-- **Its home.** `/root` in the service is the `terminals-home` volume: CLIs installed there, their
-  logins, shell history. It is never mounted into the agent's container.
-- **Project folders.** A folder mounted into the agent's container is mounted into `terminals` too, at
-  the same absolute path, so a path means the same thing in a terminal as it does to the agent. The
-  desktop launcher writes both entries itself.
-- **The sandbox toggle.** A terminal is an ordinary shell by default. With **Sandbox** ticked in the
-  terminal menu it runs in bubblewrap instead: the filesystem read-only, the project's writable folders
-  writable (what the session's own `Exec` may write), a private `/tmp`, and the daemon's token hidden.
-  It is a wall against writing, not reading. For it the `terminals` service carries `cap_add:
-  [SYS_ADMIN]` with unconfined seccomp and AppArmor — the same widening the agent's container accepts
-  for `Exec`'s sandbox. Without them the toggle shows as unavailable, with the reason, and terminals
-  open unsandboxed.
-
-### The agent's browser
-
-A Chromium the agent drives and you watch live in the app: the `browser` service, the same image's
-`browser` target (`ghcr.io/ascorblack/daedalus:browser`) started as `browserd`, the browser daemon.
-It is behind a profile, so an installation that never browses pulls nothing extra: add
-`COMPOSE_PROFILES=browser` to `.env` (it then holds for every compose command, the rebuilder's
-included) and run `docker compose -f deploy/compose.yaml --env-file .env up -d --build`. Until then
-`daedalus doctor` says the browser is not installed and names that line.
-
-- **Its walls.** The service is on a network of its own, `browser`, with **no route to the key proxy,
-  SearXNG, the agent or the terminals**, and it mounts no workspace and no project folder: a file
-  reaches a page, or leaves one, only through the host. Inside it, every connection Chromium makes
-  goes through the daemon's own proxy, which resolves names itself and refuses private and LAN
-  addresses, cloud metadata, and the installation's own ports, whatever a page or a redirect asks
-  for. The agent's services are the exception, by design: `http://127.0.0.1:8103` in the browser
-  opens the service published on the Docker host, and no other port there.
-  [docs/architecture/browser.md](docs/architecture/browser.md) has the rules.
-- **Its privileges.** It runs as an ordinary user (uid 1001) with every capability dropped, a
-  read-only root filesystem and `seccomp=unconfined`, which is what Chromium's own sandbox needs to
-  give each page its own user namespace. Nothing else is widened — not `SYS_ADMIN`, not AppArmor,
-  which the sandbox needs left in place on hosts that restrict unprivileged user namespaces.
-- **What survives what.** Like the terminals, it outlives the agent: `docker restart`, a rebuild
-  and the agent's own restarts leave every browser open. Recreating it — `docker compose up -d
-  browser` after the image changed, or **Update** in the app — closes every browser. The profiles,
-  and so the logins you made in them, stay in the `browser-state` volume; the app says how many
-  browsers the update closes before it does.
-- **Its size.** Memory is capped at `BROWSER_MEMORY_LIMIT` (3 GB): two browsers with eight tabs each
-  measured under 1.2 GB. Settings → Browser sets how many run at once and when an idle one closes,
-  and shows what they cost beside the terminals on one load bar.
-- **What a page can still do to the agent.** A page may try to talk the agent into something: text
-  addressed to it, a fake system message, an instruction hidden off screen. The agent is told that
-  page text is data, not the operator's word, but a model can still be fooled. What the walls promise
-  is what an obeyed page **cannot** reach: the key proxy, your local network and this installation's
-  ports (the network wall), a password or payment field (the agent cannot type into one), a purchase,
-  a message sent, a deletion or an upload (each asked about first), and, with an allowlist, any site
-  off it — a link or redirect the page follows there is stopped and the agent told. It can still waste
-  the agent's time on public pages. For more, Settings → Browser has **watch mode** (on the sites you
-  list, the agent acts only while you have its browser open) and an **injection monitor** (a small
-  model reads each new site's page before the agent and pauses on one that talks to it); both are off
-  until you turn them on.
-- **What is recorded.** The action log always: what the agent did, what it was refused, what a page
-  did on its own. Keyframes of the pages only when you switch recording on — for one browser from its
-  menu, or for every new one in Settings — kept a week within 500 MB, masked like any screenshot, and
-  never while you drive unless you choose so.
-
-### The host terminal (optional)
-
-A shell on the server itself, as you, opened from the app like any other terminal. It is `ptyd` again,
-the same binary as the container's, installed as a **systemd user unit of yours**:
-`bash deploy/setup.sh` asks at its last step, and `bash deploy/host-terminal.sh install` does it on its
-own. It copies the daemon out of the image the stack was built from into `~/.local/lib/daedalus/`,
-writes `~/.config/systemd/user/daedalus-ptyd.service`, turns on lingering (so it survives your logout;
-where that needs polkit, it prints the one `sudo loginctl enable-linger` to run) and starts it.
-
-- **What it can do.** Everything you can do on the server: it is your shell, in your home, with your
-  own logins — the `terminals-home` logins of the container terminals do not apply there. CLI staff and
-  project folders on the host go through it as well (Docker installs only), and so do the git
-  operations of staff worktrees in those folders.
-- **What is recorded.** Every attach and detach, with how the browser signed in and how many bytes it
-  typed, and every write an agent makes. **What you type is never recorded**: it would hold every
-  password typed at a `sudo` prompt.
-- **How the container reaches it.** Its socket and token live in `../daedalus-host-terminals`, beside the
-  checkout (`DAEDALUS_HOST_TERMINALS_DIR` moves it), which compose mounts into the agent's container
-  whether or not the unit is installed. An empty directory reads as "not installed", so installing or
-  removing it needs no recreate. The directory is sealed from the agent's own commands. It needs
-  Docker running as root: with rootless Docker or userns-remap, root in the container cannot open your
-  `0700` directory, and the app says "permission denied".
-- **What survives what.** `docker restart`, a rebuild and recreating the containers leave it running.
-  `systemctl --user restart daedalus-ptyd`, a reboot, and re-running the installer (which updates the
-  daemon to the image's) end every host terminal; setup asks before it does.
-- **Removing it:** `systemctl --user disable --now daedalus-ptyd`, or `bash deploy/host-terminal.sh
-  remove`, which also deletes the unit and the binary. `bash deploy/host-terminal.sh status` says where
-  it stands, and `daedalus doctor` names the fix for each way it can be down.
-
-### Host terminals on the desktop
-
-A native desktop install has host terminals only: shells on your own machine, as you, served by the
-`ptyd` each release carries beside the launcher. Restarting or updating the agent leaves them running;
-quitting the launcher ends them, as it ends the agent. On Windows the shell is PowerShell.
-[desktop/README.md](desktop/README.md#host-terminals) has the details.
-
-### The install ends in the app: add a model
-
-**Whichever way you installed it.** A provider key is an address, not a choice of model, so nothing
-is picked for you and the installation ships with none. The app opens on *Add a model* until one
-exists: pick an endpoint, pick a model from the list it serves — with its context window, its
-modalities and its prices beside it — and save. The same screen adds the next one later, from
-Settings → Models.
-
-<p align="center"><img src="docs/screenshots/add-model.png" alt="Add a model: the endpoint, the model from its own list with context window and prices, and how it runs" width="100%" /></p>
-
-### What each gives up
-
-Nothing here is a tier: it is the same program, and each row is a real consequence of where it runs.
-
-| | Native | Docker desktop | Server |
-|---|---|---|---|
-| **Isolation** | no container boundary: `Exec` runs as you, behind the policy rules, the approval gates and — on Linux where bubblewrap actually runs, which is now probed rather than assumed — bubblewrap, which confines what a command writes and not what it reads. Two rules exist only here: the installation's own files (the provider keys, the whole state directory, the launcher, its environment file and its runtime) are refused to read as well as to write, and a path in your home folder outside every project is a question you answer once | the container's edge, as on a server | the container's edge |
-| **Telegram** | `api.telegram.org`, so files are capped at 20 MB in and out | the local Bot API server behind `--profile telegram`: 2 GB | the same profile |
-| **Self-development** | `local`: the agent commits into the checkout the app runs from and the change applies on a restart, with a preflight on a copy of itself first and an automatic rollback if it cannot stay up | `local` by default; `server` with a GitHub token | `server`: a worktree, a pull request you approve in the chat, a merge, a rebuild |
-| **Browser skills** | `daedalus-desktop install browser`, into the folder | the `:browser` tag | the `:browser` tag |
-| **The agent's browser** | `browserd` beside the launcher, Chromium from `install browser`. **The daemon's proxy is the only wall** between a page and your machine's ports and LAN | the `browser` service: a network of its own, not root, no folders, and the proxy inside it | the same |
-| **Reach** | your machine only: services a session starts bind `127.0.0.1` | the same | a domain, a PWA, Telegram's Mini App |
-| **When you close it** | the agent stops, and a run in flight is drained, snapshotted and resumed on the next start | it keeps running and comes back with the machine | it keeps running |
-
-### Signing in without Telegram
-
-<p align="center">
-  <img src="docs/screenshots/login.png" alt="The login screen: a passkey, or the one-time pairing link, with the language picker in the corner of the card" width="70%" />
-</p>
-
-A start with no other way in (no bot, no passkey yet) writes a one-time **pairing link** to `pairing-url` in the
-state directory, readable by its owner only. Open it once and this browser is signed in; it expires after 30
-minutes, is spent on first use, and using one revokes the rest. A fresh one:
-
-```bash
-docker compose -f deploy/compose.yaml exec daedalus python -m daedalus auth pair
-```
-
-Then add a **passkey** in Settings → Security: the key stays in the device (or its password manager) and signs
-you in from the login screen with no link and no password. A passkey belongs to the address it was made at, so
-set `MINIAPP_PUBLIC_URL` before enrolling one; on the machine itself, open the app at `http://localhost:8765`
-rather than at the IP, which is not a name a key can belong to.
-
-### With Telegram
-
-1. Send `/start` to the bot in a private chat. That chat is a window onto one session at a time: `/new <title>` starts a session and writes to it, `/sessions` numbers them, `/use <n|title>` switches, `/close` puts one away. Every other session — a scheduled task, a loop agent, an agent you spawned — still speaks in the same chat, with its name above its words, and a question of any of them is answered back into it. Nothing else is needed.
-2. Optional, for a chat of its own per session: create a supergroup with topics, add the bot as an administrator with *manage topics*, and send `/bind` there. One topic is then one session, and topics you create by hand are adopted too. Mini App → Settings → Chat switches between the two shapes.
-3. Open the app with `/app`. Set `MINIAPP_PUBLIC_URL` to an HTTPS address that proxies to port 8765 and register it as the bot's menu button in @BotFather; the same address serves the browser version (sign in with Telegram's login widget), the shared services under `/s/…`, and a dialog shared from its menu under `/c/…`.
-
-### Let your agent install it
-
-Have a coding agent (Claude Code, Codex, Cursor, another Daedalus) set the server up for you: it follows
-[`docs/AGENT-SETUP.md`](docs/AGENT-SETUP.md), which is written for an agent — every step is a command with
-the output it must see. Paste this into the agent, on a shell with Docker on the target server:
+**Or have a coding agent do it.** [docs/AGENT-SETUP.md](docs/AGENT-SETUP.md) is written for one — every
+step a command with the output it must see. Paste this into the agent, on a shell with Docker on the
+target server:
 
 ```text
 Install Daedalus (https://github.com/anchor-inference/daedalus) on this server for me, following the
@@ -539,28 +215,23 @@ Then clone, configure, start the stack, verify it as the page says, and give me 
 and the two-line summary section 8 asks for. Never paste keys or tokens back into this chat.
 ```
 
-### Models and keys
-
-Providers are OpenAI-compatible endpoints (DeepSeek, OpenRouter, a self-hosted vLLM, anything else) with their own base URL, key and timeout; **presets** on top of them name a model with its thinking mode, effort, image support, context window and output cap. One preset is the default, others are fallbacks, any session can switch. Speech-to-text and the vision model pick a provider the same way.
-
-**llama.cpp** is a first-class self-hosted provider. Add a `llamacpp` endpoint such as `http://127.0.0.1:8080/v1` or `http://<host>:<port>/v1`; no key is needed unless the server was started with one. Daedalus reads `/props` and `/v1/models` to prefill the model id, context window and image support, and reports tool support, slots, build and sleep state in the doctor. Older servers and proxies that expose only `/v1` still work: whatever they do not publish stays editable. Calls run on your hardware, are recorded at zero cost, and never consume a spending cap.
-
-**An installation ships no preset at all.** The endpoints are configured; which model runs on one — and what it costs per million tokens — is the first thing you decide, in *Add a model* (the app opens there until a model exists, and Settings → Models → **Add a model** is the same screen). The first model added becomes the default. Until then every way in says so and names the fix rather than failing: the chat commands, the API (409), `daedalus doctor`, `daedalus check`.
-
-Keys never reach the agent's process: the **key proxy** injects them (one path per upstream — `/deepseek`, `/openrouter`, `/opencode`, plus any `KEYPROXY_UPSTREAM_<NAME>` — under `http://keyproxy:3200` in a container and `http://127.0.0.1:3201` natively), meters the calls, and refuses model calls once the daily budget is spent. An [OpenCode Go](https://opencode.ai/go) subscription is the `opencode` provider: set `OPENCODE_API_KEY` and its models (DeepSeek, GLM, Qwen, Kimi, MiniMax, GPT-5.6 Luna …) are presets with the gateway's list prices, refreshed daily from [models.dev](https://models.dev), so the metered spend tracks the subscription's allowance, whose 5-hour, weekly and monthly windows show on the Usage screen; every request carries the session id the gateway routes and caches by. Your **ChatGPT (Codex), SuperGrok and Claude Code** logins are read from the CLIs' own auth files, refreshed in place, and exposed as the `codex`, `grok` and `claude` providers — their quota windows show on the Usage screen and beside every session that uses them.
-
-### Without Docker, for development
+Whichever way you install it, the app opens on *Add a model* until one exists: the installation ships
+with no model picked for you. With no Telegram bot and no passkey yet, the first start writes a one-time
+**pairing link** to `pairing-url` in the state directory; a fresh one:
 
 ```bash
-uv sync --extra dev
-uv run python -m daedalus check                  # configuration and tool registry
-uv run python -m daedalus run -p "say hello"     # one session in the terminal
-uv run python -m daedalus serve                  # the bot
-uv run python -m daedalus auth pair              # a one-time link that signs a browser in
-uv run python -m daedalus db vacuum              # reclaim the database file after a schema upgrade
-uv run pytest -q                                 # tests
-(cd miniapp && npm install && npm run build)     # the app, served by the bot from miniapp/dist
+docker compose -f deploy/compose.yaml exec daedalus python -m daedalus auth pair
 ```
+
+Then add a passkey in Settings → Security.
+
+More in [docs/INSTALL.md](docs/INSTALL.md): [terminals](docs/INSTALL.md#terminals),
+[the agent's browser](docs/INSTALL.md#the-agents-browser),
+[the host terminal](docs/INSTALL.md#the-host-terminal-optional),
+[what each way of running gives up](docs/INSTALL.md#what-each-gives-up),
+[signing in without Telegram](docs/INSTALL.md#signing-in-without-telegram),
+[with Telegram](docs/INSTALL.md#with-telegram), [models and keys](docs/INSTALL.md#models-and-keys),
+[without Docker, for development](docs/INSTALL.md#without-docker-for-development).
 
 ## Commands
 
@@ -585,519 +256,21 @@ uv run pytest -q                                 # tests
 
 Every session command also works from the app's composer with the same `/` palette.
 
-## The HTTP API, where the app is not enough
+## Documentation
 
-Everything the app does it does over the same API, with the same token (`X-Daedalus-Token`, or the
-browser session cookie), so anything the app can show you a script can fetch. Three of those
-endpoints are worth naming here.
-
-**Finding a file.** `GET /api/sessions/{id}/files/search?q=&limit=` searches the session's tree by
-name: a case-insensitive substring, or a glob when `q` carries one of `*?[` — `*.py` matches the
-name, `src/**/*.py` the path. It answers `{"query", "results": [{"path", "kind", "size", "mtime"}],
-"truncated", "engine"}`, where `kind` is `file` or `dir` and `engine` says whether ripgrep or the
-built-in walk produced the list. `GET …/files/grep?q=&limit=` is the same search over file
-*contents* — `q` is matched literally, never as a pattern — and answers
-`{"query", "hits": [{"path", "line", "text"}], "truncated"}`. Both are bounded rather than complete:
-at most 200 results, 20,000 paths looked at, and a fifth of a second of wall clock for names or one
-second for contents, whichever runs out first, with `truncated` saying so. Both reach the filesystem
-through the containment the file browser uses, so a symlink out of the tree, a `..` and anything
-belonging to the installation itself are absent from the answer rather than refused. Content search
-needs ripgrep: without it, `files/grep` answers **501** and a sentence saying to search by name.
-
-**The queue in front of a working agent.** A message sent to a session that is already running is a
-steer: it waits in a queue and is placed in front of the model's next call rather than starting a
-second run. `GET /api/sessions/{id}/steer` lists what is still waiting, oldest first, as
-`[{"id", "text", "queued_at"}]`, and `DELETE /api/sessions/{id}/steer/{id}` takes one back — **409**
-once the run has read it, because by then it is in the history and no longer in a queue. The ids are
-the ones the queue is stored under, so they survive a restart and mean the same thing to every
-client. Whenever the queue changes — a steer taken in, one withdrawn, or a round placing what was
-waiting — the session's event stream (`GET /api/sessions/{id}/stream`) carries a `steer_changed`
-event with the whole queue in its payload, so a composer draws its cards from the events and never
-polls.
-
-**Everything that happens, as one stream.** `GET /api/events` is a server-sent event stream of what
-happens to sessions, terminals, staff and notifications. It opens with a `hello` frame carrying
-`head` (the newest event number) and `oldest` (the oldest one still kept), then sends each event
-with its number as the `id:` line and `{"seq", "at", "type", "project_id", "session_id",
-"staff_id", "terminal_id", "payload"}` as its data, and a `: keepalive` comment every 15 seconds.
-`types=` narrows it to a comma-separated list of names or prefixes ending in a dot
-(`types=run.,terminal.bell`). `after=<seq>` — or `Last-Event-ID` on a reconnect — replays what was
-missed and goes on live without a gap; a cursor older than what is kept (seven days by default),
-ahead of the stream, or more than 5,000 events behind gets one `resync` frame instead, and the
-client re-reads what it shows. The events are stored before they are sent, so a script that
-remembers the last number it handled never misses one across a restart of the agent.
-
-**What the operator is looking at.** Each window of the app reports itself with `POST
-/api/presence` — `{"client", "kind", "visible", "focused", "sessions", "terminals", "projects",
-"lang", "tz"}`, at most four sessions — every 20 seconds while it is visible and whenever that
-changes (**204**). A window that is visible, focused and shows a session is *attending* it: a run that
-ends there is marked as watched, and a result nobody attended, from a session whose answers do not go
-to Telegram, leaves `unread_result` on the session until someone opens it or writes to it. A report
-counts for a minute; a window that also holds `/api/events?client=<its id>` stops counting five
-seconds after that stream drops. `kind=launcher` on the stream marks a desktop launcher listening
-for notifications, which is never a presence. A refused tool call can be answered either way from
-any client: `POST /api/sessions/{id}/policy/grant` or `…/policy/refuse` with `{"key"}`, and the
-stream carries `permission.pending` and `permission.resolved` for it.
-
-**Notifications.** Everything that wants your attention — a failed run, a scheduled task's result, a
-loop that needs an answer, a service that did not come back — is one row of the notification centre
-(the Inbox screen, and `/inbox` in Telegram). `GET /api/notifications?view=all|unseen|problems|needs_you`
-lists them newest first, with `before=<id>` and `limit=` for paging, and answers
-`{"entries", "next_before", "summary"}`; the summary is `{"unseen", "needs_you"}`, also at
-`GET /api/notifications/summary` and in `/api/status`. `POST /api/notifications/seen` takes one of
-`{"ids": [...]}`, `{"all": true}` or `{"session_id": "..."}`, and `DELETE /api/notifications/{id}`
-removes one. Each new or repeated notification is also a `notify` event on `/api/events`, and each
-change of what was seen a `notify.seen` event, so a client can keep its badge without polling. A
-quiet notification is kept as a record and never counts as unseen.
-
-Where a notification goes is decided once, on the host, from the `[notifications]` section of
-`config.toml`: a matrix of categories against the channels (the app, push, the desktop launcher,
-Telegram; each cell `on`, `off` or `urgent`), quiet hours in your time zone, muted projects, and what
-you are looking at — nothing buzzes for the session on your screen, and nothing is pushed while a
-window has your attention. What Telegram already delivered is not pushed again; a session kept off
-Telegram stays off it; with no bot bound, Telegram plays no part. The reason for each channel is kept
-in the entry's `delivered`. A question or a permission request can be answered from its notification:
-`POST /api/notifications/{id}/act` with `{"action": "allow" | "deny" | "answer:<n>" | "open"}` (or
-`{"action": "answer", "value": "..."}`); the first answer wins and a second one gets 409 with the
-first one's outcome. `GET /api/notifications/preferences` returns the section with the configuration
-revision, `PUT` saves it (`{"preferences", "base_revision"}`, 409 when stale), and
-`POST /api/notifications/test` sends one notification through every channel there is and reports
-each outcome.
-
-An agent can notify you itself with the `Notify` tool (a title, a body, a level, a link, and a key that
-updates the earlier notification with the same key instead of adding one). It goes through the same
-routing, and each session may send `notify_tool_per_session` of them per `notify_tool_window_minutes`
-(5 per 10 minutes) and `notify_tool_urgent_per_hour` urgent ones (2), because urgent passes through
-quiet hours. Subagents and a project's staff do not have the tool: their work reaches you through the
-agent or orchestrator that gave it to them.
-
-**A project's board.** Every task whose project is set is on that project's board, and a task an
-agent adds is drawn on the board of the project it works in. `GET /api/projects/{id}/board` answers
-`{"project", "tasks", "needs_you", "counts", "staff"}`: each task carries its four-part `brief`
-(`objective`, `deliverable`, `boundaries`, `done_when`) and its `assignee` with that staff member's
-live status; `needs_you` is the project's open requests routed to the operator, read from the
-requests themselves each time, so an answer from anywhere ends one. `POST` to the same address adds a
-task with `{"title", "brief", "assignee_staff_id", "depends_on", "priority"}`; `PUT /api/board/{id}`
-also takes `assignee_staff_id` (`""` unassigns), `brief` (the parts sent) and `depends_on`; `POST
-/api/board/{id}/accept` moves a task from review to done, and on a task with a staff branch it is the
-merge below (**409** when it is not in review, or the merge is refused); `GET /api/board?project=<id>`
-is one project's tasks. A project's staff
-and orchestrator see its whole board, move only their own tasks and never to done; an ordinary agent
-keeps its own board, without the team's tasks. Each change is a `task.created`, `task.moved`,
-`task.assigned` or `task.accepted` event naming its `actor`.
-
-**Reviewing and merging a staff branch.** The orchestrator proposes, you merge. `GET
-/api/board/{id}/review` reads, without changing anything, what merging the task's branch into its
-folder's current branch would bring: `commits` (at most 50), `files` with their added and removed
-lines, a bounded `patch`, the dry run's `conflicts` (`git merge-tree`), whether the folder is clean and
-still on the branch the work was cut from, the staff member's verification `receipts`, and `blockers`,
-each a `code` and a sentence, when Merge cannot be pressed. `POST /api/board/{id}/merge` merges it as a
-merge commit, finishes the task and publishes `task.accepted`; the staff worktree is removed when its
-member has nothing else to do in that folder, and the branch is deleted only once it is merged. A
-conflict is never left in the folder: the merge is aborted, the task is marked `conflict` and
-`task.merge_failed` wakes the orchestrator. `POST /api/board/{id}/reject` with `{"note"}` sends the work
-back to its member. Nothing is pushed.
-
-**A project's team at work.** `POST /api/staff/{id}/assign` with `{"task_id"}` gives a staff member a
-task from its project's board; the task needs all four parts of its brief (objective, deliverable,
-boundaries, done-when). It starts at once or waits in the project's launch queue, and the answer
-says which: `{"state": "started" | "queued", "position", "reason", "detail"}`. A launch waits while
-the project's concurrency is taken, while the member is busy with another task, while the task's
-dependencies are open, for a few seconds between two launches of one project, and — for a
-command-line member, which is a terminal session — while the machine already runs as many terminal
-sessions as its cap allows or the terminals service is not there. Each member in
-`GET /api/projects/{id}/staff` carries what it waits for under `queued`, and the listing the whole
-queue under `queue`. `POST /api/staff/{id}/tell` (`{"text", "mode": "queue" | "steer" |
-"interrupt"}`) answers with the message's receipt, and `GET /api/staff/{id}/messages` lists what was
-sent, newest first, each with its delivery state; `…/interrupt`, `…/pause` (finish the turn, commit
-what is uncommitted, start nothing new) and `…/release` (`{"keep_worktree"}`) control the live
-session. What staff ask — a question, or a call the policy refused — is a request:
-`GET /api/asks?project=<id>&routed_to=operator` lists the ones waiting for you, and
-`POST /api/asks/{id}/answer` (`{"allow"}`, `{"selected": [...]}` or `{"text"}`, the id or its
-six-character short form) answers one; the first answer wins, and a second gets 409 naming who was
-first. A request the orchestrator leaves unanswered for ten minutes comes to you.
-
-**A project's orchestrator.** `POST /api/projects/{id}/orchestrator` (`{"model", "autonomy",
-"concurrency_cap"}`, each optional) switches it on: a chat of its own that runs the team and does none
-of the work — its tools are the brief, the folders, the journal, the team, the board, a read-only
-`Peek` into the files, `AskOperator` and `ProjectReport`, and nothing that writes a file or runs a
-command. It runs the team with the same limits as your own routes: it hires (`Hire`, only on an
-executor that can start here), changes and dismisses staff, hands out tasks (`Assign` refuses a brief
-without all four parts), talks to them (`Tell`), reads what they did in bounded pages (`ReadStaff`),
-and interrupts, pauses or releases them. It answers their requests within the project's autonomy:
-under `ask` its answer to a question is only a suggestion to you and permissions are yours; under
-`normal` it grants only by quoting a line of the brief's "allowed without the operator"; under `full`
-it grants with a stated reason, and a command-line agent still starts in its usual permission mode.
-It can always deny, or pass a request to you with its suggestion. `PATCH` the same address changes its model, autonomy or concurrency, `DELETE` switches it off
-(its chat stays), and `POST …/orchestrator/replace` (`{"reason"}`) gives it a fresh chat that names
-the one it replaces. It sleeps between turns and is woken by its project's events, gathered for twenty
-seconds (at once for a question, a permission, an error or a stuck report); every turn begins with the
-project as it is now, which `GET /api/projects/{id}/state` shows as it sees it. Its questions never
-pause it: they are requests you answer like a staff member's, and the answer wakes it. Its model is
-the project's own choice, else the default for project orchestrators in Settings → Models, else the
-strongest preset; the model chip in its chat changes the project's choice. In `GET /api/sessions`
-such a project carries `orchestrator: {"enabled", "session_id", "staff", "working", "needs_you"}`
-(null for a project without one), and `GET /api/sessions/{id}` names what a session is to its
-project: `orchestrator_of` (the project's id) or `staff` (`{"id", "session_id"}`).
-It asks in batches — `AskOperator(questions=[{title, text, options, multi, …}])` — and takes back what
-no longer matters with `WithdrawQuestions(ids, reason)`. What waits for you is a list in the Questions
-tab of the panel beside its chat (a sheet behind the header's button on a phone), staff waiting on a
-permission or an escalated question above its own questions; the chat itself shows one line, "N
-questions waiting". Answer some, leave others — half-answered cards are drafts kept on the device — and
-Send carries them together: `GET /api/questions?project=<id>` is the list, `POST
-/api/projects/{id}/asks/answer` takes `[{"ask_id", "selected"?, "text"?, "note"?, "allow"?,
-"always"?}]` and answers each item on its own (a request answered elsewhere first comes back as a
-`conflict`), and the answers that won wake the orchestrator once, together. The main chat's tab is the
-same list for every orchestrated project, grouped by project (`GET /api/questions`, `POST
-/api/asks/answer`).
-It sets its own alarms with `WakeMe` (in some minutes, at a moment, or on a cron at most every ten
-minutes) and is woken with the note, even mid-turn; you can leave it one too. `GET|POST
-/api/projects/{id}/wakeups` (`{"note", "in_minutes" | "at" | "cron"}`) and `DELETE …/wakeups/{id}` are
-the Wake-ups panel of the project. A wake-up belongs to the project: a replaced orchestrator, or one
-switched off and on again, gets the ones set before.
-
-A watch is "when this happens, do that", set by the orchestrator (`Watch`) or by you from the same
-panel. It waits for a member to finish a turn, ask, need a permission, crash or go silent; a task to
-move; a terminal to print a pattern (matched by the terminal daemon, so it never polls); a new commit
-on a branch; or a webhook — a pull request, a CI result, or any payload matching a pattern. Then it
-wakes the orchestrator, tells a member something, or notifies you. Every watch has a cooldown (at
-least a minute), may be set to fire once, and switches itself off, with a journal entry, after twelve
-fires in an hour; nothing the orchestrator does itself fires one. `GET|POST
-/api/projects/{id}/watches` (`{"when", "then", "cooldown_minutes", "once", "note"}`), `PATCH …/{id}`
-(`{"enabled", "note", "cooldown_minutes"}`) and `DELETE …/{id}`. Every accepted webhook is published
-as `webhook.received`; a provider with `deliver = "events"` in its `[webhooks.<name>]` section starts no
-run of its own and is there only for the watches.
-
-**A project in Telegram.** With a bot bound, a project whose orchestrator is on gets a forum topic under
-the project's name. You write there and the orchestrator receives it; its own turns do not stream into
-the topic and its replies stay in the app. The topic shows only the orchestrator's reports and
-notifications and every request of the project that waits on you — its questions, the folders it asks
-for, the staff requests it escalated — with buttons that answer them (the first answer wins, wherever it
-was given; a late tap is told who was first) and a reply that answers in words. A request to act on the
-host is answered in the app only. Staff, subagents and the notification router never post there.
-Replacing the orchestrator keeps the topic, switching it off closes it, renaming the project renames it.
-Without a forum (private mode) the same posts come to the private chat under `[project name]`, and a
-reply to one goes to that project's orchestrator rather than to the chat's current session. Without a
-bot, nothing of this exists and the app has it all.
-
-**What a project spends.** `GET /api/projects/{id}/usage` answers `{"staff", "orchestrator", "other",
-"total"}`, each with `today` (the operator's day), `week` (the last 7 days) and `all`, as `{"usd",
-"tokens", "unpriced"}`. A Daedalus member is charged for its sessions and their subagents, counted once;
-a command-line member for the latest usage its CLI reported, with `subscription` holding the share of the
-subscription window used. Calls nobody priced are counted in `unpriced`, never as zero dollars. The team
-rows, the project's column and the top of its journal show it, and the orchestrator's state block reads
-the same numbers.
-
-**Files between the operator, the orchestrators and staff.** A path means something in one place
-only — an orchestrator's inbox in the agent's container does not exist on the host where a
-command-line member works — so files travel by *handle*, `att:<id>`. A file you attach in the main chat
-or a project orchestrator's chat is kept by the host (the bytes in the blob store) and the model is
-told its handle; the main orchestrator reads its files with `Files` and passes them on with
-`Delegate(files=…)` or `CreateProject(files=…)`, and the project gets the same handle. A project
-orchestrator reads one with `Peek(path="att:…")` (`Peek(op="files")` lists them) and hands it to a
-member with `Assign(files=…)` or `Tell(files=…)`, which also take paths in the project's folders. The
-host copies each file into the member's own folder, `.agents/inbox/<task>/` (a `.gitignore` of `*`
-there keeps it out of git), before the brief that names that path: directly for a member of the
-agent's own environment, through the host terminal's `fs.write` for a member on the host — which
-writes nowhere but such an inbox. A member names its results in `Report(artifacts=…)`; files among
-them are copied back and become the project's handles, which the orchestrator can pass on and put in
-`ProjectReport(files=…)` for you and the main orchestrator. Every handle in a chat is a file card you
-can download or preview (`GET /api/files?ids=…`, `GET /api/files/{id}/download`); `GET /api/files/{id}`
-lists where a file may be used and every time it moved, with who, where, its size and its hash. One
-file is at most 50 MB, one hand-over at most 20 files.
-
-**The main orchestrator.** One chat, the home of the app's orchestration mode (the rail's
-Orchestration item; on a phone, the first row of that mode's list), where you say "in Bakery, add a
-gluten-free menu": it hands the work to that project's orchestrator as a *dispatch* and follows it. It
-never touches files, staff or a board; its tools are `Projects`, `Delegate`, `Progress`, `Cancel`,
-`CreateProject`, `Answer` and `Files`, beside `Notify`, `StaySilent` and the history tools. A dispatch wakes the
-project's orchestrator at once and is closed by exactly one `ProjectReport` with its id (done or
-blocked); a progress report is a message on it. The main orchestrator is woken only by those reports
-and by a dispatch that went quiet for `dispatcher.stalled_minutes` (30) while nobody in its project
-worked, and it tells you in a line or two — pushed to your phone when you are not looking at its chat.
-A question a project puts to you about a dispatch (`AskOperator(dispatch_id=…)`) is shown in the main
-chat as well as the project's, as one request answered once wherever you answer it; its model is not
-woken for it. It answers one for you only when your latest message says the answer (`Answer` quotes
-your words), and never a permission. Its model is Settings → Models → Main orchestrator, a mid-tier
-preset unless you choose one; the model chip in its chat writes that setting. `GET /api/main` is the
-chat as the app draws it (the session, the dispatches, the questions), `POST /api/main` opens it the
-first time and `POST /api/main/replace` gives it a fresh chat; `GET /api/dispatches/{id}` and `POST
-/api/dispatches/{id}/cancel` (`{"reason"}`) are a dispatch's card. With a Telegram bot it lives in the
-General topic of a forum — plain text there is for it, and a reply to another session's post in
-General still goes to that session — or, without a forum, it speaks in the private chat under "🧭 Main";
-a reply to one of its posts reaches it and `/main` makes it the chat's session. Its questions are
-posted there once, with buttons, and never in the project's topic.
-
-`CreateProject` makes a project only after you confirm it on a card in the main chat — a misheard
-name never becomes a folder. A container folder must lie under `dispatcher.container_roots` (by default
-the folders your container projects already live in); a host folder is looked at on your machine
-through the host terminal, and a card for one is answered in the app alone. On "Create" the folders
-are made if asked, the project's orchestrator is switched on and handed dispatch #1: survey the folders
-and write the brief. Until that dispatch is done — or you press "Finish setup" (`POST
-/api/projects/{id}/setup/finish`) — every question the project asks is shown in the main chat too.
-
-A command-line member runs its CLI in a terminal of its own, which you can open like any other. The
-launch answers the CLI's folder-trust question on screen before the task is given, and a CLI that
-cannot get ready — signed out, or stuck on a screen it does not recognise within `ready_timeout_s` —
-shows as an error with that screen, its terminal left open for you. A working CLI that goes quiet has
-its screen read: an idle prompt seen twice ends the turn, anything less shows as silence, never as
-a failure. Its team tools post to the terminal service's hook listener and are answered there. The
-CLIs keep running when the host restarts, and the host takes them up again where they were. A member
-is busy only while its session works a task that is still being worked: once the task is done, in
-review or dropped, its next task goes into the same session as its next message, when the session
-stands in the task's folder, and starts a new session otherwise. A row left grey over an idle prompt,
-or working on a task that is over, is settled at start and by the team's ticker.
-
-Claude Code is the first CLI that works as staff. Each launch gets its own settings overlay (hooks
-through the terminal service, the team tools allowed), a short statement of how to talk to the team
-in its system prompt, and a `daedalus-team` skill, all in the launch's directory and never in your
-own configuration or the project. Its permission requests and questions go to the orchestrator or to
-you as requests, answered through the held hook while Claude's own dialog stays on screen for you to
-answer there too. Messages go one at a time, only when the CLI can take them and never into a dialog,
-and each shows how far it got (`GET /api/staff/{id}/messages`); a turn that ends without a report is
-passed on with its last words. `GET /api/staff/{id}/session`, `…/transcript`, `…/events` and
-`…/changes` are what the staff view reads, and `POST /api/staff/{id}/messages` and `…/seen` its
-composer and its "read". The self-check after an update runs one short session, with one tiny prompt
-on the cheapest model.
-
-Codex and OpenCode work as staff through their own servers rather than through their screens. Codex
-runs its app server as a second terminal beside the TUI; the host starts the thread on it with the
-member's instructions and the TUI attaches to that thread, so every message the host sends by the
-server shows in the TUI, and approvals and questions come to the host as the server's requests.
-OpenCode's TUI carries its server inside it, on a loopback port of the launch and behind a password
-made for that launch; messages go to it under ids the host chooses and come back as its events. The
-team tools, the instructions and the skill are launch configuration in both, never your own.
-
-pi works as staff through a small extension the launch loads with `-e`: it reports the session's
-events, takes the host's messages on a socket in the launch's directory (a steer goes in after the
-running tool call), gives the model the two team tools and answers pi's folder-trust question. pi asks
-for no permissions. In the container it runs on the Node the Harnesses screen installs.
-
-Grok Build works as staff through an agent file the launch hands it with `--agent`: the file carries
-the hooks and the team tools for that session only, so nothing is written into `~/.grok`, and your
-own Claude hooks are kept out of it. Its permission prompts come to the orchestrator or to you and
-are answered with the dialog's own keys; a steer stops the running turn first, because Grok would
-otherwise only queue it behind that turn.
-
-Push reaches a phone or a browser with the app closed once the app is served from a public https
-address (`MINIAPP_PUBLIC_URL`). Turn it on per device in Settings → Notifications; inside Telegram the
-bot is the push instead, and an iPhone or iPad gets it only for the app added to the Home Screen.
-The host signs and encrypts every message itself (VAPID keys made once and kept in the database).
-`GET /api/push/config` gives the key a browser subscribes with, `POST /api/push/subscriptions` takes
-what `PushSubscription.toJSON()` returns plus a `device` name, `GET` lists the devices and
-`DELETE /api/push/subscriptions/{id}` removes one; a device that fails for a week is dropped. A
-permission request or a short question carries Allow/Deny (or its options) on the notification where
-the platform shows buttons; a host-level permission never does and is answered in the app. When a
-pushed request is answered anywhere else, the other devices are told to close it.
-
-## Layout
-
-```
-daedalus/
-  host/         sessions, engine wiring, prompts, tool policy, hooks, skills store, checkpoints
-  providers/    OpenAI-compatible adapter, fallback chain, pricing, registry
-  tools/        one tool per module, PascalCase names
-  stores/       SQLite stores, blob store, durable memory
-  security/     redaction of secrets in what the model and the chat see
-  transport/    Telegram (aiogram 3): topics, rich messages, voice, files
-  extensions/   HTTP API + app, self-development, scheduler, loops, subagents,
-                services, board, peers, notifications, heartbeat, balance, voice, MCP
-  bench/        headless task runner and the Harbor adapter
-launcher/       the supervisor (PID 1, never edited by the agent)
-miniapp/        Vite + React app (Telegram Mini App and browser); src/router.ts, shell.tsx,
-                dialogs.tsx, store.ts, format.ts and one file per screen under src/screens/
-skills/         SKILL.md skills the agent can load
-personas/       the persona the prompt is built from
-deploy/         Dockerfile, compose, key proxy, SearXNG settings, env examples
-desktop/        the launcher: one binary that runs the stack on a personal machine — the setup
-                page, the app window, the portable runtime native mode downloads into data/runtime/
-tests/          unit and integration tests; tests/browser drives the built app with a real mouse
-docs/           design and decisions (2026-09-06, historical), screenshots, diagrams
-```
-
-## Voice mode (beta)
-
-`/app/voice` is a conversation, not a chat window. You talk; a small fast model — the *concierge* —
-answers out loud in a second or two. It is not the agent that does the work: it is the manager who
-stays on the line while the engineers work. Small talk, quick facts and "what is running?" it answers
-itself. Anything substantial it hands to a real agent session with `Delegate` and says so at once
-("one moment, I am setting that up"), so the conversation never stalls on a four-minute tool call.
-Several things asked at once become several agents, running in parallel. While they work you can keep
-talking: add an instruction to one that is already going, ask what came back, stop one. When an agent
-finishes, the report arrives in the conversation and the concierge summarises it in a sentence.
-
-The concierge is an ordinary session: its transcript is in the app under **Voice → Transcript**, its
-history is compacted like any other, and its calls appear in Usage. What it is not is an agent — its
-tools are `Delegate`, `Agents`, `AgentResult`, `StopAgent` and `WebSearch`, and nothing else. It has no
-shell, no files and no workspace; the agents beside it have all of that. That split is enforced by the
-host, not by the prompt, and no mode can widen it.
-
-```toml
-[voice]
-enabled = true
-preset = "openrouter.qwen-qwen3.7-flash"   # a preset from [presets]; pick a fast, no-thinking model
-                                           # chosen in the app too: Settings -> Voice -> Model, which
-                                           # lists the presets and warns about the slow ones. Empty
-                                           # means the default model. A change applies to the next
-                                           # thing you say, with no restart.
-
-[voice.tts]                  # reading the answer out loud, in the order it is tried
-local_voice = ""             # a voice downloaded onto this machine: "ru-dmitri", "en-amy", ...
-local_speaker = ""           # which voice inside a multi-voice model ("af_sarah", "expr-voice-4-f")
-local_speed = 1.0            # 0.5 - 2.0
-local_threads = 2
-provider = ""                # else an endpoint: a provider id from [providers], its URL and key
-url = ""                     # or an endpoint of its own, e.g. a local speech server
-api_key = ""
-model = "gpt-4o-mini-tts"
-voice = "alloy"
-format = "mp3"               # mp3 | opus | pcm
-```
-
-**Hearing you.** Chrome, Edge and Safari recognise speech in the browser itself, streaming, with no
-server involved — that is the primary path and it costs nothing. Firefox has no such API: there the
-page records instead, cuts an utterance when you have been quiet for about a second, and posts it to
-be transcribed by the `[asr]` endpoint (the same one that transcribes voice notes in the chat). With
-neither, the page still works from the keyboard and says why the microphone is missing.
-
-**Speaking back.** Three ways, tried in that order, and the first is the one to use.
-
-**A voice that runs here.** **Settings → Voice → Voice (speech synthesis)** is a catalog of eighteen
-voices — Supertonic at the top of it, Piper in ten languages including three Russian ones, and Kokoro
-and KittenTTS for English — between thirteen and three hundred and fifty megabytes each. Pick one,
-press **Play sample** to hear it say a sentence in its own language, and press **Use this one**. From
-then on every answer is synthesised on this machine's processor: no endpoint, no key, nothing metered,
-and it works with the network down. Most of them render four to five times faster than a person talks,
-so the audio is ready before the sentence before it has finished playing; the one that does not —
-Piper's "high" quality — says so on its own card. Numbers, dates and Latin words inside a Russian
-sentence are read properly: each Piper archive carries its own copy of espeak-ng's data, so nothing
-has to be installed for it.
-
-The recommended Russian voice is **Supertonic 3**: a hundred and twenty-three megabytes that reads
-thirty-one languages, renders at forty-four kilohertz — twice the rate of the rest — offers ten voices
-inside one download, and is still quicker than any Piper voice here. A Russian answer going to it has
-its stress marked first, from a small dictionary of the words an assistant says every day, because
-that is the one thing about a Russian voice a listener notices immediately. Its licence is
-OpenRAIL-M rather than a permissive one — commercial use is allowed with use restrictions that travel
-with it — and the card says so; the Piper voices, one of them public domain, are still there for an
-installation that would rather not think about it.
-
-**An endpoint**, if you would rather: any OpenAI-compatible `/audio/speech` — a self-hosted
-Kokoro-FastAPI or Piper server, or a hosted model like `gpt-4o-mini-tts`. Set `provider` to reuse a
-configured provider's URL and key, or `url` and `api_key` for an endpoint of its own. A local voice
-that fails is *not* quietly replaced by this one: you chose it, and a failure hidden behind a metered
-fallback is a failure nobody fixes.
-
-**The browser**, with neither configured: every modern browser has a synthesiser, nothing has to be
-installed, and it sounds like it.
-
-Whichever speaks, the answer is spoken a sentence at a time as it is written, so speech starts before
-the model has finished the paragraph, and talking over it stops it.
-
-**Limits.** It is beta and it shows. Recognition quality is the browser's, and it mishears names and
-identifiers; barge-in cuts the audio but the concierge's turn keeps its own run until it settles; a
-delegated agent that stops to ask a question is reported to you but is answered in its own session,
-not by voice; reports arriving while no page is open are held and delivered together at the next
-connect, so a long silence can start with a summary of several agents at once. On iOS, audio plays
-only after the first tap on the page — take the mic once and it works for the session.
-
-## Configuration
-
-Secrets and machine facts live in `.env` (see `deploy/env.example`). Everything you may change at runtime lives in `config.toml` on the state volume and is edited from the app's Settings: presets and providers, the working rules of the system prompt, spend limits and balance thresholds, compaction, the scheduler, speech-to-text, the vision model, the web-search backend, and MCP servers:
-
-```toml
-[mcp.servers.filesystem]
-transport = "stdio"
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-filesystem", "/srv/workspaces"]
-description = "read and write files under the workspaces directory"
-
-[mcp.servers.remote]
-transport = "http"
-url = "https://example.com/mcp"
-headers = { Authorization = "Bearer ..." }
-```
-
-Every session starts with MCP servers off; the agent enables one with `McpEnable`, you toggle them in the app.
-
-Beyond the app's settings, `config.toml` holds the guard rails:
-
-```toml
-[limits]
-max_run_minutes = 0          # cap on active minutes per run (0 = none)
-max_run_tokens = 0           # cap on tokens per run, every call counted (0 = none)
-
-[tools.exec]
-max_output_chars = 60000     # the most one tool call returns to the model
-sandbox = "off"              # off | workspace — bubblewrap: the filesystem read-only except this
-                             # session's own directory, a private /tmp, its own PID namespace.
-                             # Defaults to "workspace" on a native install where bubblewrap can
-                             # actually run — installed is not enough, the machine has to allow the
-                             # namespaces — and "off" everywhere else, a container included.
-
-[tools.results]              # what happens to results the agent has moved past
-fresh_count = 6              # the newest results, always shown whole
-stale_max_chars = 2000       # head kept of an older result longer than this
-trim_batch_chars = 40000     # trimmable excess that must build up before any trimming happens
-
-[tools.groups.browser]       # how a group of tools reaches a run: eager (always in the tool list),
-load = "lazy"                # auto (while it fits), lazy (one catalogue line; the agent loads it with
-                             # ToolSearch). Lazy by default: browser, self_development, scheduling,
-                             # loop, docs, learning, mcp_oauth. Settings → Tools shows each group's
-                             # cost and how often it was used; a session can choose its own mode.
-
-[policy]                     # tool policy on top of the built-in rules (daedalus/host/policy.py)
-egress_allow = []            # hosts the agent may reach without asking; empty = every host, logged
-[[policy.rules]]
-tool = "Exec"
-pattern = "\\bpip install\\b(?!.*--user)"
-action = "deny"              # deny | ask; an allow only lifts an ask, never a built-in denial
-note = "no global installs"
-
-[hooks]                      # operator scripts: JSON on stdin, exit 2 refuses (pre_tool), JSON on stdout rewrites
-pre_tool = ""
-post_tool = ""
-run_finished = ""
-
-[compaction]
-preset = ""                  # a cheaper preset for the summariser; empty = the session's model
-
-[self_change]
-mode = "auto"                # auto | off | local | server — see Self-development above.
-                             # auto resolves at startup from the prerequisites actually present
-
-[board]
-wip_limit = 3                # tasks one agent (with its subagents) may hold in 'doing' at once
-stale_hours = 6              # a 'doing' task whose session went quiet this long is handed back
-
-[ops]
-provider_retry_max_attempts = 6      # runs driven again after the provider failed one; 0 leaves it failed
-provider_retry_base_seconds = 30.0   # the first wait; it doubles up to provider_retry_max_seconds
-provider_retry_max_seconds = 600.0
-
-[memory]
-extract_after_run = false    # store durable facts after a completed run (a paid call)
-
-[modes.review]               # your own mode; the built-in ones (quick, deep, careful, plan) stay unless you redefine the whole table
-tools_only = ["Read", "Find", "Search", "WebFetch", "AskUser"]
-prompt = "Mode: review. Read and report; change nothing."
-```
-
-A refused call comes back to the agent as an error. `refused by policy` is final; `needs the operator's approval`
-carries a key you grant once with `/allow <key>` in chat or the *Allow once* button in the app.
-
-## Evidence
-
-`uv run python -m daedalus --state-dir <dir> bench bench/selfcheck.json --preset <preset>` runs recorded tasks
-headless and writes one record per task (verdict, turns, tokens, cost, wall time) plus its trajectory. The same
-loop runs under [Harbor](https://harborframework.com) against Terminal-Bench, Aider Polyglot, SWE-bench and the
-rest of its adapters: `harbor run -d <dataset> -a daedalus.bench.harbor:DaedalusAgent -m <preset>` with
-`BENCH_STATE_DIR` naming a state directory of its own. Pin a provider's `temperature` in `config.toml` for runs
-that should be comparable. A task that declares GPUs aborts the whole Harbor job on a machine without one, and
-the trials already running with it: exclude such tasks with `-x <org>/<task>` — a registry dataset names its
-tasks with the organisation, so a bare task name matches nothing (`grep -l 'gpus = [1-9]'` over the dataset's
-`task.toml` files lists them). Benchmark sessions run without the memory tools, so nothing carries from
-one task to the next.
+| | |
+|---|---|
+| [docs/FEATURES.md](docs/FEATURES.md) | what you get, each feature at full length |
+| [docs/INSTALL.md](docs/INSTALL.md) | the desktop app, a server, terminals, the agent's browser, the host terminal, signing in, Telegram, models and keys |
+| [docs/AGENT-SETUP.md](docs/AGENT-SETUP.md) | a server install written for a coding agent to follow |
+| [desktop/README.md](desktop/README.md) | the desktop launcher: its folder, window, modes, releases |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | `.env`, `config.toml`, MCP servers and the guard rails |
+| [docs/POLICY.md](docs/POLICY.md) | what the agent may do, and where the boundary is |
+| [docs/SELF-DEVELOPMENT.md](docs/SELF-DEVELOPMENT.md) | the three self-development modes in full |
+| [docs/API.md](docs/API.md) | the HTTP API: files, steers, the event stream, notifications, projects, orchestration, push |
+| [docs/VOICE.md](docs/VOICE.md) | voice mode (beta): hearing you, speaking back, the local voices |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | the repository's layout, and benchmark runs |
+| [docs/architecture/](docs/architecture/) | the browser, the terminals, conversation search |
 
 ## License
 
