@@ -4126,7 +4126,7 @@ class SessionManager:
         return min((limit for limit in limits if limit > 0), default=0)
 
     def discovered_tools_for(self, state: SessionState) -> tuple[str, ...]:
-        """The tools the session's last run loaded through ToolSearch that this session may still call.
+        """The tools the session's last run loaded through ToolSearch and called that it may still call.
 
         Handed to the next run so it starts with them loaded rather than searching again, in the order
         they were loaded, so the tail of the tool list a prefix cache keys on comes back the same. The
@@ -4139,8 +4139,13 @@ class SessionManager:
         return tuple(name for name in names if registry.get(name) is not None and policy_admits(policy, name))
 
     def _keep_discovered_tools(self, state: SessionState, engine: QueryEngine) -> bool:
-        """Remember what the finished run had loaded; ``True`` when that changed what is stored."""
-        loaded = list(engine.context_manager.discovered_tool_names())
+        """Remember what the finished run had loaded and called; ``True`` when that changed what is stored.
+
+        Only what was called: a search loads its best three matches whether or not the model wanted
+        them, and every unused near-miss carried along cost a definition on every request of every
+        later run. What the session was seeded with counts as called — an earlier run called it.
+        """
+        loaded = list(engine.context_manager.called_discovered_tool_names())
         if loaded == list(state.metadata.get("discovered_tools") or ()):
             return False
         for meta in (state.metadata, state.session.metadata):

@@ -387,8 +387,10 @@ def test_sections_that_carry_rules_follow_the_policy_and_the_rest_follow_the_sur
 
 async def test_the_tools_a_run_loaded_are_loaded_in_the_next_run_of_the_session(settings: Settings, db: Database) -> None:
     tool = mcp_tool_name("tracker", "create_issue")
+    unused = mcp_tool_name("tracker", "list_issue")
     provider = ScriptedProvider([
-        {"tool": "ToolSearch", "args": {"query": f"select:{tool}"}},
+        {"tool": "ToolSearch", "args": {"query": f"select:{tool},{unused}"}},
+        {"tool": tool, "args": {"id": "1"}},
         {"text": "loaded"},
         {"text": "second"},
     ])
@@ -400,14 +402,16 @@ async def test_the_tools_a_run_loaded_are_loaded_in_the_next_run_of_the_session(
         sid = state.session.id
         await manager.submit(sid, "load the tracker")
         await until_await(lambda: _idle(manager, sid), "the first run ended")
-        assert [t.name for t in provider.requests[1].tools or []][-1] == tool
+        assert [t.name for t in provider.requests[1].tools or []][-2:] == [tool, unused]
+        # Loaded both, called one: the one it never called is not carried into every later request.
         assert state.metadata["discovered_tools"] == [tool]
         await until_await(lambda: _stored(manager, sid, [tool]), "the loaded tools were stored")
 
         await manager.submit(sid, "again")
         await until_await(lambda: _answered_twice(manager, sid), "the second run ended")
         # Loaded from the first request of the second run, after the base surface.
-        assert [t.name for t in provider.requests[2].tools or []][-1] == tool
+        assert [t.name for t in provider.requests[3].tools or []][-1] == tool
+        assert unused not in [t.name for t in provider.requests[3].tools or []]
 
         # What the session may no longer call is not carried back.
         state.metadata["tools_off"] = [tool]
@@ -431,7 +435,7 @@ async def _answered_twice(manager: SessionManager, session_id: str) -> bool:
     from protocore.contracts.types import MessageRole
 
     answers = [m for m in await manager.sessions.list_transcript(session_id) if m.role is MessageRole.assistant]
-    return len(answers) >= 3
+    return len(answers) >= 4
 
 
 @pytest.mark.parametrize("names", [["BoardAdd", "Nope", "Exec"], []])
