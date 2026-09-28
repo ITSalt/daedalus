@@ -128,6 +128,25 @@ export function availability(harness: Harness, catalog: Catalog | null): Unavail
   return "";
 }
 
+/** Where an executor would run if hired now, and why it could not be.
+ *
+ *  The grid used to ask only the catalog of the environment the sheet was showing, which with
+ *  Daedalus selected is Daedalus's own (the container): every command-line agent installed on the
+ *  host then read as "not installed" until some other executor was picked. Each agent is judged
+ *  where it would run, and one missing there but ready in the other environment is offered there.
+ *  `undefined` catalogs are still loading. */
+export function placeExecutor(
+  harness: Harness,
+  preferred: Env,
+  catalogs: Record<Env, Catalog | null | undefined>,
+): { env: Env; why: Unavailable; waiting: boolean } {
+  const other: Env = preferred === "host" ? "container" : "host";
+  const here = availability(harness, catalogs[preferred] ?? null);
+  if (here === "" || harness === "daedalus") return { env: preferred, why: here, waiting: false };
+  if (catalogs[other] !== undefined && availability(harness, catalogs[other] ?? null) === "") return { env: other, why: "", waiting: false };
+  return { env: preferred, why: here, waiting: catalogs[preferred] === undefined || catalogs[other] === undefined };
+}
+
 const CYRILLIC_FROM = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяіїєґ";
 const CYRILLIC_TO = ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "f", "kh", "ts", "ch", "sh", "shch", "", "y", "", "e", "yu", "ya", "i", "yi", "ye", "g"];
 const CYRILLIC: Record<string, string> = Object.fromEntries(Array.from(CYRILLIC_FROM).map((ch, i) => [ch, CYRILLIC_TO[i]]));

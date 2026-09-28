@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HARNESSES, HARNESS_BADGES, availability, branchPreview, branchSlug, colourVar, defaultIsolation, foldersFor, initials, statusTone } from "./team";
+import { HARNESSES, HARNESS_BADGES, availability, branchPreview, placeExecutor, branchSlug, colourVar, defaultIsolation, foldersFor, initials, statusTone } from "./team";
 
 describe("the executor badge", () => {
   it("gives every executor its own two letters", () => {
@@ -25,6 +25,26 @@ describe("which executor can be hired", () => {
     expect(availability("claude", { claude: { installed: true, logged_in: true } })).toBe("");
     // A catalog that does not say whether it is signed in is not a reason to refuse it.
     expect(availability("pi", { pi: { installed: true } })).toBe("");
+  });
+});
+
+describe("where an executor is offered", () => {
+  const host = { claude: { installed: true, logged_in: true }, codex: { installed: true } };
+  const container = { codex: { installed: true } };
+
+  it("offers an agent installed only on the host while the sheet shows the container", () => {
+    // The defect: with Daedalus picked the grid read the container's catalog alone, and Claude Code,
+    // installed on the host, stayed "not installed" until Codex was clicked.
+    expect(placeExecutor("claude", "container", { container, host })).toEqual({ env: "host", why: "", waiting: false });
+  });
+
+  it("keeps the preferred environment when the agent is there", () => {
+    expect(placeExecutor("codex", "container", { container, host })).toEqual({ env: "container", why: "", waiting: false });
+  });
+
+  it("says not installed only when neither environment has it, and waits while one is still loading", () => {
+    expect(placeExecutor("grok", "host", { container, host })).toEqual({ env: "host", why: "notinstalled", waiting: false });
+    expect(placeExecutor("claude", "container", { container, host: undefined }).waiting).toBe(true);
   });
 });
 

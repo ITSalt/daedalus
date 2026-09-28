@@ -22,6 +22,7 @@ import {
   Team,
   availability,
   branchPreview,
+  placeExecutor,
   colourVar,
   defaultIsolation,
   foldersFor,
@@ -29,23 +30,24 @@ import {
 
 const DAEDALUS_EFFORTS = ["", "off", "low", "medium", "high", "xhigh"];
 
-/** The harness catalog of one environment, asked for once per sheet. An installation without the
+/** The harness catalogs of both environments, asked for once per sheet. An installation without the
  *  harness manager answers 404; that, and any other failure, is "no catalog" — every command-line
  *  agent then reads as not installed, which is what the operator can act on. */
-function useCatalog(env: Env): Catalog | null | undefined {
-  const [catalogs, setCatalogs] = useState<Partial<Record<Env, Catalog | null>>>({});
+function useCatalogs(): Record<Env, Catalog | null | undefined> {
+  const [catalogs, setCatalogs] = useState<Record<Env, Catalog | null | undefined>>({ container: undefined, host: undefined });
   useEffect(() => {
-    if (env in catalogs) return;
     let live = true;
-    api
-      .get<Catalog>(`/api/harnesses/catalog?env=${env}`)
-      .then((c) => live && setCatalogs((all) => ({ ...all, [env]: c && typeof c === "object" ? c : null })))
-      .catch(() => live && setCatalogs((all) => ({ ...all, [env]: null })));
+    for (const env of ["container", "host"] as Env[]) {
+      api
+        .get<Catalog>(`/api/harnesses/catalog?env=${env}`)
+        .then((c) => live && setCatalogs((all) => ({ ...all, [env]: c && typeof c === "object" ? c : null })))
+        .catch(() => live && setCatalogs((all) => ({ ...all, [env]: null })));
+    }
     return () => {
       live = false;
     };
-  }, [env, catalogs]);
-  return catalogs[env];
+  }, []);
+  return catalogs;
 }
 
 export function StaffSheet({ team, member, onClose, onDone, toast }: { team: Team; member?: Staff; onClose: () => void; onDone: () => void; toast: (text: string) => void }) {
@@ -70,7 +72,8 @@ export function StaffSheet({ team, member, onClose, onDone, toast }: { team: Tea
 
   const daedalus = harness === "daedalus";
   const env: Env = daedalus ? project.local_env : cliEnv;
-  const catalog = useCatalog(env);
+  const catalogs = useCatalogs();
+  const catalog = catalogs[env];
   const entry = daedalus ? undefined : catalog?.[harness];
   const folders = foldersFor(project.folders, env);
   const folder = folders.find((f) => f.id === folderId) ?? folders[0];
@@ -92,6 +95,7 @@ export function StaffSheet({ team, member, onClose, onDone, toast }: { team: Tea
   const pickHarness = (next: Harness) => {
     if (next === harness) return;
     setHarness(next);
+    if (next !== "daedalus") setCliEnv(placeExecutor(next, cliEnv, catalogs).env);
     setAgent("");
     setModel("");
     setEffort("");
@@ -178,8 +182,7 @@ export function StaffSheet({ team, member, onClose, onDone, toast }: { team: Tea
           <legend className="field">{t("team.executor")}</legend>
           <div className="executor-grid">
             {HARNESSES.map((h) => {
-              const why = availability(h, catalog ?? null);
-              const waiting = h !== "daedalus" && catalog === undefined;
+              const { why, waiting } = placeExecutor(h, cliEnv, catalogs);
               return (
                 <button
                   key={h}
@@ -188,11 +191,11 @@ export function StaffSheet({ team, member, onClose, onDone, toast }: { team: Tea
                   aria-pressed={harness === h}
                   disabled={waiting || why !== ""}
                   onClick={() => pickHarness(h)}
-                  title={why ? t(`team.unavailable.${why}`) : HARNESS_NAMES[h]}
+                  title={why && !waiting ? t(`team.unavailable.${why}`) : HARNESS_NAMES[h]}
                 >
                   <HarnessBadge harness={h} title="" />
                   <span className="executor-name">{HARNESS_NAMES[h]}</span>
-                  {why && <span className="executor-why">{t(`team.unavailable.${why}`)}</span>}
+                  {why && !waiting && <span className="executor-why">{t(`team.unavailable.${why}`)}</span>}
                 </button>
               );
             })}
