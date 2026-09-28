@@ -564,7 +564,9 @@ function RulesSection({ staffId, rules, toast }: { staffId: string; rules: Stand
         {rules.map((r) => (
           <li key={r.rule} className="staff-rule" data-rule={r.rule}>
             <Icon name="shield" size={13} />
-            <span className="staff-rule-text truncate" title={r.rule}>{ruleWords(r.rule)}</span>
+            {/* Wraps rather than truncates: the server is the end of the words, and one line cut
+                "BrowserSnapshot of daedalus_browser" to "…of daedal…" on a tablet with no hover. */}
+            <span className="staff-rule-text" title={r.rule}>{ruleWords(r.rule)}</span>
             <button className="btn small ghost" disabled={busy === r.rule} onClick={() => void revoke(r.rule)}>{t("staff.rules.revoke")}</button>
           </li>
         ))}
