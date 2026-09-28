@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -15,6 +16,8 @@ from protocore.contracts.types import (
     ToolResultBlock,
     ToolUseBlock,
 )
+from protocore.runtime.events.envelope import TurnEvent
+from protocore.runtime.events.types import EventType
 from protocore.runtime.wire_format import render_compacted_placeholder
 from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 from starlette.requests import Request
@@ -141,6 +144,31 @@ async def test_a_result_cut_for_the_model_expands_to_what_the_tool_returned(clie
     assert listed[0]["length"] == len(whole) and listed[0]["clipped"]
     full = (await client.get(f"/api/sessions/{sid}/tool-results/call-s", headers=H)).json()
     assert full["content"] == whole and full["complete"]
+
+
+async def test_a_result_of_the_run_still_going_is_found_before_the_transcript_has_it(client: httpx.AsyncClient, manager: SessionManager) -> None:
+    # The fault this guards: the transcript is written when a run ends, so "show all" under a step
+    # of a running subagent answered "no such tool result" for a result the app had just drawn.
+    state = await manager.create_session("running")
+    sid = state.session.id
+    hold = asyncio.Event()
+    state.task = asyncio.create_task(hold.wait())
+    try:
+        body = "streamed line\n" * 200
+        await manager.events.publish_session(sid, TurnEvent(type=EventType.TOOL_RESULT, run_id="run-1", payload={"tool_call_id": "call-live", "is_error": False, "content_blocks": [{"type": "text", "text": body}]}))
+        full = (await client.get(f"/api/sessions/{sid}/tool-results/call-live", headers=H)).json()
+        assert full["content"] == body and full["length"] == len(body) and full["complete"] and not full.get("pending")
+        # The run's own history is read before the stream: it holds the block the transcript will get.
+        state.engine = SimpleNamespace(history=[Message(role=MessageRole.tool, content_blocks=[ToolResultBlock(tool_call_id="call-mem", content="from memory")])])  # type: ignore[assignment]
+        assert (await client.get(f"/api/sessions/{sid}/tool-results/call-mem", headers=H)).json()["content"] == "from memory"
+        # Nowhere yet, while the run goes on: not an error, a note to ask again.
+        waiting = await client.get(f"/api/sessions/{sid}/tool-results/call-later", headers=H)
+        assert waiting.status_code == 200 and waiting.json()["pending"] and waiting.json()["content"] is None
+    finally:
+        state.engine = None
+        hold.set()
+        await state.task
+    assert (await client.get(f"/api/sessions/{sid}/tool-results/call-later", headers=H)).status_code == 404
 
 
 async def test_the_page_goes_out_compressed_and_the_stream_does_not(client: httpx.AsyncClient, manager: SessionManager) -> None:

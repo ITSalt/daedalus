@@ -2565,6 +2565,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "session.result.copy": { en: "Copy all", ru: "Копировать всё" },
   "session.result.copy.failed": { en: "Could not copy; select the text instead", ru: "Не удалось скопировать; выделите текст вручную" },
   "session.result.failed": { en: "Could not load the whole result: {error}", ru: "Не удалось загрузить результат целиком: {error}" },
+  "session.result.pending": { en: "The full result is available once this step is saved.", ru: "Полный результат будет доступен, когда этот шаг сохранится." },
   "session.result.empty": { en: "the host sent no text", ru: "хост не прислал текст" },
   "session.result.partial": { en: "The stored original of this result is gone; this is the part that was kept.", ru: "Сохранённый оригинал этого результата утерян; показана только уцелевшая часть." },
   "session.answer": { en: "Answer", ru: "Ответить" },

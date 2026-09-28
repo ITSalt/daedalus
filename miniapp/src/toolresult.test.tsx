@@ -71,6 +71,21 @@ describe("the whole of a tool result", () => {
     expect(host.textContent).toContain("Could not load the whole result");
   });
 
+  it("waits calmly for a step of a running run to be saved, and asks again on request", async () => {
+    // The fault this guards: during a run the host had no saved copy of the result yet, and the
+    // viewer showed "Could not load the whole result: no such tool result" under it.
+    const get = vi.spyOn(api, "get").mockResolvedValueOnce({ content: null, complete: false, pending: true }).mockResolvedValueOnce({ content: whole, complete: true });
+    await act(async () => root.render(<ToolResultView sessionId="s1" item={item()} toast={() => {}} initial={null} keep={() => {}} />));
+    await act(async () => button(/Show all/)!.click());
+    expect(host.textContent).toContain("available once this step is saved");
+    expect(host.textContent).not.toContain("Could not load");
+    expect(host.querySelector("pre.result.full")).toBeNull();
+    await act(async () => button(/Try again/)!.click());
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(host.querySelector("pre.result.full")!.textContent).toBe(whole);
+    expect(host.textContent).not.toContain("available once this step is saved");
+  });
+
   it("copies all of it, not the part in view", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });

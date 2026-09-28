@@ -30,6 +30,8 @@ export function ToolResultView({ sessionId, item, toast, initial, keep }: { sess
   const [full, setFull] = useState<FullResult | null>(initial);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  // The host has not saved this step yet (its run is still going): not a failure, a wait.
+  const [pending, setPending] = useState(false);
   const text = full?.text ?? item.result ?? "";
   // Whether there is more of it is the server's answer, not a comparison of lengths: what is on
   // screen is a redacted preview and the length is the text's, so a redaction that shortens the
@@ -39,8 +41,13 @@ export function ToolResultView({ sessionId, item, toast, initial, keep }: { sess
   async function loadAll() {
     setLoading(true);
     setFailed(null);
+    setPending(false);
     try {
-      const r = await api.get<{ content?: unknown; complete?: boolean }>(`/api/sessions/${sessionId}/tool-results/${encodeURIComponent(item.id)}`);
+      const r = await api.get<{ content?: unknown; complete?: boolean; pending?: boolean }>(`/api/sessions/${sessionId}/tool-results/${encodeURIComponent(item.id)}`);
+      if (r.pending) {
+        setPending(true);
+        return;
+      }
       // An answer without the text is a failure to say, not a chat to take down with it.
       if (typeof r.content !== "string") throw new Error(t("session.result.empty"));
       const whole = { text: r.content, complete: r.complete !== false };
@@ -79,9 +86,10 @@ export function ToolResultView({ sessionId, item, toast, initial, keep }: { sess
       )}
       {clipped && (
         <button type="button" className="btn small" onClick={loadAll} disabled={loading}>
-          {loading ? t("common.loading") : item.length != null ? t("session.showall", { n: fmtInt(item.length) }) : t("session.showall.masked")}
+          {loading ? t("common.loading") : pending ? t("common.retry") : item.length != null ? t("session.showall", { n: fmtInt(item.length) }) : t("session.showall.masked")}
         </button>
       )}
+      {pending && <div className="result-note">{t("session.result.pending")}</div>}
       {failed && <div className="result-note error">{t("session.result.failed", { error: failed })}</div>}
       {full !== null && (
         <div className="result-tools">

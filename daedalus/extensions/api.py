@@ -2284,15 +2284,30 @@ def build_app(app: Application, api_token: str) -> FastAPI:
 
         ``complete`` is false only when the result was masked and its stored original is gone; the
         text is then the placeholder's own account of it, and the app says so.
+
+        The transcript is written when a run ends, so a result of the run still going is not in it
+        yet; asked for one, this answered 404 and the app showed an error under a result it had just
+        drawn from the live stream. The run's own history holds it in memory, and the stream's stored
+        envelope holds what the app was shown, so those are read next, in that order. When none has
+        it and the session is running, ``pending`` says to ask again once the step is saved.
         """
         state = await manager.get_state(session_id)
         if state is None:
             raise HTTPException(404, "no such session")
-        for message in await manager.sessions.messages_for_call(session_id, call_id):
+        messages = await manager.sessions.messages_for_call(session_id, call_id)
+        if state.engine is not None:
+            messages = [*messages, *reversed(state.engine.history)]
+        for message in messages:
             for block in message.content_blocks:
                 if isinstance(block, ToolResultBlock) and block.tool_call_id == call_id:
                     text, complete = await full_tool_result(block, manager.blobs, TENANT)
                     return {"id": call_id, "content": redact.redact(text), "is_error": block.is_error, "length": len(text), "complete": complete}
+        streamed = await manager.events.session_tool_result(session_id, call_id)
+        if streamed is not None:
+            text, is_error = streamed
+            return {"id": call_id, "content": redact.redact(text), "is_error": is_error, "length": len(text), "complete": True}
+        if state.running:
+            return {"id": call_id, "content": None, "is_error": False, "length": None, "complete": False, "pending": True}
         raise HTTPException(404, "no such tool result")
 
     @api.get("/api/sessions/{session_id}/sent/{call_id}/download")

@@ -1007,6 +1007,26 @@ class SqliteEventStream(IEventStream):
             "payload": payload,
         }
 
+    async def session_tool_result(self, session_id: str, call_id: str) -> tuple[str, bool] | None:
+        """The text and error flag of one tool result as the session's stream carried it, or None.
+
+        The stream's envelope is stored before the transcript is: while a run is going it is the
+        only durable copy of a result, and the full-result endpoint falls back to it.
+        """
+        row = await self._db.fetchone(
+            "SELECT payload FROM session_events WHERE session_id = ? AND kind = 'tool_result'"
+            " AND json_extract(payload, '$.tool_call_id') = ? ORDER BY event_seq DESC LIMIT 1",
+            (session_id, call_id),
+        )
+        if row is None:
+            return None
+        payload = json.loads(row["payload"])
+        content = payload.get("content")
+        if not isinstance(content, str):
+            blocks = payload.get("content_blocks") or []
+            content = "".join(str(b.get("text") or "") for b in blocks if isinstance(b, dict))
+        return content, bool(payload.get("is_error"))
+
     async def session_replay(
         self,
         session_id: str,
