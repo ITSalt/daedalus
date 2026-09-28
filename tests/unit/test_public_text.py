@@ -84,6 +84,11 @@ def test_the_public_audit_catches_a_history_walk_that_stops_early(tmp_path) -> N
     still finds the credential and still refuses, and the self-check would answer green. The audit
     reports how many commits it visited and the self-check requires all of them, so a walk that
     stops early goes red wherever the credential sits -- which is this test, measured on a copy.
+
+    The walk has to stop early *and exit cleanly*, or the other arm answers first: `| head -2`
+    makes the enumeration die of SIGPIPE, and the audit refuses it as a reader that failed, which
+    says nothing about the count. `--max-count=2` visits two of the fixture's three commits and
+    returns 0, so the only thing that can catch it is the count.
     """
     import subprocess
     from pathlib import Path
@@ -93,7 +98,9 @@ def test_the_public_audit_catches_a_history_walk_that_stops_early(tmp_path) -> N
     needle = 'git rev-list --all > "$commit_list"'
     assert text.count(needle) == 1, "the history enumeration is not one occurrence"
     cut = tmp_path / "audit_public_cut.sh"
-    cut.write_text(text.replace(needle, 'git rev-list --all | head -2 > "$commit_list"'), encoding="utf-8")
+    cut.write_text(
+        text.replace(needle, 'git rev-list --all --max-count=2 > "$commit_list"'), encoding="utf-8"
+    )
 
     done = subprocess.run(["bash", str(cut), "--self-check"], capture_output=True, text=True)
     assert done.returncode != 0, "a history walk that stopped early passed the self-check:\n" + done.stdout
