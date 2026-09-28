@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Sheet, useLayer } from "./dialogs";
+import { useEdgeFade } from "./edgefade";
 import { Icon, IconName } from "./icons";
 import {
   PANEL_CLOSED,
@@ -141,6 +142,12 @@ const TAB_ICON: Record<PanelTab, IconName> = { details: "settings", files: "fold
 
 function Tabs({ state, onTab, onClose, onExpand, badges, marks, inSheet, local, tabs = PANEL_TABS }: HostProps & { inSheet?: boolean }) {
   const strip = useRef<HTMLDivElement>(null);
+  // On a phone the sheet's eight tabs are wider than the screen: fade the edge with more behind it,
+  // and bring the open tab into view, or a sheet opened on Folders showed a lone "F" at the edge.
+  useEdgeFade(strip, state.tab);
+  useEffect(() => {
+    strip.current?.querySelector<HTMLElement>(".panel-tab.on")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [state.tab]);
   const onKey = (e: React.KeyboardEvent) => {
     const i = tabs.indexOf(state.tab!);
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {

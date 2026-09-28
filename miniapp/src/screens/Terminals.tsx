@@ -3,7 +3,8 @@
 // host's listing (`?preview=6`), never from a connection: forty cards must not hold forty sockets.
 // Opening one goes to its full-screen view (`/app/terminals/<id>`), which does connect.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useEdgeFade } from "../edgefade";
 import { api, Project, SessionList, TerminalEnv, TerminalEnvName, TerminalList, TerminalLoad, TerminalView as TerminalRow } from "../api";
 import { Skeleton } from "../components";
 import { Sheet } from "../dialogs";
@@ -82,6 +83,9 @@ export function TerminalsScreen({ toast, project, projects }: { toast: (text: st
     refresh();
   };
 
+  // On a phone the chips run past the edge; the row fades there so "Finished" reads as a swipe away.
+  const filterRow = useRef<HTMLDivElement>(null);
+  useEdgeFade(filterRow, rows.length);
   const subtitle = list.data ? t("term.screen.counts", { open: counts.open, host: counts.host, staff: counts.staff }) : undefined;
   const lens = projects.find((p) => p.id === project) ?? null;
 
@@ -98,7 +102,7 @@ export function TerminalsScreen({ toast, project, projects }: { toast: (text: st
         }
       >
         {load.data && <LoadBar load={load.data} compact />}
-        <div className="chips term-filters" role="group" aria-label={t("term.filter.label")}>
+        <div ref={filterRow} className="chips term-filters" role="group" aria-label={t("term.filter.label")}>
           {FILTERS.map((f) => {
             const n = rows.filter((r) => matches(r, f)).length;
             return (

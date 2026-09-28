@@ -18,6 +18,7 @@ import type { TerminalEnvName, TerminalView as TerminalRow } from "../api";
 import { MenuItem, OverflowMenu, toast } from "../dialogs";
 import { t } from "../i18n";
 import { Icon } from "../icons";
+import { useEdgeFade } from "../edgefade";
 import { InputDeduper } from "./dedupe";
 import { copyText, fontSizeStep, setFontSize, storedFontSize, TerminalState } from "./instance";
 import { applyModifiers, composeBytes, keyBytes, PHONE_KEYS, PhoneKey, pinchFont, StickyModifier } from "./phonekeys";
@@ -295,8 +296,12 @@ function KeyRow({ ctrl, alt, onPress }: { ctrl: string; alt: string; onPress: (k
     held.current = null;
   };
   useEffect(() => release, []);
+  // More keys than a phone is wide: the edge with more behind it fades (edgefade.ts), where a bare
+  // cut left the tenth key a sliver that read as a broken button.
+  const row = useRef<HTMLDivElement>(null);
+  useEdgeFade(row);
   return (
-    <div className="term-keys" role="toolbar" aria-label={t("term.phone.keys")}>
+    <div ref={row} className="term-keys" role="toolbar" aria-label={t("term.phone.keys")}>
       {PHONE_KEYS.map((key) => {
         const mod = key.modifier === "ctrl" ? ctrl : key.modifier === "alt" ? alt : "";
         return (
