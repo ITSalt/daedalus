@@ -2750,7 +2750,9 @@ button.staff-row:hover { background: var(--surface-2); }
 .term-card-head .term-env { margin-right: 0; }
 .term-card-owner { padding: 0 12px 6px; font-size: var(--fs-12); }
 .term-card-preview { margin: 0; height: calc(6 * 1.45em + 16px); padding: 8px 12px; overflow: hidden; background: var(--term-bg); color: var(--fg); font-family: var(--mono); font-size: var(--fs-11); line-height: 1.45; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.term-card-line { white-space: pre; overflow: hidden; text-overflow: clip; min-height: 1.45em; }
+/* A line wider than the card ends in an ellipsis: clipped bare, "cd ../daedalus" read as "cd ../daeda",
+   a whole command that was never typed. */
+.term-card-line { white-space: pre; overflow: hidden; text-overflow: ellipsis; min-height: 1.45em; }
 .term-card-foot { display: flex; align-items: center; gap: var(--space-2); min-height: var(--row-h); padding: 4px 8px 4px 12px; min-width: 0; }
 .term-card-status { flex: 1; min-width: 0; font-size: var(--fs-12); }
 .term-card-status[data-level="warn"] { color: var(--warn); }
