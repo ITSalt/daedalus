@@ -3801,8 +3801,8 @@ def build_app(app: Application, api_token: str) -> FastAPI:
         if status == 403:
             text = "Для этой ссылки нужен ключ." if russian else "This link needs its key."
         else:
-            text = "Этот диалог не открыт." if russian else "This dialog is not shared."
-        title = "Общий диалог" if russian else "Shared dialog"
+            text = "Этот диалог не открыт." if russian else "This conversation is not shared."
+        title = "Общий диалог" if russian else "Shared conversation"
         lang = "ru" if russian else "en"
         body = (
             f"<!DOCTYPE html><html lang=\"{lang}\"><head><meta charset=\"utf-8\">"
