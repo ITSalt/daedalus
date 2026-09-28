@@ -78,6 +78,7 @@
   --reading-w: 760px;   /* prose max width: the answer and the user's card */
   --chat-w: 920px;      /* the stripe the timeline, the turns and the composer share; it widens below */
   --head-h: 48px;
+  --page-pad: 14px;     /* a page's side padding; 24 on a desktop, 40 on a wide one */
   --composer-h: 46px;
   /* Motion. */
   --t-fast: 120ms; --t-base: 180ms; --t-slow: 240ms;
@@ -173,6 +174,12 @@ a { color: var(--accent); text-decoration: none; }
 .screen { flex: 1; padding: 6px 14px calc(76px + env(safe-area-inset-bottom)); }
 .screen.narrow { width: min(100%, 1120px); margin-inline: auto; }
 .screen.wide { width: min(100%, 1680px); margin-inline: auto; }
+/* The header's contents stand in the same column as the page under it, while its band still spans
+   the window. Flush left, the title and the filters sat 240 px left of the cards on a 1920 screen,
+   on Inbox, Memory and Services alike. The padding is the column's margin plus the side padding the
+   two share at that width (14, 24, 40). */
+.pagehead:has(+ .screen.narrow) { padding-inline: max(var(--page-pad), calc((100% - 1120px) / 2 + var(--page-pad))); }
+.pagehead:has(+ .screen.wide) { padding-inline: max(var(--page-pad), calc((100% - 1680px) / 2 + var(--page-pad))); }
 .pagehead { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: max(6px, env(safe-area-inset-top)) 14px 6px; }
 .pagehead-row { display: flex; align-items: center; gap: 8px; min-height: var(--head-h); }
 .pagehead-title { flex: 1; min-width: 0; }
@@ -915,6 +922,7 @@ input.field, select.field, textarea.field {
   .navmenu-lang .ic { color: var(--fg-2); }
   .navmenu-lang .segmented { margin: 0; }
   .main { min-width: 0; }
+  :root { --page-pad: 24px; }
   .pagehead { padding: 8px 24px 6px; }
   .pagehead h1 { font-size: 20px; }
   .screen { padding: 4px 24px 32px; }
@@ -961,6 +969,7 @@ input.field, select.field, textarea.field {
 }
 @media (min-width: 1600px) {
   .chat-head, .chat-scroll, .composer { padding-left: 40px; padding-right: 40px; }
+  :root { --page-pad: 40px; }
   .screen, .pagehead { padding-left: 40px; padding-right: 40px; }
 }
 
