@@ -254,14 +254,16 @@ export function ServiceRow({ s, sessionId, onChange, toast, onLogs, card }: { s:
   return (
     <div className={`service-row ${s.status} ${card ? "erow service" : ""}`}>
       <div className="service-line">
-        <span className={`dot ${s.status}`} />
         <div className="grow" style={{ minWidth: 0 }}>
           <div className="service-name">
             {s.name}
             {s.port && <span className="chip mono port">:{s.port}</span>}
             {shared && <span className={`chip ${mode === "public" ? "bad" : "attn"}`}>{accessWord(mode)}</span>}
           </div>
+          {/* The dot leads the line it describes. Centred beside the whole block, it sat level with
+              an access badge whenever a phone wrapped the name, and read as that badge's colour. */}
           <div className="sub service-meta">
+            <span className={`dot ${s.status}`} />
             {s.status === "running" ? t("svc.running", { t: relTime(s.started_at) }) : `${statusWord(s.status === "dead" ? "dead" : "stopped")}${s.note ? `: ${s.note}` : ""}${s.stopped_at ? ` · ${relTime(s.stopped_at)}` : ""}`}
             {s.status === "running" && lan && !shared ? ` · ${lan}` : ""}
           </div>

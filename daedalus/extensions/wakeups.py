@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from daedalus.stores.projects import Project
 
 NOTE_MAX = 500
+NAME_MAX = 80
+"""The note is the wake-up's name in the list of schedules, shortened to this many characters."""
 IN_MINUTES_MAX = 60 * 24 * 60
 """Sixty days: past that an alarm is a plan, and the brief or the board is the place for it."""
 AT_MAX_DAYS = 366
@@ -109,6 +111,20 @@ async def count(app: Application, project_id: str) -> int:
     return int(row["n"]) if row is not None else 0
 
 
+def short_name(text: str) -> str:
+    """The note as a schedule's name: whole if it fits, otherwise cut at a word and marked as cut.
+
+    It was sliced at 80 characters, so the list of schedules ended a title on half a word with nothing
+    to say more followed, and "против ст" read as a word of its own."""
+    if len(text) <= NAME_MAX:
+        return text
+    cut = text[: NAME_MAX - 1]
+    space = cut.rfind(" ")
+    if space > NAME_MAX // 2:
+        cut = cut[:space]
+    return cut.rstrip(" ,.;:") + "…"
+
+
 async def set_wakeup(
     app: Application,
     project: Project,
@@ -138,7 +154,7 @@ async def set_wakeup(
     run_at, recurring = resolve_when(app, at=at, in_minutes=in_minutes, cron=cron)
     try:
         created = await scheduler.create(
-            name=text[:80],
+            name=short_name(text),
             prompt=text,
             cron=recurring,
             run_at=run_at,

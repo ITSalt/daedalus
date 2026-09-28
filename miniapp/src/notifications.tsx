@@ -71,7 +71,10 @@ export function noticeLine(entry: Notification, projects: Map<string, string>): 
   const project = entry.project_id ? projects.get(entry.project_id) : undefined;
   if (project) parts.push(project);
   const session = entry.session_id ? peek<SessionList>("/api/sessions")?.sessions.find((s) => s.id === entry.session_id) : undefined;
-  if (session?.title && session.title !== project) parts.push(session.title);
+  // An orchestrator's session is titled "Orchestrator · <project>", so its whole title repeated the
+  // project already named and the line read "Anchor Inference · Orchestrator · Anchor Inference".
+  const own = (session?.title ?? "").split(" · ").filter((part) => part !== project).join(" · ");
+  if (own) parts.push(own);
   return parts.join(" · ");
 }
 

@@ -198,7 +198,7 @@ function MemorySheet({ r, sessions, onClose, onSaved, onForget, toast }: { r?: M
         </div>
         <div>
           <label className="field">{t("memory.scope")}</label>
-          <select className="field" value={scope} disabled={!!r} onChange={(e) => setScope(e.target.value)}>
+          <select className="field" value={scope} disabled={!!r} title={r ? t("memory.scope.fixed") : undefined} onChange={(e) => setScope(e.target.value)}>
             <option value="global">{t("memory.scope.globaloption")}</option>
             {sessions.map(([id, title]) => (
               <option key={id} value={`session:${id}`}>{title}</option>

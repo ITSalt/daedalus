@@ -404,7 +404,9 @@ export function VoiceScreen({ onOpen, toast }: { onOpen: (id: string) => void; t
                       being written to a sound, and how much of that was the voice being built rather
                       than speaking. A warm voice makes the second number disappear, which is the
                       point. */}
-                  <SpokenTiming ms={ui.firstAudioMs} turn={state?.tts?.last_turn} />
+                  {/* Not while something is loading: the last answer's "the voice is loaded" then sat
+                      under "Loading…" and the page said both things at once. */}
+                  {ready && ui.voice.state !== "loading" && <SpokenTiming ms={ui.firstAudioMs} turn={state?.tts?.last_turn} />}
 
                   {/* There is no asking a browser whether it will make a sound; it is found out by
                       handing it a sentence and hearing nothing start. When that happens the page

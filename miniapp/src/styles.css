@@ -78,6 +78,7 @@
   --reading-w: 760px;   /* prose max width: the answer and the user's card */
   --chat-w: 920px;      /* the stripe the timeline, the turns and the composer share; it widens below */
   --head-h: 48px;
+  --page-pad: 14px;     /* a page's side padding; 24 on a desktop, 40 on a wide one */
   --composer-h: 46px;
   /* Motion. */
   --t-fast: 120ms; --t-base: 180ms; --t-slow: 240ms;
@@ -173,6 +174,12 @@ a { color: var(--accent); text-decoration: none; }
 .screen { flex: 1; padding: 6px 14px calc(76px + env(safe-area-inset-bottom)); }
 .screen.narrow { width: min(100%, 1120px); margin-inline: auto; }
 .screen.wide { width: min(100%, 1680px); margin-inline: auto; }
+/* The header's contents stand in the same column as the page under it, while its band still spans
+   the window. Flush left, the title and the filters sat 240 px left of the cards on a 1920 screen,
+   on Inbox, Memory and Services alike. The padding is the column's margin plus the side padding the
+   two share at that width (14, 24, 40). */
+.pagehead:has(+ .screen.narrow) { padding-inline: max(var(--page-pad), calc((100% - 1120px) / 2 + var(--page-pad))); }
+.pagehead:has(+ .screen.wide) { padding-inline: max(var(--page-pad), calc((100% - 1680px) / 2 + var(--page-pad))); }
 .pagehead { position: sticky; top: 0; z-index: 12; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: max(6px, env(safe-area-inset-top)) 14px 6px; }
 .pagehead-row { display: flex; align-items: center; gap: 8px; min-height: var(--head-h); }
 .pagehead-title { flex: 1; min-width: 0; }
@@ -301,6 +308,8 @@ a { color: var(--accent); text-decoration: none; }
 .chips { display: flex; flex-shrink: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 2px; margin: 4px 0 8px; }
 .chips::-webkit-scrollbar { display: none; }
 .chips .chip { flex: none; }
+/* A set of choices that must all be seen at once wraps instead of scrolling out of the window. */
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
 .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .bar i { display: block; height: 100%; width: calc(var(--v, 0) * 1%); background: var(--accent); border-radius: 3px; transition: width .3s; }
 .bar.attn i { background: var(--warn); }
@@ -557,6 +566,9 @@ pre.diff { font-family: var(--mono); font-size: var(--fs-mono); white-space: pre
 pre.diff .add { color: var(--ok); }
 pre.diff .del { color: var(--bad); }
 pre.diff .hunk { color: var(--info); }
+/* A phone wraps a diff rather than scrolling it sideways: the scroll had no mark, and a long file
+   header simply stopped at the sheet's edge with its second path gone. */
+@media (max-width: 1023px) { pre.diff { white-space: pre-wrap; overflow-wrap: anywhere; } }
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
 td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 500; }
@@ -565,6 +577,12 @@ label.field { display: block; margin: 10px 0 4px; color: var(--muted); font-size
 input.field, select.field, textarea.field {
   width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--card-2); padding: 8px 10px;
 }
+/* A field that cannot be changed says so before it is tried: a disabled select drew exactly like the
+   live one beside it, and a memory's fixed scope read as editable. */
+input.field:disabled, select.field:disabled, textarea.field:disabled { opacity: .55; cursor: not-allowed; }
+/* A choice longer than its box ends in an ellipsis. Clipped mid-letter, the voice model's
+   "… vllm" read as "vllr", a different word rather than a shortened one. */
+select.field { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px; background: var(--surface-3); color: var(--fg); border: 1px solid var(--line-strong); padding: 8px 10px 8px 16px; border-radius: var(--radius-md); font-size: var(--fs-13); max-width: min(92vw, 460px); box-shadow: var(--shadow-pop); }
 .toast .btn.small { min-height: 30px; padding: 4px 8px; }
 .stat { display: flex; flex-direction: column; gap: 2px; }
@@ -613,7 +631,10 @@ input.field, select.field, textarea.field {
 .badge.stream { color:var(--info); border-color:color-mix(in srgb, var(--info) 40%, transparent); }
 .badge.structured { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, transparent); }
 .badge.text { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, transparent); }
-.usage-raw { margin:0 0 8px; padding:8px 10px; background:var(--bg-2); border-radius:var(--radius-sm); font-family:var(--mono); font-size:var(--fs-11); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
+/* The unfolded call and its payload read as one pair: the row is lit, and the payload is a code
+   panel with its own edge. On the card's own colour it was a bare "{}" in body text. */
+.usage-row.open { background:var(--surface-2); border-radius:var(--radius-sm); }
+.usage-raw { margin:0 0 8px; padding:8px 10px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); font-family:var(--mono); font-size:var(--fs-11); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
 .grid4 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .filters { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
 
@@ -956,6 +977,7 @@ input.field, select.field, textarea.field {
   .navmenu-lang .ic { color: var(--fg-2); }
   .navmenu-lang .segmented { margin: 0; }
   .main { min-width: 0; }
+  :root { --page-pad: 24px; }
   .pagehead { padding: 8px 24px 6px; }
   .pagehead h1 { font-size: 20px; }
   .screen { padding: 4px 24px 32px; }
@@ -1006,6 +1028,7 @@ input.field, select.field, textarea.field {
 }
 @media (min-width: 1600px) {
   .chat-head, .chat-scroll, .composer { padding-left: 40px; padding-right: 40px; }
+  :root { --page-pad: 40px; }
   .screen, .pagehead { padding-left: 40px; padding-right: 40px; }
   .pagehead:has(+ .screen.narrow) { padding-left: max(40px, calc((100% - 1120px) / 2 + 40px)); padding-right: max(40px, calc((100% - 1120px) / 2 + 40px)); }
 }
@@ -1494,6 +1517,10 @@ body.resizing iframe { pointer-events: none; }
 .erow.unread .erow-title, .sidebar .erow.unread .erow-title { font-weight: 650; }
 .erow-meta { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: var(--fs-13); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .erow-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A change's own sheet has the room to say who, where and when in full: truncated to a line, a
+   phone showed "daed…", "bot/websear…" and "28 Se…" and nothing could bring them back. */
+.proposal-sheet .erow-meta { flex-wrap: wrap; row-gap: 4px; white-space: normal; }
+.proposal-sheet .erow-meta > span { overflow: visible; overflow-wrap: anywhere; }
 .erow-meta .sep { color: var(--fg-3); flex: none; }
 .erow-meta .word { font-weight: 600; flex: none; }
 .erow-meta.running .word { color: var(--accent); }
@@ -1637,7 +1664,7 @@ pre.diff .file { color: var(--fg); font-weight: 600; }
 .service-row.erow .service-name { font-size: var(--fs-14); }
 .service-name .chip.port { padding: 1px 7px; font-size: var(--fs-11); min-height: 0; }
 .service-name .chip { padding: 1px 8px; font-size: var(--fs-11); }
-.service-meta { font-size: var(--fs-12); }
+.service-meta { display: flex; align-items: center; gap: 6px; font-size: var(--fs-12); }
 .service-line .btn.open { flex: none; min-height: var(--ctl-h-sm); }
 .service-group .section-title .linkbtn { color: var(--fg-2); text-transform: none; letter-spacing: 0; font-size: var(--fs-13); font-weight: 600; }
 .service-group .section-title .linkbtn:hover { color: var(--fg); }
@@ -1677,6 +1704,26 @@ pre.diff .file { color: var(--fg); font-weight: 600; }
 .quota-line .sub { text-align: right; min-width: 90px; }
 .tablecard { overflow-x: auto; }
 .tablecard td.dayc { white-space: nowrap; }
+/* A phone has no room for seven columns: scrolled sideways, the cost column was the one off the
+   edge and a model's name broke at its hyphen. Each row becomes a small card of its own, the model
+   and its cost on top, the counts under them with their names. */
+@media (max-width: 700px) {
+  .usage .tablecard thead { display: none; }
+  .usage .tablecard table, .usage .tablecard tbody { display: block; }
+  .usage .tablecard tr { display: grid; grid-template-columns: repeat(4, auto) minmax(0, 1fr); grid-template-areas: "day day day day day" "model model model model usd" "calls in out cached ."; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .usage .tablecard tr:first-child { border-top: 0; }
+  .usage .tablecard td { display: block; padding: 0; border: 0; text-align: left; }
+  .usage .tablecard td.dayc { grid-area: day; font-weight: 600; }
+  .usage .tablecard td.dayc:empty { display: none; }
+  .usage .tablecard td.modelc { grid-area: model; min-width: 0; overflow-wrap: anywhere; }
+  .usage .tablecard td.usdc { grid-area: usd; text-align: right; white-space: nowrap; }
+  .usage .tablecard td.callsc { grid-area: calls; }
+  .usage .tablecard td.inc { grid-area: in; }
+  .usage .tablecard td.outc { grid-area: out; }
+  .usage .tablecard td.cachedc { grid-area: cached; }
+  .usage .tablecard td[data-label] { color: var(--fg-2); font-size: var(--fs-12); }
+  .usage .tablecard td[data-label]::before { content: attr(data-label) " "; color: var(--fg-3); }
+}
 .settings-stage { display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--bg); }
 .settings-index { display: flex; flex-direction: column; gap: 2px; }
 .settings-back { display: none; }
@@ -1700,6 +1747,10 @@ h1.settings-title { margin: 0 0 16px; font-size: 28px; font-weight: 650; letter-
 .settings-choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--row-h); padding: 6px 0; }
 .settings-choice .segmented { margin: 0; }
 .settings-choice select.field { width: auto; max-width: 46%; margin: 0; }
+.health-mark { flex: none; width: 22px; padding-top: 2px; }
+.health-mark.ok { color: var(--ok); }
+.health-mark.warn { color: var(--warn); }
+.health-mark.bad { color: var(--bad); }
 .settings-color { display: inline-flex; align-items: center; gap: 8px; }
 .settings-color input { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; }
 .settings-faces { display: flex; flex-direction: column; margin: 4px 0 8px; }
@@ -1723,7 +1774,9 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
   .settings-link .chev { display: none; }
   .settings-link-text .sub { display: none; }
   .settings-link.active { background: var(--surface-2); border-color: var(--line); }
-  .settings-lang .settings-link-text b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The label names the setting in both languages and the EN/RU switch shares its row, so in the
+     280 px column it wraps after the slash. Cut to one line it read "Language / …" on every width. */
+  .settings-lang .settings-link-text b { line-height: 1.25; }
 }
 
 /* ── palette, offline strip ──────────────────────────────────────────────── */

@@ -259,3 +259,15 @@ async def test_the_wake_up_routes(settings: Settings, db: Database, tmp_path: Pa
         assert changes.count("wakeups") == 2
     finally:
         await r.manager.close()
+
+
+def test_a_long_note_is_named_at_a_word_and_marked_as_cut() -> None:
+    assert wakeups.short_name("Check the render") == "Check the render"
+    long = "Check the render of both videos after the edits against the storyboard and tell the operator"
+    name = wakeups.short_name(long)
+    assert name.endswith("…")
+    assert len(name) <= wakeups.NAME_MAX
+    assert long.startswith(name[:-1])
+    assert long[len(name) - 1] == " "
+    unbroken = "x" * 120
+    assert wakeups.short_name(unbroken) == "x" * (wakeups.NAME_MAX - 1) + "…"

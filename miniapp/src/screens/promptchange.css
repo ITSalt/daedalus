@@ -13,6 +13,10 @@
 .prompt-review > p { margin:0; }
 .prompt-review-diff { max-height:55vh; overflow:auto; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--bg); }
 .prompt-review-diff .diff-file { position:sticky; top:0; z-index:1; }
+/* The rules are prose, and the line being approved has to be read whole: kept on one line as code
+   is, a phone showed "…then list e" at the box's edge with no sign the rest was to the right. */
+.prompt-review-diff .diff-line { min-width:0; white-space:pre-wrap; }
+.prompt-review-diff .diff-line > span:last-child { flex:1; min-width:0; overflow-wrap:anywhere; }
 .rules-editor-field { min-height:220px; max-height:55vh; }
 @media (max-width: 560px) {
   .prompt-change-actions { align-items:stretch; flex-direction:column; }

@@ -6,8 +6,9 @@ import { act as reactAct } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Notification } from "./api";
-import { ActionButtons, act, byDay, byProject, entryPath } from "./notifications";
+import { ActionButtons, act, byDay, byProject, entryPath, noticeLine } from "./notifications";
 import { setLang } from "./i18n";
+import { prime } from "./store";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -107,5 +108,14 @@ describe("the buttons", () => {
     expect(host.textContent).toBe("Allowed");
     await reactAct(async () => root.render(<ActionButtons entry={entry(1)} />));
     expect(host.innerHTML).toBe("");
+  });
+});
+
+describe("the line under a notification", () => {
+  it("names the project once when the session's title already carries it", () => {
+    prime("/api/sessions", { sessions: [{ id: "o1", title: "Orchestrator · Anchor Inference" }, { id: "s1", title: "Anchor Inference" }] });
+    const names = new Map([["p1", "Anchor Inference"]]);
+    expect(noticeLine(entry(1, { category: "system", project_id: "p1", session_id: "o1" }), names)).toBe("System · Anchor Inference · Orchestrator");
+    expect(noticeLine(entry(2, { category: "system", project_id: "p1", session_id: "s1" }), names)).toBe("System · Anchor Inference");
   });
 });

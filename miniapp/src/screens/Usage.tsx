@@ -192,17 +192,19 @@ export function UsageScreen({ onOpen }: { onOpen?: (id: string) => void }) {
                     rows.map((d, i) => (
                       <tr key={`${day}-${i}`}>
                         <td className="dayc">{i === 0 ? dayLabel(day) : ""}</td>
-                        <td>
+                        <td className="modelc">
                           <span className="sub">{d.provider_id}/</span>
                           {d.model}
                         </td>
-                        <td className="num">{int(d.calls)}</td>
-                        <td className="num">{tokens(d.input_tokens)}</td>
-                        <td className="num">{tokens(d.output_tokens)}</td>
-                        <td className="num">{tokens(d.cache_read_tokens)}</td>
-                        <td className="num">
+                        {/* The labels are for a phone, where the row becomes a card and the header is gone. */}
+                        <td className="num callsc" data-label={t("usage.col.calls")}>{int(d.calls)}</td>
+                        <td className="num inc" data-label={t("usage.col.in")}>{tokens(d.input_tokens)}</td>
+                        <td className="num outc" data-label={t("usage.col.out")}>{tokens(d.output_tokens)}</td>
+                        <td className="num cachedc" data-label={t("usage.col.cached")}>{tokens(d.cache_read_tokens)}</td>
+                        <td className="num usdc">
                           {usd(d.cost_usd)}
-                          {d.unmetered > 0 && <span className="sub"> +{d.unmetered}</span>}
+                          {/* Said in words, as the session card says it: a bare "+12" beside "$0" read as money owed. */}
+                          {d.unmetered > 0 && <div className="sub">{t("usage.onsubs", { n: int(d.unmetered) }).replace(/^ · /, "")}</div>}
                         </td>
                       </tr>
                     )),
@@ -220,7 +222,7 @@ export function UsageScreen({ onOpen }: { onOpen?: (id: string) => void }) {
             <div className="card">
               {recent.slice(0, showAllCalls ? 200 : 30).map((r, i) => (
                 <div key={i}>
-                  <div className="usage-row" onClick={() => setOpen(open === i ? null : i)}>
+                  <div className={`usage-row ${open === i ? "open" : ""}`} aria-expanded={open === i} onClick={() => setOpen(open === i ? null : i)}>
                     <div className="when">
                       {clock(r.at)}
                       <br />
