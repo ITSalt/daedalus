@@ -661,7 +661,10 @@ def stub(route) -> None:  # type: ignore[no-untyped-def]
         harnesses = HARNESSES.answer(request.method, rel, urlsplit(url).query, posted)
         if harnesses is not None:
             return respond(route, harnesses[1], status=harnesses[0])
-    team = TEAM.answer(request.method, rel, urlsplit(url).query, None) or TEAM_BOARD.answer(request.method, rel, urlsplit(url).query, None)
+    # The installation-wide Board lists BOARD below. The team's board also answers GET /api/board, and
+    # asked first it answered with its own empty list, so the Board picture came out with no cards.
+    whole_board = rel == "/api/board" and request.method == "GET"
+    team = TEAM.answer(request.method, rel, urlsplit(url).query, None) or (None if whole_board else TEAM_BOARD.answer(request.method, rel, urlsplit(url).query, None))
     if team is not None:
         return respond(route, team[1], status=team[0])
     if request.method == "POST" and rel.startswith("/api/notifications/") and rel.endswith("/act"):
