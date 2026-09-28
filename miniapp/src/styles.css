@@ -560,6 +560,12 @@ label.field { display: block; margin: 10px 0 4px; color: var(--muted); font-size
 input.field, select.field, textarea.field {
   width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--card-2); padding: 8px 10px;
 }
+/* A field that cannot be changed says so before it is tried: a disabled select drew exactly like the
+   live one beside it, and a memory's fixed scope read as editable. */
+input.field:disabled, select.field:disabled, textarea.field:disabled { opacity: .55; cursor: not-allowed; }
+/* A choice longer than its box ends in an ellipsis. Clipped mid-letter, the voice model's
+   "… vllm" read as "vllr", a different word rather than a shortened one. */
+select.field { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px; background: var(--surface-3); color: var(--fg); border: 1px solid var(--line-strong); padding: 8px 10px 8px 16px; border-radius: var(--radius-md); font-size: var(--fs-13); max-width: min(92vw, 460px); box-shadow: var(--shadow-pop); }
 .toast .btn.small { min-height: 30px; padding: 4px 8px; }
 .stat { display: flex; flex-direction: column; gap: 2px; }

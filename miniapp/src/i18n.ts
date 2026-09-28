@@ -1421,6 +1421,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "memory.text.placeholder": { en: "What the agent should keep in mind", ru: "Что агенту стоит держать в голове" },
   "memory.kind": { en: "Kind", ru: "Вид" },
   "memory.scope.globaloption": { en: "Global — every session", ru: "Общая — для всех сессий" },
+  "memory.scope.fixed": { en: "A memory keeps the scope it was made in", ru: "Область памяти задаётся при создании и не меняется" },
   "memory.created": { en: "Created {when}", ru: "Создано {when}" },
   "memory.version": { en: " · version {n}", ru: " · версия {n}" },
   "memory.recalled": { en: " · last recalled {t}", ru: " · вспоминали {t}" },
