@@ -285,12 +285,17 @@ export function TerminalsPage({ projectId, selected, back }: { projectId: string
 // ── switching the orchestrator on ────────────────────────────────────────────────────────────
 
 /** The centre of a project without an orchestrator: what one is, and the way to switch it on. */
-export function EnableOrchestrator({ project, toast }: { project: Project; toast: (text: string) => void }) {
+export function EnableOrchestrator({ project, toast, back }: { project: Project; toast: (text: string) => void; back?: string | null }) {
   const [open, setOpen] = useState(false);
+  // The header every other page of the project carries: without it a tablet with its column folded,
+  // or a phone, showed the prompt alone, with no project name and no way back.
+  const head = <PageHeader title={project.name} back={back ?? undefined} />;
   if (project.settings.ephemeral) {
-    return <div className="empty"><b>{t("focus.enable.closed", { name: project.name })}</b></div>;
+    return <>{head}<div className="empty"><b>{t("focus.enable.closed", { name: project.name })}</b></div></>;
   }
   return (
+    <>
+    {head}
     <div className="screen narrow focus-enable">
       <div className="empty">
         <Icon name="conductor" size={28} />
@@ -300,6 +305,7 @@ export function EnableOrchestrator({ project, toast }: { project: Project; toast
       </div>
       {open && <EnableSheet project={project} onClose={() => setOpen(false)} toast={toast} />}
     </div>
+    </>
   );
 }
 

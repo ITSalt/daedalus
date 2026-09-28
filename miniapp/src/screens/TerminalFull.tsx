@@ -33,7 +33,12 @@ export function gridPath(ids: string[]): string {
 
 export function TerminalFullScreen({ id, beside, toast }: { id: string; beside: string | null; toast: (text: string) => void }) {
   const ids = useMemo(() => gridIds(id, beside), [id, beside]);
-  const wide = useMedia("(min-width: 1024px)");
+  // A touch screen with no mouse takes the phone's layout however wide it is: the desktop's has no
+  // keys row and no compose line, and a tablet held without a keyboard had no Esc, no arrows and no
+  // way to answer the program's own dialog.
+  const roomy = useMedia("(min-width: 1024px)");
+  const touchOnly = useMedia("(hover: none) and (pointer: coarse)");
+  const wide = roomy && !touchOnly;
   const list = useQuery<TerminalList>("/api/terminals", { pollMs: LIST_POLL_MS, staleMs: 1000 });
   const rows = useMemo(() => new Map((list.data?.terminals ?? []).map((r) => [r.id, r])), [list.data]);
   useEffect(() => {
@@ -102,7 +107,7 @@ export function TerminalFullScreen({ id, beside, toast }: { id: string; beside: 
 
   const exited = row ? row.status !== "running" : !!states[current]?.exit;
 
-  // A phone shows one pane at a time, with the keys row and the compose line; the others of a grid
+  // A phone (or a touch tablet) shows one pane at a time, with the keys row and the compose line; the others of a grid
   // are one menu item away, and the first Back leaves the grid as a whole.
   if (!wide) {
     const others: MenuItem[] = ids.filter((tid) => tid !== current).map((tid) => ({ label: t("term.phone.show", { title: title(tid) }), icon: rows.get(tid)?.env === "host" ? "lock" : "terminal", onSelect: () => choose(tid) }));

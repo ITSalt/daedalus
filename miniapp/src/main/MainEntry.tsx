@@ -26,10 +26,15 @@ export function MainEntry({ current }: { current: boolean }) {
     <a className={`main-entry ${current ? "current" : ""} ${working ? "working" : ""}`} href={MAIN_PATH} onClick={(e) => go(e, MAIN_PATH)} aria-current={current ? "page" : undefined} data-main-entry>
       <span className="main-entry-icon"><Icon name="compass" size={16} /></span>
       <span className="main-entry-text">
-        <span className="main-entry-name">{label}</span>
+        {/* The pill rides on the name's line and drops under it when the column is narrow, so the
+            status line below always has the column's whole width. Beside the text, it once squeezed
+            "2 dispatches under way" to "2 dispatches under…" in the desktop sidebar. */}
+        <span className="main-entry-head">
+          <span className="main-entry-name">{label}</span>
+          {questions > 0 && <span className="main-pill" data-questions={questions}>{plural("main.questions", questions)}</span>}
+        </span>
         <span className="main-entry-sub truncate">{working ? t("main.entry.working") : going ? plural("main.entry.going", going) : t("main.entry.sub")}</span>
       </span>
-      {questions > 0 && <span className="main-pill" data-questions={questions}>{plural("main.questions", questions)}</span>}
     </a>
   );
 }

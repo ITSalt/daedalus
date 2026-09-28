@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useMoreBelow } from "./edgefade";
 import { Icon, IconName } from "./icons";
 import { t } from "./i18n";
 
@@ -39,6 +40,8 @@ export function useLayer(onEscape: () => void) {
 
 export function Sheet({ title, ariaLabel, onClose, children, size, className, head }: { title?: ReactNode; ariaLabel?: string; onClose: () => void; children: ReactNode; size?: "wide" | "narrow" | "full"; className?: string; head?: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  useMoreBelow(body);
   useLayer(onClose);
   // Focus moves in once, on open, and back to the control that opened the sheet when it closes;
   // the callback's identity changes on every parent render and must not re-run this.
@@ -59,7 +62,15 @@ export function Sheet({ title, ariaLabel, onClose, children, size, className, he
           {head}
           <button className="iconbtn small" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}><Icon name="close" size={16} /></button>
         </div>
-        <div className="sheet-body">{children}</div>
+        <div ref={body} className="sheet-body">{children}</div>
+        {/* Shown by the stylesheet only while the body has more below its fold (data-more) and no
+            sticky footer: a touch screen draws no scrollbar, and a task sheet whose actions sat under
+            the fold ended at a clean edge that looked like its end. A tap scrolls most of a screen on. */}
+        <div className="sheet-more-anchor">
+          <button type="button" className="sheet-more" tabIndex={-1} aria-label={t("common.more.below")} title={t("common.more.below")} onClick={() => body.current?.scrollBy({ top: body.current.clientHeight * 0.8, behavior: "smooth" })}>
+            <Icon name="chevron" size={16} />
+          </button>
+        </div>
       </div>
       </div>
     </Overlay>

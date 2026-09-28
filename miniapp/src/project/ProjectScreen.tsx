@@ -41,7 +41,8 @@ export function ProjectScreen({ projectId, page, inner, toast, wide }: { project
         banner={project.setup_by === "dispatcher" ? <SetupLine projectId={projectId} name={project.name} toast={toast} /> : undefined}
       />
     ) : (
-      <EnableOrchestrator project={project} toast={toast} />
+      // The project's home, so a phone's way back is the orchestration list it was picked from.
+      <EnableOrchestrator project={project} toast={toast} back={wide ? null : ORCHESTRATION_LIST} />
     );
   } else if (view.kind === "session") {
     // A member's conversation is reached from the team on a phone, and goes back there.
