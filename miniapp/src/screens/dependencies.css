@@ -24,6 +24,7 @@
 .deps-environment-head > .chip { flex:none; color:var(--ok); }
 .deps-tool-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:var(--space-1); }
 .deps-tool-chips .chip { min-height:28px; padding:0 9px; background:var(--surface-2); }
+.deps-tool-chips .chip.missing { background:transparent; border-style:dashed; color:var(--fg-3); }
 .deps-tools { margin:4px 0 var(--space-2); }
 .deps-tools .kv { gap:12px; align-items:baseline; }
 .deps-tools .kv > span { text-align:right; overflow-wrap:anywhere; }
@@ -32,8 +33,10 @@
 .dependencies pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:var(--fs-12); }
 .deps-explanation { white-space:pre-wrap; overflow-wrap:anywhere; }
 .deps-patch { padding:12px; background:var(--bg); border-radius:var(--radius-sm); max-height:40vh; overflow:auto; }
-.deps-consent { display:flex; align-items:start; gap:10px; min-height:44px; margin:16px 0; }
-.deps-consent input { flex-shrink:0; margin-top:4px; }
+/* The whole label is the target and is a touch row tall; the box itself is drawn at 20 px because the
+   browser's 13 px one looked like it wanted a fingertip's precision on the one gate before a restart. */
+.deps-consent { display:flex; align-items:start; gap:10px; min-height:44px; margin:16px 0; cursor:pointer; }
+.deps-consent input { flex-shrink:0; width:20px; height:20px; margin:1px 0 0; accent-color:var(--accent); }
 .deps-progress { display:grid; gap:var(--space-2); min-width:0; }
 .deps-progress-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .deps-progress-heading > span { display:flex; align-items:center; gap:9px; min-width:0; }

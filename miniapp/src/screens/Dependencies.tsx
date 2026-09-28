@@ -124,7 +124,12 @@ export function DependenciesTab() {
       </div>}
       <div className="card deps-environment">
         <div className="deps-environment-head"><span><b>{t("deps.environment")}</b><span className="sub">{t("deps.environment.summary", { available: String(available.length), missing: String(missing.length), python: String(view.packages.length) })}</span></span>{view.job?.state === "completed" && <span className="chip"><Icon name="check" size={13} />{t("deps.current")}</span>}</div>
-        <div className="deps-tool-chips">{available.map((tool) => <span className="chip" key={tool.name}><code>{tool.name}</code></span>)}</div>
+        {/* The missing ones are named beside the present ones: the summary counted them and nothing on
+            the card said which they were. */}
+        <div className="deps-tool-chips">
+          {available.map((tool) => <span className="chip" key={tool.name}><code>{tool.name}</code></span>)}
+          {missing.map((tool) => <span className="chip missing" key={tool.name} title={t("deps.missing")}><code>{tool.name}</code><span>{t("deps.missing")}</span></span>)}
+        </div>
         <details><summary>{t("deps.environment.details")}</summary><div className="deps-tools">
           {view.tools.map((tool) => <div className="kv" key={tool.name}><code>{tool.name}</code><span className={tool.available ? "sub" : "sub faint"}>{tool.available ? tool.version : t("deps.missing")}</span></div>)}
         </div></details>
