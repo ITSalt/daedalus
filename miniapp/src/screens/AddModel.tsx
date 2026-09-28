@@ -386,8 +386,9 @@ export function AddModel({ onSaved, onCancel, toast }: { onSaved: (presetId: str
 
       <div className="addmodel-foot">
         {/* The name this model will be known by, once there is one to show; a sentence until then,
-            and a sentence is not monospaced. */}
-        <div className={`sub truncate ${ready ? "mono" : ""}`}>{ready ? presetIdFor(provider, model) : t("add.foot.empty")}</div>
+            and a sentence is not monospaced. It wraps rather than truncates: this is the last look
+            at what is about to be created, and a phone cut it to "openrouter.anthropi…". */}
+        <div className={`sub addmodel-name ${ready ? "mono" : ""}`}>{ready ? presetIdFor(provider, model) : t("add.foot.empty")}</div>
         <span className="grow" />
         {onCancel && (
           <button className="btn" onClick={onCancel}>

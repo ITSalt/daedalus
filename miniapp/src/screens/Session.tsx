@@ -64,6 +64,12 @@ const TAIL_AFTER_EVENT = 24;
 const EVENT_COALESCE_MS = 150;
 /** How many older messages a page holds when the reader scrolls past the top. */
 const OLDER_PAGE = 200;
+/**
+ * Less than this left below the fold and the newest-message button is not offered. It was 160 px,
+ * which is three or four lines of an answer: the end of a reply sat under the composer, cut mid-
+ * sentence, with nothing on screen to say there was more.
+ */
+const AT_END_PX = 32;
 
 // ── screen ────────────────────────────────────────────────────────────────────────────────
 
@@ -712,7 +718,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
       const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
       stick.current = gap < 48;
       lastTop.current = el.scrollTop;
-      setAtBottom(gap < 160);
+      setAtBottom(gap < AT_END_PX);
       return;
     }
     opened.current = null;
@@ -847,7 +853,7 @@ export function SessionScreen({ id, onBack, onOpen, toast, pane, onSplit, focus,
     lastTop.current = el.scrollTop;
     // Still pinned with a gap: the history grew under the pin before this event came. Take the end again.
     if (stick.current && gap >= 48) el.scrollTop = el.scrollHeight;
-    setAtBottom(gap < 160);
+    setAtBottom(stick.current || gap < AT_END_PX);
     // Near the top of what was loaded: ask for the page before it, if the API has one. A history
     // short enough to have arrived whole has no page before it and is never asked for one.
     if (el.scrollTop < 400 && older === "more" && pageable) void loadOlder();

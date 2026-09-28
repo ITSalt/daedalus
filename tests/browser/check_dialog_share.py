@@ -35,8 +35,8 @@ WORDS = {
         "public": "Public",
         "confirm": "Make public",
         "cancel": "Cancel",
-        "kicker": "Shared dialog",
-        "gone": "This dialog is not shared.",
+        "kicker": "Shared conversation",
+        "gone": "This conversation is not shared.",
         "chip": "Public",
     },
     "ru": {

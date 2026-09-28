@@ -255,7 +255,9 @@ a { color: var(--accent); text-decoration: none; }
 .btn.ghost:hover { background: var(--surface-2); color: var(--fg); }
 .btn.danger { color: var(--bad); background: transparent; border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
 .btn.danger:hover { background: color-mix(in srgb, var(--bad) 12%, transparent); }
-.btn.danger.solid { background: var(--bad); color: #fff; border-color: transparent; }
+/* The ink is the primary button's: white on the dark theme's coral read at 3.2:1, below what a label
+   needs, and it was the label of an action that cannot be undone. */
+.btn.danger.solid { background: var(--bad); color: var(--primary-ink); border-color: transparent; }
 .btn.small { padding: 4px 10px; font-size: var(--fs-13); min-height: var(--ctl-h-sm); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn .ic { flex: none; }
@@ -449,6 +451,13 @@ a { color: var(--accent); text-decoration: none; }
 .diff pre { margin:0; padding:8px 10px; font-family:var(--mono); font-size:var(--fs-mono); white-space:pre-wrap; word-break:break-word; }
 .diff .del { background:rgba(248,113,113,.14); border-radius:var(--radius-md) var(--radius-md) 0 0; color:#fca5a5; }
 .diff .add { background:rgba(74,222,128,.12); border-radius:0 0 var(--radius-md) var(--radius-md); color:#86efac; }
+/* What was removed and what replaced it are told apart by a sign as well as a tint: red and green
+   at this depth are one colour to a reader who does not see the difference between them. The sign
+   is drawn, not written, so copying the text copies the code alone. */
+.diff pre.del, .diff pre.add { position:relative; padding-left:26px; }
+.diff pre.del::before, .diff pre.add::before { position:absolute; left:10px; top:8px; font-weight:700; }
+.diff pre.del::before { content:"−"; }
+.diff pre.add::before { content:"+"; }
 
 /* The answer's own label when another model wrote it: above the text, never inside it. */
 .fallback-note { margin: 6px 0 2px; }
@@ -471,11 +480,16 @@ a { color: var(--accent); text-decoration: none; }
 .answer code, .note code, .summary-body code, .msg.user code { font-family:var(--mono); font-size:0.9em; background:color-mix(in srgb, var(--fg) 6%, transparent); padding:1px 4px; border-radius:4px; color:inherit; }
 .answer details, .summary-body details { border:1px solid var(--line); border-radius:var(--radius-md); padding:8px 12px; margin:0 0 10px; }
 .answer summary, .summary-body summary { cursor:pointer; color:var(--muted); }
-.tablewrap { overflow:auto; max-height:70vh; margin:0 0 10px; border:1px solid var(--line); border-radius:var(--radius-sm); }
-.tablewrap table { border:0; border-radius:0; min-width:100%; }
+/* The frame is as wide as the table, up to the column: a two-column table in a frame the width of the
+   answer drew its header and its rows short of the frame's right edge, with a blank strip beside them. */
+.tablewrap { overflow:auto; max-height:70vh; width:fit-content; max-width:100%; margin:0 0 10px; border:1px solid var(--line); border-radius:var(--radius-sm); }
+.tablewrap table, .answer .tablewrap table, .summary-body .tablewrap table { border:0; border-radius:0; min-width:100%; }
 .answer thead th, .summary-body thead th { position:sticky; top:0; background:var(--surface-1); z-index:1; color:var(--fg-2); font-weight:500; }
 .answer table, .summary-body table { width:auto; min-width:60%; border:0; border-collapse:separate; border-spacing:0; font-size:var(--fs-13); }
 .answer th, .answer td, .summary-body th, .summary-body td { padding:6px 10px; border-bottom:1px solid var(--line); }
+/* A cell breaks between words, and inside a word only when the word alone is wider than the table
+   can give: the answer's break-anywhere let a narrow column split "framework" into "framewo" / "rk". */
+.answer th, .answer td, .summary-body th, .summary-body td { word-break:normal; overflow-wrap:break-word; }
 .answer tr:last-child td { border-bottom:0; }
 
 .codecard { margin:6px 0 10px; border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; background:var(--card); }
@@ -486,6 +500,9 @@ a { color: var(--accent); text-decoration: none; }
 .codehead .copy[data-state="done"] .glyph-done { display:inline-flex; color:var(--ok); }
 .codehead .copy span { display:inline-flex; }
 .codecard pre { margin:0; padding:10px 12px; overflow-x:auto; font-family:var(--mono); font-size:var(--fs-mono); line-height:1.5; white-space:pre-wrap; word-break:break-word; color:var(--code-block); }
+/* The block is the frame; its text is not an inline code span again. The answer's inline-code tint
+   reached into it and drew a rounded chip behind every line of a fenced block. */
+.codecard pre code { background:none; padding:0; border-radius:0; }
 .toolcard .codecard { margin:0; }
 
 .summary { border:1px solid var(--line); border-radius:var(--radius-md); background:var(--card); padding:4px 12px; }
@@ -604,6 +621,12 @@ input.field, select.field, textarea.field {
 @media (hover: hover) {
   .msg-actions { opacity:0; transition:opacity .15s; }
   .turn:hover .msg-actions, .msg-actions:focus-within, .msg-actions:hover { opacity:1; }
+}
+/* A landscape tablet is wider than the phone layout and still pressed with a finger: the icons under
+   a message sat 26 px apart there, and copy, fork and undo were one smudge wide. The glyph keeps its
+   size; the button around it grows to the size a thumb needs. */
+@media (pointer: coarse) and (min-width: 1024px) {
+  .msg-actions .iconbtn.small { width:var(--row-h-touch); height:var(--row-h-touch); }
 }
 
 
@@ -781,6 +804,9 @@ input.field, select.field, textarea.field {
 .tool-timing .dt-row { flex-wrap: wrap; padding-block: 4px; }
 .tool-timing .dt-row > span:first-child { overflow-wrap: anywhere; }
 .dt-key { flex: none; min-width: 72px; color: var(--fg-3); }
+/* A sentence in a row wraps under itself instead of ending in "stays in t…". */
+.dt-row.prose { align-items: baseline; padding-block: 2px; }
+.dt-row.prose > .grow { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
 .dt-sep { color: var(--fg-3); }
 .dt-row .field { margin: 0; }
 .dt-row.path .mono { font-size: var(--fs-mono); white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
@@ -888,7 +914,10 @@ input.field, select.field, textarea.field {
   .rail-item:hover .rail-tip, .rail-item:focus-visible .rail-tip { opacity: 1; visibility: visible; }
   /* The menu over the content: anchored bottom-left, opening upward, never centred, never a modal. */
   .navmenu-backdrop { display: block; position: fixed; inset: 0; z-index: 35; background: transparent; }
-  .navmenu { display: flex; flex-direction: column; position: fixed; left: calc(var(--rail-w) + 6px); bottom: 8px; z-index: 36; width: 300px; max-height: 70vh; overflow-y: auto; padding: 6px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); animation: navmenu-in 160ms var(--ease-out); }
+  /* As tall as the window allows, from its foot to 8 px under the top: capped at 70 % it ended at
+     Health on a landscape tablet, with Language, Settings and About below the edge and nothing on
+     screen to say the list went on. */
+  .navmenu { display: flex; flex-direction: column; position: fixed; left: calc(var(--rail-w) + 6px); bottom: 8px; z-index: 36; width: 300px; max-height: calc(100dvh - 16px); overflow-y: auto; padding: 6px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); animation: navmenu-in 160ms var(--ease-out); }
   .navmenu-section { display: flex; flex-direction: column; padding: 2px 0; }
   .navmenu-section + .navmenu-section { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 4px; }
   .navmenu-label { padding: 4px 10px 2px; font-size: var(--fs-11); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); }
@@ -1100,6 +1129,9 @@ body.resizing iframe { pointer-events: none; }
 .attachment-meta .sub { font-size: var(--fs-11); }
 .attachment-x { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--fg); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
 .attachment-x:hover { background: var(--bad); color: #fff; }
+/* On touch the ✕ is pressed, not clicked: its hit area reaches 40 px around the 22 px circle the
+   eye sees, so removing a file is not a matter of aim. */
+@media (pointer: coarse) { .attachment-x::after { content: ""; position: absolute; inset: -9px; } }
 .dropzone { position: absolute; inset: 0; z-index: 25; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: color-mix(in srgb, var(--bg) 80%, transparent); backdrop-filter: blur(4px); border: 2px dashed var(--info); border-radius: var(--radius-lg); margin: 8px; color: var(--fg); font-size: var(--fs-15); pointer-events: none; }
 .chat { position: relative; }
 
@@ -1409,12 +1441,17 @@ body.resizing iframe { pointer-events: none; }
 /* A fork keeps its step in from the session it was taken from, inside a folder as outside one. */
 .folder.open > .erow.fork { margin-left: 32px; }
 .chip.tiny { padding: 1px 7px; font-size: var(--fs-11); min-height: 0; flex: none; }
+/* Outside a phone these boxes are not there: the name, the counts and the time are items of the row. */
+.folder-text, .folder-title, .folder-meta { display: contents; }
 @media (max-width: 520px) {
-  /* At 390 px the counts and the time would push the name out; the name is what the folder is. */
-  .folder-head { flex-wrap: wrap; row-gap: 2px; }
-  .folder-counts { margin-left: 26px; }
-  .folder-time { margin-left: auto; }
-  .folder-name { flex: 1 1 auto; }
+  /* At 390 px the counts and the time would push the name out; the name is what the folder is. So
+     the name has a line of its own and the counts and the time share the one under it, in the same
+     place on every folder — wrapping one line instead gave "V.." on one row and a lone "52m" in
+     the middle of the next. */
+  .folder-text { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+  .folder-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .folder-meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .folder-counts { margin-left: 0; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .erow.fork { margin-left: 22px; border-left: 2px solid var(--line-strong); }
 .erow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; min-height: var(--row-h); padding: 6px 12px; margin-bottom: 4px; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
@@ -1689,6 +1726,9 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
 /* the first item of a meta line keeps its width; what follows truncates */
 .erow-meta > span:first-child, .erow-meta > .nowrap, .erow-meta > .chip, .erow-meta > span[title], .erow-meta > .pill { flex: none; }
 .erow-meta > .mono:not(:first-child) { flex: 0 1 auto; }
+/* The model is the part of a row's state line that gives way, with an ellipsis: held at its width
+   by the rule above, it was cut flush against the row's menu — "DeepSee" with nothing to say so. */
+.erow-meta > span.erow-model { flex: 0 1 auto; }
 .mrow-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); align-items: center; }
 .mrow.default .mtitle::before { content: ""; }
 @media (max-width: 480px) { .kpi-grid > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; } }
@@ -2066,7 +2106,7 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
   background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-md);
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.28);
 }
-.addmodel-foot .sub { min-width: 0; flex: 1 1 140px; }
+.addmodel-foot .sub { min-width: 0; flex: 1 1 140px; overflow-wrap: anywhere; }
 .empty.calm { padding: 26px 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); margin-top: 10px; }
 @media (min-width: 720px) {
   .modelbar { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
@@ -2444,10 +2484,19 @@ input.field[type="range"] {
   .folder .erow { border:0; border-radius:0; background:transparent; margin-inline:0; }
   .folder.single:not(.open) { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; }
   .folder-expand { order:2; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
-  .folder-actions { order:3; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
+  .folder-actions { order:1; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
   .folder-root { display:none; }
-  .folder-add { display:grid; place-items:center; width:var(--row-h-touch); height:var(--row-h-touch); min-width:var(--row-h-touch); min-height:var(--row-h-touch); padding:0; }
+  .folder-add { order:2; display:grid; place-items:center; width:var(--row-h-touch); height:var(--row-h-touch); min-width:var(--row-h-touch); min-height:var(--row-h-touch); padding:0; }
   .folder-head > .chev { order:2; margin-left:auto; }
+  /* One order of controls on every row: the chevron inside the row, then its menu, then the new
+     agent. A project of one agent carries its menu inside the agent's row, which is why the
+     project's own menu comes before + rather than after it. The Voice folder's chevron is its own
+     button, and it moves to the same place at the right. */
+  .folder-head.linked > .folder-disclose { order:2; padding:4px 12px 4px 2px; }
+  /* Opening a project of one agent shows its folder's path and nothing else, and the path is not
+     drawn here: the chevron opened nothing, and it was a third, different control on that row. */
+  .folder.single .folder-expand { display:none; }
+  .folder.single .folder-top > .erow { padding-right:0; }
 }
 .search-component progress { width: 100%; accent-color: var(--accent); }
 
@@ -2477,6 +2526,8 @@ h1.start-greeting { margin:0; max-width:18em; font-size:var(--fs-18); font-weigh
 .start-files { text-align:center; }
 .start-list-head { display:flex; align-items:center; gap:var(--space-2); padding:0 14px; }
 .start-list-head .section-title { flex:1; margin-bottom:0; }
+/* The list below keeps its 14 px gutter; the search field ran from one edge of the glass to the other. */
+.start-list > .field.search { display:block; width:calc(100% - 28px); margin:2px 14px 6px; }
 @media (min-width: 1024px) {
   .start { flex:1; min-height:0; }
   .start-hero { flex:1; min-height:0; padding:var(--space-4) var(--space-4) 0; }
@@ -3482,6 +3533,9 @@ button.staff-row:hover { background: var(--surface-2); }
 .bp-control.give { background: var(--info); color: var(--primary-ink); font-weight: 600; }
 .bp-control.resume { background: var(--surface-3); color: var(--fg); font-weight: 600; }
 .bp-control.pulse { animation: bp-pulse 900ms var(--ease-out); }
+/* Take control is the one button here a finger has to find at once; on a touch screen wider than the
+   phone layout it was still the desktop's 28 px. */
+@media (pointer: coarse) { .btn.bp-control { min-height: 36px; } }
 @keyframes bp-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); } 30% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent); } }
 
 .bp-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }

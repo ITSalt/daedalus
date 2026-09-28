@@ -224,18 +224,28 @@ export const FolderSection = memo(function FolderSection({ folder, onOpen, curre
   const inside = (
     <>
       <Icon name={folder.system ? "mic" : "folder"} size={16} />
-      <span className="folder-name truncate">{folder.name}</span>
-      {folder.active > 0 && <span className="folder-live" title={t("agents.active", { n: folder.active })}><Dot status="running" /></span>}
-      {compact ? (
-        <span className="folder-counts sub num" title={plural("agents.count", folder.total)}>{folder.total}</span>
-      ) : (
-        <span className="folder-counts sub">
-          {plural("agents.count", folder.total)}
-          {folder.active > 0 && ` · ${t("agents.active", { n: folder.active })}`}
-          {folder.loops > 0 && ` · ${t("agents.filter.loops", { n: folder.loops })}`}
+      {/* Two boxes that only a phone draws: the name on one line, the counts and the time under it.
+          Everywhere else they are `display: contents` and the row is the single line it always was.
+          In one wrapping line the name was what gave way — "Voice" read "V.." beside a gap — and
+          the time fell onto a line of its own wherever the break happened to land. */}
+      <span className="folder-text">
+        <span className="folder-title">
+          <span className="folder-name truncate">{folder.name}</span>
+          {folder.active > 0 && <span className="folder-live" title={t("agents.active", { n: folder.active })}><Dot status="running" /></span>}
         </span>
-      )}
-      {!compact && folder.last_message_at && <span className="folder-time sub num" title={new Date(folder.last_message_at).toLocaleString()}>{relTime(folder.last_message_at)}</span>}
+        <span className="folder-meta">
+          {compact ? (
+            <span className="folder-counts sub num" title={plural("agents.count", folder.total)}>{folder.total}</span>
+          ) : (
+            <span className="folder-counts sub">
+              {plural("agents.count", folder.total)}
+              {folder.active > 0 && ` · ${t("agents.active", { n: folder.active })}`}
+              {folder.loops > 0 && ` · ${t("agents.filter.loops", { n: folder.loops })}`}
+            </span>
+          )}
+          {!compact && folder.last_message_at && <span className="folder-time sub num" title={new Date(folder.last_message_at).toLocaleString()}>{relTime(folder.last_message_at)}</span>}
+        </span>
+      </span>
     </>
   );
   const chevron = <span className={`chev ${showing ? "down" : ""}`} aria-hidden>›</span>;
@@ -382,7 +392,7 @@ const Row = memo(function Row({ s, kids, onOpen, current, fork, compact, project
           {spoken && <Dot status={status} />}
           {spoken && <span className="word">{statusWord(status)}</span>}
           {spoken && s.model && <span className="sep">·</span>}
-          {s.model && <span title={s.model}>{shortModel(s.model, 28)}</span>}
+          {s.model && <span className="erow-model" title={s.model}>{shortModel(s.model, 28)}</span>}
           {orphan && <span className="sep">·</span>}
           {orphan && <span>{t("agents.orphan")}</span>}
         </div>
