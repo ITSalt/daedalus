@@ -97,6 +97,12 @@
 @media (max-width: 1023px) {
   :root { --row-h: var(--row-h-touch); --row-h-dense: 40px; --ctl-h: 40px; --ctl-h-sm: 32px; --fs-prose: var(--fs-16); }
 }
+/* A touch tablet is as wide as a desktop and keeps the desktop's rows, but not its controls: a
+   thumb gets the phone's button and chip sizes. At the desktop's 28px a filter chip was the size a
+   mouse wants and too small a target for a finger. */
+@media (pointer: coarse) {
+  :root { --ctl-h: 40px; --ctl-h-sm: 32px; }
+}
 :root[data-tg="1"] { --bg: #000000; }
 :root[data-scheme="light"] {
   --bg: #f7f7f8;
@@ -2589,6 +2595,12 @@ button.staff-row:hover { background: var(--surface-2); }
 .term-dot.cmd-running { box-shadow: inset 0 0 0 2px var(--accent); }
 .term-tabs > .iconbtn { margin-left: 2px; }
 .term-tools { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+/* A touch tablet is wide enough for the desktop's dock but is worked with a thumb: the dock's tools
+   take the touch size there. At the desktop's 32px they sat 30px apart, glyph against glyph. */
+@media (pointer: coarse) {
+  .term-bar { height: var(--row-h-touch); }
+  .term-bar .iconbtn.small { width: var(--row-h-touch); height: var(--row-h-touch); }
+}
 .term-env { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; margin-right: 4px; border-radius: var(--radius-pill); border: 1px solid; font-size: var(--fs-11); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .term-env.container { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .term-env.host { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
