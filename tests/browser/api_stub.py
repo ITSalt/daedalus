@@ -755,6 +755,32 @@ def answer_batch(asks: list[dict], items: list[dict], *, via: str, project_id: s
     return {"batch_id": "b-stub", "results": results}
 
 
+LONG_LINK = "https://example.org/docs/readme-and-badges/a-very-long-path-with-no-spaces-at-all/that-runs-on-past-the-edge-of-any-phone"
+LONG_OPTIONS = {
+    "en": {
+        "title": "Where to start the launch",
+        "text": "Pick what goes first; the others follow in the order you choose.",
+        "options": [
+            "Links and badges: the project's README, the maintainer's profile, .github",
+            "Repository showcase: topics, descriptions, social preview, the core's README",
+            "Channels: Telegram, X, LinkedIn and drafts of the first posts",
+            LONG_LINK,
+        ],
+    },
+    "ru": {
+        "title": "С чего начать запуск",
+        "text": "Выберите, что идёт первым; остальное — в том порядке, который вы укажете.",
+        "options": [
+            "Ссылки и бейджи: README проекта, профиль сопровождающего, .github",
+            "Витрина репозитория: топики, описания, social preview, README ядра",
+            "Каналы: Telegram, X, LinkedIn и черновики первых постов",
+            LONG_LINK,
+        ],
+    },
+}
+"""The long-options question in both languages (``FocusStub.question_of_long_options``)."""
+
+
 class FocusStub:
     """A project with its orchestrator switched on, as focus mode reads it, kept between requests.
 
@@ -1107,6 +1133,18 @@ class FocusStub:
         session["requests"] = [*session["requests"], browse]
         session["rules"] = [{"rule": "mcp__daedalus_browser__BrowserSnapshot", "created_at": at, "created_by": "operator"}]
         return browse
+
+    def question_of_long_options(self, lang: str = "en") -> dict:
+        """A question whose options are sentences, and one a link with no spaces in it: the options once
+        kept to one line each and pushed a phone's Questions sheet sideways."""
+        words = LONG_OPTIONS[lang]
+        row = {
+            "id": "ask-launch", "short_id": "ql4nch", "project_id": self.projects[0]["id"], "origin": "orchestrator", "kind": "question", "staff_id": None, "staff_session_id": None,
+            "task_id": None, "request_ref": "", "title": words["title"], "text": words["text"], "detail": {"options": words["options"], "multi": True},
+            "routed_to": "operator", "suggestion": "", "created_at": "2026-09-24T09:40:00Z", "routed_at": "2026-09-24T09:40:00Z", "resolved_at": None, "resolved_by": None, "resolution": {},
+        }
+        self.asks.append(row)
+        return row
 
     def questions_of_bakery(self, lang: str = "en") -> list[dict]:
         """What the Questions tab has to show beside the discount question: a batch the orchestrator

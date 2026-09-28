@@ -1489,6 +1489,13 @@ def open_phone_questions(page: Page) -> None:
     page.locator(".panel-sheet .q-card[data-ask='qg1t04'] .q-chip[data-option='allow']").tap()
 
 
+def open_phone_long_question(page: Page) -> None:
+    """The sheet with the long question alone in it, one of its options chosen."""
+    page.locator(".chat-head .questions-headbtn").tap()
+    page.wait_for_selector(".panel-sheet .q-card[data-ask='ql4nch']", timeout=5000)
+    page.locator(".panel-sheet .q-card[data-ask='ql4nch'] .q-chip").nth(1).tap()
+
+
 def run_focus() -> int:
     """A project's focus mode: the orchestrator's chat with the board beside it, and the journal; its
     Questions tab half answered, and the same tab as a phone's sheet."""
@@ -1515,6 +1522,12 @@ def run_focus() -> int:
         page = phone.new_page()
         page.route("**/api/**", focus_stub(asking))
         shot(page, "phone-questions", f"project/{pid}", wait=".chat-head .questions-headbtn", before=open_phone_questions, settle=900)
+        # A question whose options are sentences and a link: each wraps inside its card.
+        asking = FocusStub.bakery(LANG)
+        asking.question_of_long_options(LANG)
+        page = phone.new_page()
+        page.route("**/api/**", focus_stub(asking))
+        shot(page, "phone-questions-long", f"project/{pid}", wait=".chat-head .questions-headbtn", before=open_phone_long_question, settle=900)
         phone.close()
         browser.close()
     return UNHANDLED.report()

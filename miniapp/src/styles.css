@@ -3310,8 +3310,11 @@ button.staff-row:hover { background: var(--surface-2); }
    carry. The send bar stays at the foot of the tab however long the list is. */
 .panel-body.tab-questions { padding: 0; display: flex; flex-direction: column; }
 .questions-panel { flex: 1; min-height: 100%; display: flex; flex-direction: column; }
-.questions-list { flex: 1; display: grid; align-content: start; gap: var(--space-4); padding: var(--space-3) var(--space-3) var(--space-4); }
-.questions-section, .questions-group { display: grid; gap: var(--space-2); min-width: 0; }
+/* Every grid on the way down to a chip has one column that may shrink below its content: an
+   implicit column is sized to its widest child, and a chip that would not wrap once made a card, and
+   the sheet with it, wider than a phone and scroll sideways. */
+.questions-list { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--space-4); padding: var(--space-3) var(--space-3) var(--space-4); }
+.questions-section, .questions-group { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
 .questions-section-head, .questions-group-head { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; color: var(--fg-3); font-size: var(--fs-11); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .questions-section.requests .questions-section-head { color: var(--warn); }
 .questions-group-head { text-transform: none; letter-spacing: 0; font-size: var(--fs-12); color: var(--fg-2); }
@@ -3320,7 +3323,7 @@ button.staff-row:hover { background: var(--surface-2); }
 .questions-count { min-width: 18px; padding: 0 5px; border-radius: var(--radius-pill); background: var(--surface-3); color: var(--fg-2); font-size: var(--fs-11); font-weight: 600; line-height: 18px; text-align: center; letter-spacing: 0; }
 .questions-count:empty { display: none; }
 
-.q-card { position: relative; display: grid; gap: var(--space-2); min-width: 0; padding: var(--space-3) var(--space-3) 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-1); transition: border-color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out), box-shadow var(--t-base) var(--ease-out); }
+.q-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; padding: var(--space-3) var(--space-3) 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-1); transition: border-color var(--t-base) var(--ease-out), background var(--t-base) var(--ease-out), box-shadow var(--t-base) var(--ease-out); }
 .q-card::before { content: ""; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: transparent; transition: background var(--t-base) var(--ease-out); }
 .q-card:focus-within { border-color: var(--line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
 .q-card.s-draft::before { background: var(--warn); }
@@ -3369,11 +3372,13 @@ button.staff-row:hover { background: var(--surface-2); }
 .q-suggestion { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--fs-12); color: var(--fg-2); overflow-wrap: anywhere; }
 .q-suggestion .ic { flex: none; margin-top: 2px; color: var(--accent); }
 
-.q-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.q-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: var(--ctl-h-sm); padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: transparent; color: var(--fg); font: inherit; font-size: var(--fs-13); font-weight: 500; cursor: pointer; transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
-.q-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.q-chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: var(--ctl-h-sm); padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: calc(var(--ctl-h-sm) / 2); background: transparent; color: var(--fg); font: inherit; font-size: var(--fs-13); font-weight: 500; line-height: 1.35; text-align: left; cursor: pointer; transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast); }
+/* An option is read whole, over as many lines as it takes: the operator chooses by it, and an
+   ellipsis hid the half that told two options apart. A link with no spaces breaks anywhere. */
+.q-chip-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .q-chip:hover { background: var(--surface-2); }
-.q-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-pill); }
+.q-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .q-chip.on { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--fg); }
 .q-chip.tone-ok.on { border-color: color-mix(in srgb, var(--ok) 70%, transparent); background: color-mix(in srgb, var(--ok) 16%, transparent); }
 .q-chip.tone-bad.on { border-color: color-mix(in srgb, var(--bad) 70%, transparent); background: color-mix(in srgb, var(--bad) 14%, transparent); }
@@ -3424,7 +3429,7 @@ button.staff-row:hover { background: var(--surface-2); }
 .questions-headbtn { position: relative; }
 .questions-headbtn .count { position: absolute; top: 2px; right: 2px; min-width: 16px; padding: 0 4px; border-radius: var(--radius-pill); background: var(--warn); color: var(--primary-ink); font-size: var(--fs-11); font-weight: 700; line-height: 16px; text-align: center; }
 @media (max-width: 1023px) {
-  .q-chip { min-height: var(--ctl-h); padding: 0 14px; }
+  .q-chip { min-height: var(--ctl-h); padding: 6px 14px; border-radius: calc(var(--ctl-h) / 2); }
   .questions-keys { display: none; }
   .questions-send-btn { min-height: var(--row-h-touch); }
 }
