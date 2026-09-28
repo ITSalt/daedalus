@@ -603,7 +603,10 @@ select.field { text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .badge.stream { color:var(--info); border-color:color-mix(in srgb, var(--info) 40%, transparent); }
 .badge.structured { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 40%, transparent); }
 .badge.text { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, transparent); }
-.usage-raw { margin:0 0 8px; padding:8px 10px; background:var(--bg-2); border-radius:var(--radius-sm); font-family:var(--mono); font-size:var(--fs-11); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
+/* The unfolded call and its payload read as one pair: the row is lit, and the payload is a code
+   panel with its own edge. On the card's own colour it was a bare "{}" in body text. */
+.usage-row.open { background:var(--surface-2); border-radius:var(--radius-sm); }
+.usage-raw { margin:0 0 8px; padding:8px 10px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); font-family:var(--mono); font-size:var(--fs-11); white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; }
 .grid4 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .filters { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
 
@@ -1647,6 +1650,26 @@ pre.diff .file { color: var(--fg); font-weight: 600; }
 .quota-line .sub { text-align: right; min-width: 90px; }
 .tablecard { overflow-x: auto; }
 .tablecard td.dayc { white-space: nowrap; }
+/* A phone has no room for seven columns: scrolled sideways, the cost column was the one off the
+   edge and a model's name broke at its hyphen. Each row becomes a small card of its own, the model
+   and its cost on top, the counts under them with their names. */
+@media (max-width: 700px) {
+  .usage .tablecard thead { display: none; }
+  .usage .tablecard table, .usage .tablecard tbody { display: block; }
+  .usage .tablecard tr { display: grid; grid-template-columns: repeat(4, auto) minmax(0, 1fr); grid-template-areas: "day day day day day" "model model model model usd" "calls in out cached ."; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .usage .tablecard tr:first-child { border-top: 0; }
+  .usage .tablecard td { display: block; padding: 0; border: 0; text-align: left; }
+  .usage .tablecard td.dayc { grid-area: day; font-weight: 600; }
+  .usage .tablecard td.dayc:empty { display: none; }
+  .usage .tablecard td.modelc { grid-area: model; min-width: 0; overflow-wrap: anywhere; }
+  .usage .tablecard td.usdc { grid-area: usd; text-align: right; white-space: nowrap; }
+  .usage .tablecard td.callsc { grid-area: calls; }
+  .usage .tablecard td.inc { grid-area: in; }
+  .usage .tablecard td.outc { grid-area: out; }
+  .usage .tablecard td.cachedc { grid-area: cached; }
+  .usage .tablecard td[data-label] { color: var(--fg-2); font-size: var(--fs-12); }
+  .usage .tablecard td[data-label]::before { content: attr(data-label) " "; color: var(--fg-3); }
+}
 .settings-stage { display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--bg); }
 .settings-index { display: flex; flex-direction: column; gap: 2px; }
 .settings-back { display: none; }
