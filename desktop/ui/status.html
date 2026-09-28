@@ -14,7 +14,7 @@
   <div class="inner">
     <header class="hero rise">
       <h1>{{.T "status.title"}}</h1>
-      <p>{{if .Native}}{{.T "status.mode.native"}}{{else}}{{.T "status.mode.docker"}}{{end}} — <code>{{.Status.Data}}</code></p>
+      <p>{{if .Native}}{{.T "status.mode.native"}}{{else}}{{.T "status.mode.docker"}}{{end}} — <code class="path" title="{{.Status.Data}}"><bdi dir="ltr">{{.Status.Data}}</bdi></code></p>
       <p>{{if .Native}}{{.T "status.close.native"}}{{else}}{{.T "status.close.docker"}}{{end}}</p>
     </header>
 
@@ -41,7 +41,7 @@
         <button data-action="start">{{.T "status.start"}}</button>
         <button data-action="stop">{{.T "status.stop"}}</button>
         <button data-action="update">{{.T "status.update"}}</button>
-        <a class="button" href="/setup">{{.T "status.configure"}}</a>
+        <a class="button" href="/setup" data-busy-off>{{.T "status.configure"}}</a>
         <span class="busy" id="busy"></span>
       </div>
       {{if .Native}}<p class="note">{{.T "status.native.note"}}</p>{{end}}

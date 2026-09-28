@@ -85,6 +85,21 @@ code {
 .hero { margin-bottom: clamp(24px, 3vw, 36px); }
 .hero h1 { font-size: clamp(26px, 2.6vw, 38px); }
 .hero p { color: var(--muted); margin-top: 8px; font-size: clamp(14px, 1.1vw, 16px); }
+/* Where the data lives, on one line. Wrapped, a long install path took four lines of a phone's
+   first screen and pushed every control below the fold, broken mid-word by `break-all`. The line is
+   cut at its start rather than its end — right-to-left overflow, with the path itself isolated as
+   left-to-right so its slashes stay put — because the tail ("…/Daedalus/data") is the part that
+   says which installation this is; the whole path is in the title and copies whole. */
+.hero code.path {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  vertical-align: bottom;
+  word-break: normal;
+}
 
 /* ---- surfaces ---------------------------------------------------------------------------- */
 .card {
@@ -230,6 +245,7 @@ button:active, .button:active { transform: scale(0.985); }
 button.primary { background: var(--accent); border-color: transparent; color: var(--accent-ink); font-weight: 600; }
 button.primary:hover { background: #8cbcff; }
 button[disabled] { opacity: 0.45; cursor: default; transform: none; }
+.button[aria-disabled="true"] { opacity: 0.45; cursor: default; pointer-events: none; transform: none; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: clamp(18px, 2vw, 26px); }
 .bar .note { margin: 0; }
 
@@ -331,6 +347,8 @@ button[disabled] { opacity: 0.45; cursor: default; transform: none; }
   padding: 15px 18px;
 }
 .decide { border-color: rgba(86, 211, 100, 0.45); margin-bottom: clamp(14px, 1.4vw, 20px); }
+.decide.failed { border-color: rgba(240, 180, 41, 0.4); }
+.decide.failed h2 { color: #f7d79b; }
 .decide p { color: var(--muted); margin: 8px 0 16px; }
 .log {
   background: var(--bg);
@@ -374,4 +392,10 @@ button[disabled] { opacity: 0.45; cursor: default; transform: none; }
   .bar { align-items: stretch; flex-direction: column; }
   .bar button { width: 100%; }
   .actions button, .actions .button { flex: 1 1 140px; text-align: center; }
+  /* Four stacked tiles of a desktop's proportions filled a phone's first screen on their own, and
+     with an alert above them the buttons began below the fold. Here each tile is one line: the
+     label, and what it says beside it. */
+  .tiles { gap: 8px; }
+  .tile { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 12px 16px; }
+  .tile .value { font-size: 16px; min-width: 0; overflow-wrap: anywhere; }
 }

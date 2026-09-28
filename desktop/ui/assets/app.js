@@ -169,10 +169,21 @@ function drawStatus(status) {
   for (const button of document.querySelectorAll("button[data-action]")) {
     button.disabled = Boolean(status.busy);
   }
+  // The configuration is a link, not a button, so `disabled` means nothing to it — and saving the
+  // form in the middle of a start or an update rewrites the mode and the .env under the work in
+  // flight. It is held off for the same span the buttons are.
+  for (const link of document.querySelectorAll("a.button[data-busy-off]")) {
+    if (status.busy) link.setAttribute("aria-disabled", "true");
+    else link.removeAttribute("aria-disabled");
+    link.tabIndex = status.busy ? -1 : 0;
+  }
   // The agent's own code. A change waiting for a restart is the only thing on this page the
   // operator has to act on, so it gets a card of its own and the button that applies it.
   const change = status.change || {};
   el("change").hidden = !change.commit;
+  // A change that was reversed or never applied is a failure the operator should notice, and the
+  // card's green edge said "all is well" over a sentence saying the opposite.
+  el("change").classList.toggle("failed", !change.pending && (change.status === "rolled_back" || change.status === "failed"));
   if (change.commit) {
     el("change-title").textContent = change.pending ? T("change.pending") : changeOutcome(change.status);
     el("change-body").textContent = change.pending ? change.summary : change.detail || change.summary;
