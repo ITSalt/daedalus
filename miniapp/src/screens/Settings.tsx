@@ -410,6 +410,8 @@ function TotalCaps({ s, save }: { s: Settings; save: (patch: any) => Promise<voi
         <span className="sub" style={{ whiteSpace: "nowrap" }}>{t("settings.limits.spent", { sum: spend ? `$${spend.total.spent_usd.toFixed(2)}` : "…" })}</span>
       </div>
       <label className="field">{t("settings.limits.perprovider")}</label>
+      {/* Said, not left blank: an empty space under the heading read as a list that failed to load. */}
+      {providers.length === 0 && <div className="sub">{t("settings.limits.noproviders")}</div>}
       {providers.map((pid) => (
         <div key={pid} className="composer-row" style={{ marginBottom: 6 }}>
           <span style={{ minWidth: 90 }}>{pid}</span>

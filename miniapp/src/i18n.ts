@@ -2035,6 +2035,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "settings.limits.total": { en: "Total spend cap, all sessions and providers (USD, 0 = none)", ru: "Общий потолок трат по всем сессиям и клиентам (USD, 0 — без ограничения)" },
   "settings.limits.perprovider": { en: "Per-provider total caps (USD, 0 = none)", ru: "Потолки по каждому клиенту (USD, 0 — без ограничения)" },
   "settings.limits.spent": { en: "spent {sum}", ru: "потрачено {sum}" },
+  "settings.limits.noproviders": { en: "No providers yet — they are added under Models & providers.", ru: "Клиентов пока нет — они добавляются в разделе «Модели и клиенты»." },
   "settings.limits.since": { en: "counting since {when}", ru: "считаем с {when}" },
   "settings.limits.since.start": { en: "the beginning", ru: "самого начала" },
   "settings.limits.reset": { en: "reset counters", ru: "обнулить счётчики" },
