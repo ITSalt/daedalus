@@ -449,6 +449,13 @@ a { color: var(--accent); text-decoration: none; }
 .diff pre { margin:0; padding:8px 10px; font-family:var(--mono); font-size:var(--fs-mono); white-space:pre-wrap; word-break:break-word; }
 .diff .del { background:rgba(248,113,113,.14); border-radius:var(--radius-md) var(--radius-md) 0 0; color:#fca5a5; }
 .diff .add { background:rgba(74,222,128,.12); border-radius:0 0 var(--radius-md) var(--radius-md); color:#86efac; }
+/* What was removed and what replaced it are told apart by a sign as well as a tint: red and green
+   at this depth are one colour to a reader who does not see the difference between them. The sign
+   is drawn, not written, so copying the text copies the code alone. */
+.diff pre.del, .diff pre.add { position:relative; padding-left:26px; }
+.diff pre.del::before, .diff pre.add::before { position:absolute; left:10px; top:8px; font-weight:700; }
+.diff pre.del::before { content:"−"; }
+.diff pre.add::before { content:"+"; }
 
 /* The answer's own label when another model wrote it: above the text, never inside it. */
 .fallback-note { margin: 6px 0 2px; }
