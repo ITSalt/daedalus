@@ -70,7 +70,10 @@ export function ModelSelect({ model, fallback, open, onOpenChange, onChoose, she
     <>
       <button ref={trigger} type="button" className={`model-select ${fallback ? "attn" : ""} ${open ? "on" : ""}`} onClick={() => onOpenChange(!open)} title={title} aria-label={t("session.model.for")} aria-haspopup="menu" aria-expanded={open}>
         {fallback ? <span className="model-dot" aria-hidden /> : <Icon name="model" size={14} />}
-        <span className="model-label truncate">{label}{onChooseEffort && thinking ? ` · ${t(`add.effort.${effort || "medium"}`)}` : ""}</span>
+        {/* The effort is its own span so a long model name is what gives way: in one span the
+            ellipsis ate the effort first and the pill read "DeepSeek Flash · l…". */}
+        <span className="model-label truncate">{label}</span>
+        {onChooseEffort && thinking && <span className="model-effort">· {t(`add.effort.${effort || "medium"}`)}</span>}
         <Icon name="chevron" size={12} />
       </button>
       {open && sheet && (

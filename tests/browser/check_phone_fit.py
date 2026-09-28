@@ -1,10 +1,16 @@
-"""What on a phone must fit the screen it is on, in both languages.
+"""Two things on a phone that must fit the screen they are on, in both languages.
 
 The Questions sheet: a question whose options are long sentences, and one whose option is a link with
 no spaces in it. The options once kept to one line each, so the card grew wider than the phone and
 the whole sheet scrolled sideways, a card border crossing the chips and the Send bar shifted with
 it. Every option now wraps inside its card, and nothing in the sheet scrolls sideways; the same card
 is looked at beside a project's orchestrator on a desktop and in the Main orchestrator's list.
+
+The composer: the mode chip, the one pill for the model and its effort, the microphone and the
+circle, at 360, 375, 390 and 430 px, with a short and a long model name, idle and running. The mode
+chip once hugged its label and was cut to "Age…" beside a long model name; now the mode keeps its
+whole name, each pill has room inside it, the model name is what gives way (never the effort), every
+control stays inside the pill and at least 40 px tall.
 
     APP_URL=http://127.0.0.1:<port>/app python tests/browser/check_phone_fit.py
 
@@ -20,12 +26,15 @@ from pathlib import Path
 from playwright.sync_api import Page, expect, sync_playwright
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import check_composer as composer  # noqa: E402
 from api_stub import DEFAULT_APP, FocusStub, MainStub, expect_app  # noqa: E402
 from check_main import serve as serve_main  # noqa: E402
 from check_project_focus import PID, fits, serve  # noqa: E402
 
 BASE = os.environ.get("APP_URL", DEFAULT_APP)
 CHROMIUM = os.environ.get("CHROMIUM", "/usr/local/bin/chromium")
+
+MODELS = ("GLM 4", "DeepSeek Flash long-context preview")
 
 OVERFLOW = """(root) => {
   // Every element in the sheet that could scroll sideways, and by how much it would.
@@ -121,6 +130,73 @@ def main_questions(browser, lang: str, width: int) -> list[str]:  # type: ignore
     return problems
 
 
+def composer_fits(browser, lang: str, width: int, model: str, running: bool) -> list[str]:  # type: ignore[no-untyped-def]
+    where = f"{lang} {width} {'running' if running else 'idle'} '{model}'"
+    problems: list[str] = []
+    composer.HOST.status = "running" if running else "idle"
+    composer.HOST.yagni = width == 360
+    original = composer.Host.detail
+    composer.HOST.detail = lambda: {**original(composer.HOST), "model": model}  # type: ignore[method-assign]
+    context = browser.new_context(viewport={"width": width, "height": 780}, is_mobile=True, has_touch=True, color_scheme="dark")
+    context.add_init_script("try { localStorage.setItem('daedalus.session.panel', '0'); } catch (e) {}")
+    page = context.new_page()
+    page.route("**/api/**", composer.stub)
+    page.goto(f"{BASE}/agents/{composer.SESSION}?token=t&scheme=dark&lang={lang}")
+    page.wait_for_selector(".composer .roundbtn.primary", timeout=15000)
+    page.wait_for_timeout(300)
+    try:
+        facts = page.evaluate("""() => {
+          const box = document.querySelector('.composer-box').getBoundingClientRect();
+          const shown = [...document.querySelectorAll('.composer-row > *, .composer-tools > *')]
+            .filter((e) => e.getClientRects().length && !e.classList.contains('composer-tools') && e.tagName !== 'INPUT');
+          const pill = (sel) => {
+            const e = document.querySelector(sel);
+            if (!e) return null;
+            const s = getComputedStyle(e), r = e.getBoundingClientRect();
+            return { w: r.width, h: r.height, pad: parseFloat(s.paddingLeft), fs: parseFloat(s.fontSize) };
+          };
+          const cut = (sel) => { const e = document.querySelector(sel); return e ? e.scrollWidth > e.clientWidth + 1 : null; };
+          return {
+            box: { left: box.left, right: box.right },
+            outside: shown.filter((e) => { const r = e.getBoundingClientRect(); return r.left < box.left - 0.5 || r.right > box.right + 0.5; }).map((e) => e.className),
+            short: shown.filter((e) => e.getBoundingClientRect().height < 39.5).map((e) => e.className),
+            mode: pill('.composer .composer-mode'), model: pill('.composer .model-select'),
+            modeCut: cut('.composer .composer-mode .truncate'), effortCut: cut('.composer .model-select .model-effort'),
+            effort: document.querySelector('.composer .model-select .model-effort')?.textContent ?? null,
+            doc: document.documentElement.scrollWidth - window.innerWidth,
+          };
+        }""")
+    finally:
+        composer.HOST.detail = lambda: original(composer.HOST)  # type: ignore[method-assign]
+    if facts["doc"] > 0:
+        problems.append(f"{where}: the page scrolls sideways by {facts['doc']}px")
+    if facts["outside"]:
+        problems.append(f"{where}: {facts['outside']} leave the pill")
+    if facts["short"]:
+        problems.append(f"{where}: {facts['short']} are under 40px tall")
+    mode, pill = facts["mode"], facts["model"]
+    if not mode:
+        problems.append(f"{where}: no mode chip")
+    else:
+        if facts["modeCut"]:
+            problems.append(f"{where}: the mode chip's name is cut")
+        if mode["pad"] < 8 or mode["fs"] > 12:
+            problems.append(f"{where}: the mode chip has {mode['pad']}px inside and {mode['fs']}px type")
+    if running:
+        if pill:
+            problems.append(f"{where}: the model pill did not give way to steering")
+    elif not pill:
+        problems.append(f"{where}: no model pill")
+    else:
+        if pill["pad"] < 8 or pill["fs"] > 12:
+            problems.append(f"{where}: the model pill has {pill['pad']}px inside and {pill['fs']}px type")
+        if not facts["effort"] or facts["effortCut"]:
+            problems.append(f"{where}: the effort is missing or cut ({facts['effort']!r})")
+    print(where, "mode", mode, "model", pill, "effort", facts["effort"])
+    context.close()
+    return problems
+
+
 def run() -> int:
     problems: list[str] = []
     with sync_playwright() as p:
@@ -129,11 +205,16 @@ def run() -> int:
             for width in (360, 390, 1440):
                 problems += project_questions(browser, lang, width)
                 problems += main_questions(browser, lang, width)
+            for width in (360, 375, 390, 430):
+                for model in MODELS:
+                    for running in (False, True):
+                        problems += composer_fits(browser, lang, width, model, running)
         browser.close()
+    composer.HOST.status, composer.HOST.yagni = "idle", False
     print("problems:", problems or "none")
     return 1 if problems else 0
 
 
 if __name__ == "__main__":
     expect_app(BASE)
-    sys.exit(run())
+    sys.exit(run() or composer.UNHANDLED.report())

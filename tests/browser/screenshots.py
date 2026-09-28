@@ -236,7 +236,7 @@ def detail(id_: str) -> dict:
         "workspace": workspace, "workspace_name": workspace.rsplit("/", 1)[-1], "workspace_own": s["workspace_own"],
         "project": project,
         "workspace_sessions": [{"id": S2, "title": "Bakery site: photos"}] if id_ == S1 else [{"id": S1, "title": "Bakery site"}] if id_ == S2 else [],
-        "pending": QUESTION if id_ == S4 else None, "model": s["model"], "provider": "claude" if id_ == S1 else "opencode",
+        "pending": QUESTION if id_ == S4 else None, "model": (id_ == S1 and getattr(stub, "model", None)) or s["model"], "provider": "claude" if id_ == S1 else "opencode",
         "thinking": True, "reasoning_effort": "high",
         "messages": messages, "mode": "", "usd_cap": 4.0, "brief": "Site of a small bakery. Static HTML, no frameworks; the owner edits data files, never markup.", "spawned_by": None, "tools_off": [],
         "loop": LOOP if id_ == S3 else None, "services": SERVICES_S1 if id_ == S1 else [], "subagents": SUBAGENTS_S1 if id_ == S1 else [],
@@ -2006,10 +2006,20 @@ def run_modes() -> int:
             stub.running = True  # type: ignore[attr-defined]
             shot(page, "phone-composer-yagni", f"agents/{S1}", wait=".composer .composer-mode.yagni")
             phone.close()
+            # The narrowest phone, idle, with a model whose name does not fit: the name is cut inside
+            # its pill, the effort beside it and the mode chip keep their words.
+            stub.running = False  # type: ignore[attr-defined]
+            stub.model = "DeepSeek Flash long-context preview"  # type: ignore[attr-defined]
+            narrow = browser.new_context(viewport={"width": 360, "height": 780}, device_scale_factor=3, color_scheme="dark", is_mobile=True, has_touch=True)
+            page = narrow.new_page()
+            page.route("**/api/**", stub)
+            shot(page, "phone-composer-long-model", f"agents/{S1}", wait=".composer .model-select .model-effort")
+            narrow.close()
             browser.close()
     finally:
         stub.yagni = False  # type: ignore[attr-defined]
         stub.running = False  # type: ignore[attr-defined]
+        stub.model = None  # type: ignore[attr-defined]
     return UNHANDLED.report()
 
 

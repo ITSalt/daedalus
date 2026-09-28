@@ -656,7 +656,6 @@ input.field, select.field, textarea.field {
 .composer-box { container-type: inline-size; }
 @container (max-width: 560px) {
   .ctx-ring, .iconbtn.flat.voice { display:none; }
-  .model-select { max-width:104px; padding:0 4px; gap:3px; }
   .composer-box textarea { padding:9px 4px; }
   .composer-tools { gap:0; }
 }
@@ -2363,9 +2362,18 @@ input.field[type="range"] {
 .composer-place { display:flex; gap:var(--space-2); min-width:0; padding-inline:var(--space-2); }
 .composer-place-chip { display:inline-flex; align-items:center; gap:var(--space-1); min-width:0; color:var(--fg-3); font-size:var(--fs-11); }
 .composer-place-chip .ic { flex:none; }
+/* In a narrow composer the controls are pills with room inside them, in a smaller type than the
+   field, the way a phone's chat app draws them. The mode chip keeps its whole name (it was shrunk to
+   "Age…" and hugged its label); the model and its effort share one pill that takes what is left, and
+   the model name is what is cut, never the effort. These sit after the composer's own rules, which
+   they would otherwise lose to at equal specificity. */
 @container (max-width: 560px) {
-  .composer-mode { max-width:112px; padding-inline:var(--space-1); }
   .effort-select { max-width:88px; padding-inline:var(--space-1); }
+  .composer-row .composer-mode { flex:none; max-width:45%; padding-inline:12px; gap:6px; font-size:var(--fs-12); }
+  .composer-row .composer-mode .ic { display:none; }
+  .composer-row .model-select { flex:0 1 auto; max-width:none; padding-inline:12px; gap:4px; font-size:var(--fs-12); }
+  .composer-row .model-select > .ic:first-child { display:none; }
+  .composer-row .model-select .model-effort { flex:none; white-space:nowrap; }
 }
 @media (max-width: 1023px) {
   .composer-box textarea { min-height:calc(var(--fs-prose) * 1.4 + var(--space-2) * 2); }
