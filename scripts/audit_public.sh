@@ -63,13 +63,28 @@ audit() {
   if git grep -InE "$PATTERNS" -- . 2>/dev/null | grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
 
   echo "== history (all blobs)"
-  local history_hits
+  local history_hits history_report walked
   # Captured, then tested -- never tested by the pipeline's status. Under pipefail the status of
   # `cmd | while ...; done | grep ...` is the status of the loop's LAST iteration, so a pattern
   # present in an older commit and absent from the newest one printed its line here and answered
   # "clean": the verdict hung on the order `git rev-list --all` happens to visit commits in.
-  history_hits=$(git rev-list --all | while read -r c; do git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null | sed "s/^/$c:/"; done |
+  # The walk that reads is also the walk that counts. A finding proves only that the reader reached
+  # the commit the finding is in, so a walk cut short after it prints the same line and answers the
+  # same way; the number of commits visited is the only part of the answer that does not depend on
+  # where the finding sits. It is taken inside the substitution that does the grepping, because a
+  # count read from a second, untruncated enumeration would agree with itself and prove nothing.
+  history_report=$(
+    walked=0
+    while read -r c; do
+      walked=$((walked + 1))
+      git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null | sed "s/^/$c:/"
+    done < <(git rev-list --all)
+    printf 'walked %d\n' "$walked"
+  )
+  walked=$(printf '%s\n' "$history_report" | sed -n 's/^walked \([0-9][0-9]*\)$/\1/p')
+  history_hits=$(printf '%s\n' "$history_report" | grep -v '^walked [0-9][0-9]*$' |
     grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER" || true)
+  echo "history: ${walked:-0} commit(s) walked"
   if [ -n "$history_hits" ]; then printf '%s\n' "$history_hits"; failed=1; else echo "clean"; fi
 
   echo "== commit messages"
@@ -207,12 +222,23 @@ Generated with a tool: see the session log at https://example.invalid/session_01
     git rm -q gone.txt
     git commit -qm "and is gone from the tree"
   )
+  local walked_expected
+  walked_expected=$(cd "$older" && git rev-list --all | wc -l | tr -d ' ')
   status2=0
   bash "$SELF" "$older" > "$older/out.txt" 2>&1 || status2=$?
   report2=$(cat "$older/out.txt")
   rm -rf "$older"
   if [ "$status2" -eq 0 ]; then
     echo "SELF-CHECK FAILED: the audit passed a repository whose only credential is in an older commit"
+    printf '%s\n' "$report2"
+    return 1
+  fi
+  # The credential is in the fixture's middle commit, so the refusal above witnesses only the region
+  # that commit sits in: an enumeration cut short after it still finds the credential and still
+  # refuses. This is the other half, and it holds wherever the credential sits -- the audit must
+  # report having visited every commit the fixture has.
+  if ! printf '%s\n' "$report2" | grep -q "^history: $walked_expected commit(s) walked$"; then
+    echo "SELF-CHECK FAILED: the history reader did not report visiting all of the fixture's commits"
     printf '%s\n' "$report2"
     return 1
   fi

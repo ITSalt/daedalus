@@ -74,3 +74,27 @@ def test_the_public_audit_gates_a_pattern_that_lives_only_in_an_older_commit(tmp
     done = subprocess.run(["bash", str(script), str(repo)], capture_output=True, text=True)
     assert done.returncode != 0, "a credential surviving only in an older commit was not refused:\n" + done.stdout
     assert "gone.txt" in done.stdout
+
+
+def test_the_public_audit_catches_a_history_walk_that_stops_early(tmp_path) -> None:
+    """The history arm's verdict does not depend on where the surviving credential sits.
+
+    The self-check's own fixture keeps its credential in the middle commit, so the refusal that
+    fixture demands witnesses only the walk up to that commit: an enumeration cut short after it
+    still finds the credential and still refuses, and the self-check would answer green. The audit
+    reports how many commits it visited and the self-check requires all of them, so a walk that
+    stops early goes red wherever the credential sits -- which is this test, measured on a copy.
+    """
+    import subprocess
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "audit_public.sh"
+    text = script.read_text(encoding="utf-8")
+    needle = "done < <(git rev-list --all)"
+    assert text.count(needle) == 1, "the history enumeration is not one occurrence"
+    cut = tmp_path / "audit_public_cut.sh"
+    cut.write_text(text.replace(needle, "done < <(git rev-list --all | head -2)"), encoding="utf-8")
+
+    done = subprocess.run(["bash", str(cut), "--self-check"], capture_output=True, text=True)
+    assert done.returncode != 0, "a history walk that stopped early passed the self-check:\n" + done.stdout
+    assert "did not report visiting all of the fixture's commits" in done.stdout
