@@ -2074,7 +2074,7 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
   background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-md);
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.28);
 }
-.addmodel-foot .sub { min-width: 0; flex: 1 1 140px; }
+.addmodel-foot .sub { min-width: 0; flex: 1 1 140px; overflow-wrap: anywhere; }
 .empty.calm { padding: 26px 16px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-md); margin-top: 10px; }
 @media (min-width: 720px) {
   .modelbar { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
