@@ -15,7 +15,7 @@ import { useMain } from "./main/data";
 import { orchestratedProjects, waitingInOrchestration } from "./mode";
 import { ORCHESTRATION, projectHome } from "./router";
 import { FoldButton } from "./sidebar";
-import { PageHeader, go } from "./shell";
+import { PageHeader, go, useMedia } from "./shell";
 import { useQuery } from "./store";
 import { useStreamUp } from "./events";
 
@@ -64,12 +64,15 @@ function ProjectRow({ project, sessions }: { project: ProjectFolder; sessions: S
 function OrchestrationRows({ onMain }: { onMain: boolean }) {
   const { data, loading } = useListing();
   const projects = orchestratedProjects(data?.projects ?? []);
+  // The palette is a keyboard's way in; a phone or a tablet without a pointer has no ⌘K to press,
+  // so there the empty line points at the Agents list, where every project is one tap away.
+  const keyboard = useMedia("(hover: hover) and (pointer: fine)");
   return (
     <>
       <div className="orch-main"><MainEntry current={onMain} /></div>
       <div className="orch-section sub">{t("orch.projects")}</div>
       {projects.map((p) => <ProjectRow key={p.id} project={p} sessions={data?.sessions ?? []} />)}
-      {!loading && data && projects.length === 0 && <div className="orch-empty sub">{t("orch.empty")}</div>}
+      {!loading && data && projects.length === 0 && <div className="orch-empty sub">{t(keyboard ? "orch.empty" : "orch.empty.touch")}</div>}
     </>
   );
 }
