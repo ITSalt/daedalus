@@ -23,7 +23,7 @@
   <img src="docs/screenshots/browser.gif" alt="The agent's own browser, live, with the actions it took: the operator takes control, leaves a note for the agent and gives the browser back" width="100%" />
 </p>
 
-> Built on [protocore](https://github.com/ascorblack-labs/protocore-community), an open agent core (ReAct loop, tools, context compaction, snapshots and resumable runs, memory, skills). The copy it runs on is [protocore-exp](https://github.com/anchor-inference/protocore-exp).
+> Built on [protocore](https://github.com/anchor-inference/protocore), an open agent core (ReAct loop, tools, context compaction, snapshots and resumable runs, memory, skills). The copy it runs on is [protocore-exp](https://github.com/anchor-inference/protocore-exp).
 
 ---
 
