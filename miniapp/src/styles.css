@@ -554,6 +554,17 @@ input.field, select.field, textarea.field {
 .sheet .grip { width:44px; height:4px; border-radius:2px; background:var(--line); margin:4px auto 10px; }
 .sheet h3 { margin:0 0 10px; font-size:var(--fs-16); }
 .sheet-body { overflow-y:auto; min-height:0; }
+/* More of the sheet waits below the fold (edgefade.ts): the body's lower edge fades, or, where a
+   sticky footer holds the actions, a shade rises above it. Without either, a touch screen showed a
+   hire sheet or a task's actions ending at the fold with nothing to say the rest was a swipe away. */
+.sheet-body[data-more="below"]:not(:has(.sheet-foot)) { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent); }
+.sheet-more-anchor { position: relative; height: 0; flex: none; }
+.sheet-more { position: absolute; left: 50%; bottom: var(--space-2); transform: translateX(-50%); display: none; align-items: center; justify-content: center; width: var(--ctl-h-sm); height: var(--ctl-h-sm); border-radius: var(--radius-pill); border: 1px solid var(--line-strong); background: var(--surface-3); color: var(--fg); box-shadow: var(--shadow-pop); cursor: pointer; }
+.sheet-body[data-more="below"] + .sheet-more-anchor .sheet-more { display: inline-flex; }
+/* A sheet with a sticky footer says it with the shade over the footer instead: the arrow, standing
+   above the footer, sat on the last field's words. */
+.sheet-body[data-more="below"]:has(.sheet-foot) + .sheet-more-anchor .sheet-more { display: none; }
+.sheet-body[data-more="below"] .sheet-foot::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 56px; background: linear-gradient(to bottom, transparent, var(--surface-1) 85%); pointer-events: none; }
 .menu-item { display:flex; justify-content:space-between; align-items:center; width:100%; min-height:var(--row-h); background:var(--card); border:1px solid var(--line); border-radius:var(--radius-sm); padding:8px 12px; margin-bottom:6px; color:var(--fg); font-size:var(--fs-14); cursor:pointer; text-align:left; }
 .card.row .pill { flex:none; }
 .card.row .avatar { flex:none; }

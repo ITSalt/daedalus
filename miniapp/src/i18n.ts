@@ -590,6 +590,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "common.remove": { en: "Remove", ru: "Убрать" },
   "common.delete": { en: "Delete", ru: "Удалить" },
   "common.close": { en: "Close", ru: "Закрыть" },
+  "common.more.below": { en: "More below", ru: "Ниже есть ещё" },
   "common.open": { en: "Open", ru: "Открыть" },
   "common.edit": { en: "Edit", ru: "Изменить" },
   "common.copy": { en: "Copy", ru: "Копировать" },

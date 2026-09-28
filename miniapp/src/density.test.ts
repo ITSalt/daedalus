@@ -120,6 +120,9 @@ const CONTENT_BOXES = [
   { selector: ".turn-skeleton .sk-user", property: "height", max: 40 },
   { selector: ".files .tree-row.grep-row", property: "height", max: 48 },
   { selector: ".html-frame", property: "min-height", max: 400 },
+  // Not a box but the shade a sheet raises over its sticky footer while more waits below; shorter
+  // than this it fell into the gap above the footer and said nothing.
+  { selector: '.sheet-body[data-more="below"] .sheet-foot::before', property: "height", max: 56 },
 ];
 
 /** Top and bottom padding of a shorthand, in px; a component that is not a plain length counts as its first literal. */
