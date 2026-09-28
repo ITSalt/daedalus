@@ -471,11 +471,16 @@ a { color: var(--accent); text-decoration: none; }
 .answer code, .note code, .summary-body code, .msg.user code { font-family:var(--mono); font-size:0.9em; background:color-mix(in srgb, var(--fg) 6%, transparent); padding:1px 4px; border-radius:4px; color:inherit; }
 .answer details, .summary-body details { border:1px solid var(--line); border-radius:var(--radius-md); padding:8px 12px; margin:0 0 10px; }
 .answer summary, .summary-body summary { cursor:pointer; color:var(--muted); }
-.tablewrap { overflow:auto; max-height:70vh; margin:0 0 10px; border:1px solid var(--line); border-radius:var(--radius-sm); }
-.tablewrap table { border:0; border-radius:0; min-width:100%; }
+/* The frame is as wide as the table, up to the column: a two-column table in a frame the width of the
+   answer drew its header and its rows short of the frame's right edge, with a blank strip beside them. */
+.tablewrap { overflow:auto; max-height:70vh; width:fit-content; max-width:100%; margin:0 0 10px; border:1px solid var(--line); border-radius:var(--radius-sm); }
+.tablewrap table, .answer .tablewrap table, .summary-body .tablewrap table { border:0; border-radius:0; min-width:100%; }
 .answer thead th, .summary-body thead th { position:sticky; top:0; background:var(--surface-1); z-index:1; color:var(--fg-2); font-weight:500; }
 .answer table, .summary-body table { width:auto; min-width:60%; border:0; border-collapse:separate; border-spacing:0; font-size:var(--fs-13); }
 .answer th, .answer td, .summary-body th, .summary-body td { padding:6px 10px; border-bottom:1px solid var(--line); }
+/* A cell breaks between words, and inside a word only when the word alone is wider than the table
+   can give: the answer's break-anywhere let a narrow column split "framework" into "framewo" / "rk". */
+.answer th, .answer td, .summary-body th, .summary-body td { word-break:normal; overflow-wrap:break-word; }
 .answer tr:last-child td { border-bottom:0; }
 
 .codecard { margin:6px 0 10px; border:1px solid var(--line); border-radius:var(--radius-md); overflow:hidden; background:var(--card); }
@@ -486,6 +491,9 @@ a { color: var(--accent); text-decoration: none; }
 .codehead .copy[data-state="done"] .glyph-done { display:inline-flex; color:var(--ok); }
 .codehead .copy span { display:inline-flex; }
 .codecard pre { margin:0; padding:10px 12px; overflow-x:auto; font-family:var(--mono); font-size:var(--fs-mono); line-height:1.5; white-space:pre-wrap; word-break:break-word; color:var(--code-block); }
+/* The block is the frame; its text is not an inline code span again. The answer's inline-code tint
+   reached into it and drew a rounded chip behind every line of a fenced block. */
+.codecard pre code { background:none; padding:0; border-radius:0; }
 .toolcard .codecard { margin:0; }
 
 .summary { border:1px solid var(--line); border-radius:var(--radius-md); background:var(--card); padding:4px 12px; }
