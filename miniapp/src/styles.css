@@ -1716,7 +1716,9 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
   .settings-link .chev { display: none; }
   .settings-link-text .sub { display: none; }
   .settings-link.active { background: var(--surface-2); border-color: var(--line); }
-  .settings-lang .settings-link-text b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The label names the setting in both languages and the EN/RU switch shares its row, so in the
+     280 px column it wraps after the slash. Cut to one line it read "Language / …" on every width. */
+  .settings-lang .settings-link-text b { line-height: 1.25; }
 }
 
 /* ── palette, offline strip ──────────────────────────────────────────────── */
