@@ -63,7 +63,7 @@ audit() {
   if git grep -InE "$PATTERNS" -- . 2>/dev/null | grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
 
   echo "== history (all blobs)"
-  local history_hits history_report walked
+  local history_hits history_report walked unreadable commit_list enum_rc
   # Captured, then tested -- never tested by the pipeline's status. Under pipefail the status of
   # `cmd | while ...; done | grep ...` is the status of the loop's LAST iteration, so a pattern
   # present in an older commit and absent from the newest one printed its line here and answered
@@ -73,19 +73,37 @@ audit() {
   # same way; the number of commits visited is the only part of the answer that does not depend on
   # where the finding sits. It is taken inside the substitution that does the grepping, because a
   # count read from a second, untruncated enumeration would agree with itself and prove nothing.
+  # The enumeration's own status is taken where the list is produced. `< <(git rev-list --all)`
+  # hides it and `$(... || true)` below hides it again, so an enumeration that failed printed the
+  # same two words as one that found nothing: "clean" over a section that never ran. A list that
+  # came back non-zero, and a commit the reader could not read, are both a reader that cannot
+  # answer -- a commit nobody could read is not a commit that was cleared.
+  commit_list=$(mktemp)
+  enum_rc=0
+  git rev-list --all > "$commit_list" || enum_rc=$?
   history_report=$(
     walked=0
+    unreadable=0
     while read -r c; do
       walked=$((walked + 1))
-      git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null | sed "s/^/$c:/"
-    done < <(git rev-list --all)
-    printf 'walked %d\n' "$walked"
+      out=""
+      rc=0
+      out=$(git grep -InE "$PATTERNS" "$c" -- . 2>/dev/null) || rc=$?
+      [ "$rc" -le 1 ] || unreadable=$((unreadable + 1))
+      [ -z "$out" ] || printf '%s\n' "$out" | sed "s|^|$c:|"
+    done < "$commit_list"
+    printf 'walked %d\nunreadable %d\n' "$walked" "$unreadable"
   )
+  rm -f "$commit_list"
   walked=$(printf '%s\n' "$history_report" | sed -n 's/^walked \([0-9][0-9]*\)$/\1/p')
+  unreadable=$(printf '%s\n' "$history_report" | sed -n 's/^unreadable \([0-9][0-9]*\)$/\1/p')
   history_hits=$(printf '%s\n' "$history_report" | grep -v '^walked [0-9][0-9]*$' |
-    grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER" || true)
+    grep -v '^unreadable [0-9][0-9]*$' | grep -EvI "$PATTERN_EXEMPT" | grep -vi "$OWN_TRAILER" || true)
   echo "history: ${walked:-0} commit(s) walked"
-  if [ -n "$history_hits" ]; then printf '%s\n' "$history_hits"; failed=1; else echo "clean"; fi
+  if [ "$enum_rc" -ne 0 ] || [ "${unreadable:-0}" -ne 0 ]; then
+    echo "history: the reader could not answer -- enumeration exit $enum_rc, ${unreadable:-0} commit(s) unreadable"
+    failed=1
+  elif [ -n "$history_hits" ]; then printf '%s\n' "$history_hits"; failed=1; else echo "clean"; fi
 
   echo "== commit messages"
   if git log --all --format='%H %s%n%b' | grep -inE "$PATTERNS" | grep -vi "$OWN_TRAILER"; then failed=1; else echo "clean"; fi
@@ -243,6 +261,45 @@ Generated with a tool: see the session log at https://example.invalid/session_01
     return 1
   fi
   echo "self-check: the audit refuses a pattern that survives only in history"
+
+  # A reader that breaks is not a reader that found nothing. Here the enumeration exits non-zero
+  # without printing anything, so the section never ran; "clean" would be a sentence about nothing,
+  # and a scanner whose whole history arm can go dead in silence is the scanner this file exists to
+  # replace. The mutation is applied to a copy, and the copy is compared with the original first:
+  # an arm that could not be planted measured nothing.
+  local broken status3 report3
+  broken=$(mktemp -d)
+  mkdir -p "$broken/tool" "$broken/repo"
+  cp "$SELF" "$broken/tool/audit.sh"
+  sed -i.bak 's|^  git rev-list --all > "\$commit_list"|  false > "$commit_list"|' "$broken/tool/audit.sh"
+  if cmp -s "$SELF" "$broken/tool/audit.sh"; then
+    echo "SELF-CHECK FAILED: the history enumeration could not be replaced, so this arm measured nothing"
+    rm -rf "$broken"
+    return 1
+  fi
+  (
+    cd "$broken/repo"
+    git init -q .
+    git config user.email a@b.c
+    git config user.name a
+    printf 'a note\n' > note.md
+    git add -A
+    git commit -qm "a first commit"
+  )
+  status3=0
+  bash "$broken/tool/audit.sh" "$broken/repo" > "$broken/out.txt" 2>&1 || status3=$?
+  report3=$(cat "$broken/out.txt")
+  rm -rf "$broken"
+  if [ "$status3" -eq 0 ]; then
+    echo "SELF-CHECK FAILED: the audit passed a repository whose history it could not enumerate"
+    printf '%s\n' "$report3"
+    return 1
+  fi
+  printf '%s' "$report3" | grep -q "the reader could not answer" || {
+    echo "SELF-CHECK FAILED: a failed enumeration was not named as a failed reader"
+    printf '%s\n' "$report3"
+    return 1; }
+  echo "self-check: the audit refuses to call a section clean when its reader failed"
 }
 
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")

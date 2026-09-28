@@ -90,11 +90,48 @@ def test_the_public_audit_catches_a_history_walk_that_stops_early(tmp_path) -> N
 
     script = Path(__file__).resolve().parents[2] / "scripts" / "audit_public.sh"
     text = script.read_text(encoding="utf-8")
-    needle = "done < <(git rev-list --all)"
+    needle = 'git rev-list --all > "$commit_list"'
     assert text.count(needle) == 1, "the history enumeration is not one occurrence"
     cut = tmp_path / "audit_public_cut.sh"
-    cut.write_text(text.replace(needle, "done < <(git rev-list --all | head -2)"), encoding="utf-8")
+    cut.write_text(text.replace(needle, 'git rev-list --all | head -2 > "$commit_list"'), encoding="utf-8")
 
     done = subprocess.run(["bash", str(cut), "--self-check"], capture_output=True, text=True)
     assert done.returncode != 0, "a history walk that stopped early passed the self-check:\n" + done.stdout
     assert "did not report visiting all of the fixture's commits" in done.stdout
+
+
+def test_the_public_audit_refuses_a_history_reader_that_failed(tmp_path) -> None:
+    """A section whose reader broke is not a section that found nothing.
+
+    The enumeration used to be handed to the loop through a process substitution, so its exit
+    status was never seen, and a run whose `git rev-list` failed printed `history: 0 commit(s)
+    walked` and then `clean` -- the same two words as a repository with no findings. Here the
+    enumeration is replaced by a command that fails without printing, and the audit must refuse.
+    """
+    import subprocess
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "audit_public.sh"
+    text = script.read_text(encoding="utf-8")
+    needle = 'git rev-list --all > "$commit_list"'
+    assert text.count(needle) == 1, "the history enumeration is not one occurrence"
+    cut = tmp_path / "audit_public_dead.sh"
+    cut.write_text(text.replace(needle, 'false > "$commit_list"'), encoding="utf-8")
+
+    repo = tmp_path / "clean"
+    repo.mkdir()
+
+    def git(*args: str) -> None:
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.invalid", "-c", "user.name=t", *args],
+            cwd=repo, check=True, capture_output=True, text=True,
+        )
+
+    git("init", "-q", ".")
+    (repo / "note.md").write_text("a note\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-qm", "a first commit")
+
+    done = subprocess.run(["bash", str(cut), str(repo)], capture_output=True, text=True)
+    assert done.returncode != 0, "a failed history reader passed the audit:\n" + done.stdout
+    assert "the reader could not answer" in done.stdout
