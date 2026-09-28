@@ -255,7 +255,9 @@ a { color: var(--accent); text-decoration: none; }
 .btn.ghost:hover { background: var(--surface-2); color: var(--fg); }
 .btn.danger { color: var(--bad); background: transparent; border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
 .btn.danger:hover { background: color-mix(in srgb, var(--bad) 12%, transparent); }
-.btn.danger.solid { background: var(--bad); color: #fff; border-color: transparent; }
+/* The ink is the primary button's: white on the dark theme's coral read at 3.2:1, below what a label
+   needs, and it was the label of an action that cannot be undone. */
+.btn.danger.solid { background: var(--bad); color: var(--primary-ink); border-color: transparent; }
 .btn.small { padding: 4px 10px; font-size: var(--fs-13); min-height: var(--ctl-h-sm); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn .ic { flex: none; }
