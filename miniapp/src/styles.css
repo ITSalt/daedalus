@@ -3089,6 +3089,9 @@ button.staff-row:hover { background: var(--surface-2); }
 .phone-staff-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .phone-staff-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-14); font-weight: 600; }
 .phone-staff-name > .truncate { flex: 0 1 auto; min-width: 0; }
+/* The name is who the row is: the role gives way first. Both shrinking alike cut "Cleo" to "C…" and
+   "langpt" to "l." beside a long role; the cap keeps a very long name from taking the whole line. */
+.phone-staff-name > .truncate:first-child { flex: 0 0 auto; max-width: 60%; }
 .phone-staff-role { color: var(--fg-3); font-size: var(--fs-12); font-weight: 400; }
 .phone-staff-name .harness-badge, .phone-staff-name .focus-host { flex: none; }
 .phone-staff-line { color: var(--fg-2); font-size: var(--fs-12); }

@@ -315,7 +315,9 @@ function PhoneStaffRow({ member, task, spend, onOpen, onEdit }: { member: Staff;
           <HarnessBadge harness={member.harness} />
           {member.env === "host" && <span className="focus-host">{t("team.env.host")}</span>}
         </span>
-        <span className={`phone-staff-line truncate ${wait || tone === "waiting" ? "waits" : ""}`}>{line}</span>
+        {/* Two lines before it gives up: a wait's reason is the one thing that says why the member is
+            stuck, and one line cut "the machine's terminal limit is reached" before its verb. */}
+        <span className={`phone-staff-line clamp-2 ${wait || tone === "waiting" ? "waits" : ""}`}>{line}</span>
         {/* The spend has a line of its own rather than joining the one above: that line truncates, and
             the money is the part the operator would lose on a narrow phone. */}
         {spend && <span className="phone-staff-line staff-spend truncate">{spend}</span>}
