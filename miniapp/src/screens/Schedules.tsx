@@ -240,7 +240,9 @@ function ScheduleForm({ existing, onClose, onSaved, toast }: { existing?: Schedu
       <label className="field">{t(kind === "agent" ? "sched.instruction" : "sched.remindertext")}</label>
       <textarea className="field" rows={4} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
       <label className="field">{t("sched.when")}</label>
-      <div className="chips">
+      {/* Wrapped, not scrolled: in one scrolling row a phone showed four and a half of the six, and
+          an existing Cron schedule opened with its own choice out of sight. */}
+      <div className="chips wrap">
         {(["once", "daily", "weekdays", "weekly", "hours", "cron"] as When[]).map((w) => (
           <button key={w} className="chip select" aria-pressed={when === w} onClick={() => setWhen(w)}>
             {t(`sched.when.${w}`)}
@@ -262,7 +264,7 @@ function ScheduleForm({ existing, onClose, onSaved, toast }: { existing?: Schedu
       {when === "weekly" && (
         <>
           <label className="field">{t("sched.days")}</label>
-          <div className="chips">
+          <div className="chips wrap">
             {DAYS.map((d, i) => (
               <button key={d} className="chip select" aria-pressed={days.includes(i)} onClick={() => setDays((cur) => (cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i].sort()))}>{t(`fmt.dow.${d}`)}</button>
             ))}

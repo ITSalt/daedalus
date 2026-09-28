@@ -306,6 +306,8 @@ a { color: var(--accent); text-decoration: none; }
 .chips { display: flex; flex-shrink: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 2px; margin: 4px 0 8px; }
 .chips::-webkit-scrollbar { display: none; }
 .chips .chip { flex: none; }
+/* A set of choices that must all be seen at once wraps instead of scrolling out of the window. */
+.chips.wrap { flex-wrap: wrap; overflow: visible; }
 .bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .bar i { display: block; height: 100%; width: calc(var(--v, 0) * 1%); background: var(--accent); border-radius: 3px; transition: width .3s; }
 .bar.attn i { background: var(--warn); }

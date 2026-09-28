@@ -1316,6 +1316,7 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "sched.kind.agent": { en: "Agent task", ru: "Задача агенту" },
   "sched.kind.message": { en: "Reminder", ru: "Напоминание" },
   "sched.kind.lazy": { en: "Lazy note", ru: "Заметка на потом" },
+  "sched.kind.wake": { en: "Orchestrator wake-up", ru: "Пробуждение оркестратора" },
   "sched.upcoming": { en: "{n} upcoming", ru: "впереди: {n}" },
   "sched.paused.count": { en: " · {n} paused", ru: " · на паузе: {n}" },
   "sched.new": { en: "New schedule", ru: "Новое расписание" },
