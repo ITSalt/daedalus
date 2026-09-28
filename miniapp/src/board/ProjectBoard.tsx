@@ -252,10 +252,14 @@ function StatusText({ task, titles }: { task: ProjectTask; titles: Record<string
   const line = statusLine(task, titles);
   if (line.kind === "working") {
     return (
-      <span className={`status ${statusTone(line.status)} truncate`} title={line.waiting || undefined}>
+      // The words sit in a span of their own: `.status` is a flex row, and an ellipsis never applies to
+      // a flex container's text, so a narrow tablet column cut "needs permission · 4d" to "needs permissic".
+      <span className={`status ${statusTone(line.status)} pcard-status`} title={line.waiting || undefined}>
         <span className="dot" aria-hidden />
-        {t(`team.status.${line.status}`)}
-        {line.since && <> · {relTime(line.since)}</>}
+        <span className="truncate">
+          {t(`team.status.${line.status}`)}
+          {line.since && <> · {relTime(line.since)}</>}
+        </span>
       </span>
     );
   }
