@@ -182,9 +182,9 @@ export function SessionDetails({ ids, id, role = "session", detail, busy, modes,
           </div>
         )}
         {!conductor && (
-          <div className="dt-row sub">
+          <div className="dt-row sub prose">
             <span className="dt-key">{t("session.project")}</span>
-            <span className="grow truncate" title={projectPath(detail.project)}>
+            <span className="grow" title={projectPath(detail.project)}>
               {t("session.project.inside", { name: detail.project.name })}
             </span>
             <button className="linkbtn" onClick={on.move}>{t("session.project.move")}</button>
