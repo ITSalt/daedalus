@@ -97,6 +97,12 @@
 @media (max-width: 1023px) {
   :root { --row-h: var(--row-h-touch); --row-h-dense: 40px; --ctl-h: 40px; --ctl-h-sm: 32px; --fs-prose: var(--fs-16); }
 }
+/* A landscape tablet is wider than the phone rule but still held by a thumb. It keeps the desktop's
+   layout and rows, and only its small buttons and chips grow: at 28 px, Allow and Deny on a
+   permission card and the notification matrix's cells were under the touch minimum at 1180 px. */
+@media (min-width: 1024px) and (pointer: coarse) {
+  :root { --ctl-h-sm: 32px; }
+}
 :root[data-tg="1"] { --bg: #000000; }
 :root[data-scheme="light"] {
   --bg: #f7f7f8;
