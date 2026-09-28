@@ -2126,7 +2126,7 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
 .stt-filters .field { flex: 1 1 180px; min-width: 140px; }
 .stt-filters .chip.select.on { background: var(--fg); color: var(--bg); border-color: transparent; }
 
-.stt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; margin-top: 10px; }
+.stt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 10px; margin-top: 10px; }
 .stt-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); }
 .stt-card.using { background: var(--surface-3); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .stt-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2173,8 +2173,11 @@ input.field[type="range"] {
 .comp-disk { font-size: var(--fs-12); white-space: nowrap; }
 .comp-restart { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-3); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 .comp-restart > b { font-size: var(--fs-14); }
-.comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin-top: 12px; }
-.comp-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); }
+/* The minimum is capped at the column's width and a card may shrink below its content: a card's fix
+   command is `white-space: pre`, and with the default `auto` minimum it widened the one phone column
+   past the screen, cutting every card's text at the right edge. */
+.comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 10px; margin-top: 12px; }
+.comp-card { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); }
 .comp-card-on { background: var(--surface-3); }
 .comp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .comp-head b { font-size: var(--fs-14); flex: 1 1 auto; }
@@ -2199,9 +2202,6 @@ input.field[type="range"] {
 .comp-detail { margin-top: 2px; font-size: var(--fs-12); }
 .voice-needs { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); }
 
-@media (max-width: 480px) {
-  .comp-grid { grid-template-columns: 1fr; }
-}
 .settings-link-text .settings-mark { position: static; display: inline-block; margin-left: 7px; vertical-align: middle; }
 
 /* The tree keeps its own scrolling area beside a wide preview. Hidden tabs stay mounted so a
