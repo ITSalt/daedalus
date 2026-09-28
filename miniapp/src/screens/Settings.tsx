@@ -686,7 +686,9 @@ function HealthTab({ toast }: { toast: (t: string) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (!data) return <div className="empty">{t(busy ? "settings.health.checking" : "common.loading")}</div>;
-  const mark = (c: Check) => (c.fixed ? "🔧" : c.ok ? "✅" : c.severity === "fail" ? "❌" : "⚠️");
+  // The app's own glyphs, coloured by the state, as the dependency cards draw a failure; emoji drew
+  // the same states in each platform's own colours and shapes.
+  const mark = (c: Check): [IconName, string] => (c.fixed ? ["wrench", "ok"] : c.ok ? ["check", "ok"] : c.severity === "fail" ? ["close", "bad"] : ["alert", "warn"]);
   // An answer without `checks` is not a screen that should go down with "Cannot read properties of
   // undefined": the doctor is one endpoint away and an installation that has not got it yet reads
   // as no checks rather than as a broken page.
@@ -713,7 +715,7 @@ function HealthTab({ toast }: { toast: (t: string) => void }) {
       <div className="card">
         {checks.map((c, i) => (
           <div key={i} className="row" style={{ alignItems: "flex-start", padding: "6px 0", borderTop: i ? "1px solid var(--line)" : undefined }}>
-            <span style={{ flex: "none", width: 22 }}>{mark(c)}</span>
+            <span className={`health-mark ${mark(c)[1]}`}><Icon name={mark(c)[0]} size={16} /></span>
             <div className="grow" style={{ minWidth: 0 }}>
               <div>
                 <b>{c.name}</b> <span className="sub">{c.message}</span>

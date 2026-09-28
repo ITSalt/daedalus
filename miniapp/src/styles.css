@@ -1693,6 +1693,10 @@ h1.settings-title { margin: 0 0 16px; font-size: 28px; font-weight: 650; letter-
 .settings-choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--row-h); padding: 6px 0; }
 .settings-choice .segmented { margin: 0; }
 .settings-choice select.field { width: auto; max-width: 46%; margin: 0; }
+.health-mark { flex: none; width: 22px; padding-top: 2px; }
+.health-mark.ok { color: var(--ok); }
+.health-mark.warn { color: var(--warn); }
+.health-mark.bad { color: var(--bad); }
 .settings-color { display: inline-flex; align-items: center; gap: 8px; }
 .settings-color input { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; }
 .settings-faces { display: flex; flex-direction: column; margin: 4px 0 8px; }

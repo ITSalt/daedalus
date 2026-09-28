@@ -2207,9 +2207,9 @@ export const DICT: Record<string, Record<Lang, string>> = {
   "settings.health.ok": { en: "{n} ok", ru: "в порядке: {n}" },
   "settings.health.warn": { en: "{n} warnings", ru: "предупреждений: {n}" },
   "settings.health.fail": { en: "{n} failures", ru: "сбоев: {n}" },
-  "settings.health.recheck": { en: "re-check", ru: "проверить снова" },
-  "settings.health.fix": { en: "apply safe fixes", ru: "применить безопасные исправления" },
-  "settings.health.fixed": { en: "fixes applied", ru: "исправления применены" },
+  "settings.health.recheck": { en: "Re-check", ru: "Проверить снова" },
+  "settings.health.fix": { en: "Apply safe fixes", ru: "Применить безопасные исправления" },
+  "settings.health.fixed": { en: "Fixes applied", ru: "Исправления применены" },
   "settings.health.checking": { en: "Checking…", ru: "Проверяем…" },
   "settings.logout": { en: "Log out of this browser", ru: "Выйти из этого браузера" },
 
