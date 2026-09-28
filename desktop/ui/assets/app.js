@@ -139,10 +139,18 @@ function drawProgress(status) {
     el("trouble-log").textContent = [status.failure, ...(status.log || [])].filter(Boolean).join("\n");
     return;
   }
-  el("idle").hidden = Boolean(status.busy) || ready;
+  const idle = !status.busy && !ready;
+  el("idle").hidden = !idle;
   // Two lines: what is happening, in the operator's language, and under it the launcher's own
-  // commentary, which is machine output and looks like it.
-  el("live").textContent = ready ? T("progress.done") : status.stage ? T("live." + status.stage) : T("progress.working");
+  // commentary, which is machine output and looks like it. Nothing happening is a state of its
+  // own: it once fell through to "Working…", printed right above the Start button it contradicts.
+  el("live").textContent = ready
+    ? T("progress.done")
+    : idle
+      ? T("progress.idle")
+      : status.stage
+        ? T("live." + status.stage)
+        : T("progress.working");
   el("livelog").textContent = ready ? "" : (status.log || []).slice(-1)[0] || "";
   if (ready) setTimeout(() => (location.href = "/status"), 900);
 }
