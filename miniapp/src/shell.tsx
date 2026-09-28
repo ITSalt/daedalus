@@ -76,7 +76,9 @@ export function TabBar({ screen, counts, selfdev, onMore, moreOpen, waiting = 0 
   const moreCount = more.reduce((n, s) => n + countFor(s, counts), 0);
   // The Inbox lives in More on a phone, so its unseen count is what the More tab shows as a number;
   // anything else counted in there (a change waiting) is a dot.
-  const unseen = countFor("inbox", counts);
+  // While the slot stands for another screen of More (Usage, Schedules…) the number would sit under
+  // that screen's name and read as its own count, "Schedules 5" beside one schedule; there it is a dot.
+  const unseen = inMore && screen !== "inbox" ? 0 : countFor("inbox", counts);
   return (
     <nav className="tabbar five" aria-label={t("shell.nav.primary")}>
       {PRIMARY.map((s) => {
