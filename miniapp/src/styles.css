@@ -888,7 +888,10 @@ input.field, select.field, textarea.field {
   .rail-item:hover .rail-tip, .rail-item:focus-visible .rail-tip { opacity: 1; visibility: visible; }
   /* The menu over the content: anchored bottom-left, opening upward, never centred, never a modal. */
   .navmenu-backdrop { display: block; position: fixed; inset: 0; z-index: 35; background: transparent; }
-  .navmenu { display: flex; flex-direction: column; position: fixed; left: calc(var(--rail-w) + 6px); bottom: 8px; z-index: 36; width: 300px; max-height: 70vh; overflow-y: auto; padding: 6px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); animation: navmenu-in 160ms var(--ease-out); }
+  /* The panel may take the whole height beside the rail. Capped at 70 % it was shorter than its own
+     list on a 820 px tall tablet, and Language, Settings and About sat below its edge with nothing
+     saying the panel scrolled. */
+  .navmenu { display: flex; flex-direction: column; position: fixed; left: calc(var(--rail-w) + 6px); bottom: 8px; z-index: 36; width: 300px; max-height: calc(100dvh - 16px); overflow-y: auto; padding: 6px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); animation: navmenu-in 160ms var(--ease-out); }
   .navmenu-section { display: flex; flex-direction: column; padding: 2px 0; }
   .navmenu-section + .navmenu-section { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 4px; }
   .navmenu-label { padding: 4px 10px 2px; font-size: var(--fs-11); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); }

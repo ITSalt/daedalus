@@ -11,6 +11,7 @@ import type { RefObject } from "react";
 import { plural, t } from "./i18n";
 import { Icon, type IconName } from "./icons";
 import { type Mode, modeHome } from "./mode";
+import { menuSections } from "./navigation";
 import { type Screen, pathFor } from "./router";
 import { type SelfDevMode, visibleScreens } from "./capabilities";
 import { type Counts, ICONS, countFor, go, screenTitle } from "./shell";
@@ -67,6 +68,9 @@ function Item({ href, icon, label, on, mode = false, badge, quiet, data }: { hre
 
 export function Rail(p: RailProps) {
   const home = modeHome(p.mode);
+  // A destination the menu alone reaches lights the menu's button, so Changes or Usage answers
+  // "where am I" on the rail the way Services does; without it nothing on the rail was lit.
+  const inMenu = !PLACES.includes(p.screen) && p.screen !== "agents" && menuSections(p.selfdev).some((g) => g.items.includes(p.screen));
   const modeItem = (m: Mode) => (
     <Item
       key={m}
@@ -103,7 +107,7 @@ export function Rail(p: RailProps) {
         <Item key={s} data={s} href={pathFor(s)} icon={ICONS[s]} label={screenTitle(s)} on={p.screen === s} badge={countFor(s, p.counts)} />
       ))}
       <div className="rail-foot">
-        <button ref={p.menuButton} className={`rail-item ${p.menuOpen ? "on" : ""}`} onClick={p.onMenu} aria-label={t("nav.menu")} aria-haspopup="menu" aria-expanded={p.menuOpen} data-rail="menu">
+        <button ref={p.menuButton} className={`rail-item ${p.menuOpen || inMenu ? "on" : ""}`} onClick={p.onMenu} aria-label={t("nav.menu")} aria-haspopup="menu" aria-expanded={p.menuOpen} data-rail="menu">
           <Icon name="more" size={20} />
           {(p.counts.changes ?? 0) > 0 && <span className="rail-dot" aria-hidden />}
           <Tip text={t("nav.menu")} keys={KEYS.menu} />
