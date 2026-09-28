@@ -1010,7 +1010,9 @@ export function SettingsScreen({ toast, section }: { toast: (t: string) => void;
         setS(current);
         throw new Error(t("settings.validation.stale"));
       }
-      if (!validation.valid) throw new Error(validation.problems[0]?.message || t("settings.validation.invalid"));
+      // An answer without its list of problems still ends in a sentence the operator can read; indexing
+      // the missing list put "Cannot read properties of undefined (reading '0')" in a toast.
+      if (!validation.valid) throw new Error(validation.problems?.[0]?.message || t("settings.validation.invalid"));
       const next = await api.put<Settings>("/api/settings", { ...patch, base_revision: s.revision });
       setS({ ...next, providers_available: next.providers_available ?? s?.providers_available ?? [] });
       toast(t("common.saved"));
