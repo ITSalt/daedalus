@@ -549,6 +549,9 @@ pre.diff { font-family: var(--mono); font-size: var(--fs-mono); white-space: pre
 pre.diff .add { color: var(--ok); }
 pre.diff .del { color: var(--bad); }
 pre.diff .hunk { color: var(--info); }
+/* A phone wraps a diff rather than scrolling it sideways: the scroll had no mark, and a long file
+   header simply stopped at the sheet's edge with its second path gone. */
+@media (max-width: 1023px) { pre.diff { white-space: pre-wrap; overflow-wrap: anywhere; } }
 table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
 td, th { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 500; }
@@ -1451,6 +1454,10 @@ body.resizing iframe { pointer-events: none; }
 .erow.unread .erow-title, .sidebar .erow.unread .erow-title { font-weight: 650; }
 .erow-meta { display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: var(--fs-13); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .erow-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A change's own sheet has the room to say who, where and when in full: truncated to a line, a
+   phone showed "daed…", "bot/websear…" and "28 Se…" and nothing could bring them back. */
+.proposal-sheet .erow-meta { flex-wrap: wrap; row-gap: 4px; white-space: normal; }
+.proposal-sheet .erow-meta > span { overflow: visible; overflow-wrap: anywhere; }
 .erow-meta .sep { color: var(--fg-3); flex: none; }
 .erow-meta .word { font-weight: 600; flex: none; }
 .erow-meta.running .word { color: var(--accent); }
