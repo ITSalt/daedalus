@@ -2297,6 +2297,14 @@ input.field[type="range"] {
 .diff-line { display:flex; min-width:max-content; white-space:pre; }
 .diff-line .linenum { min-width:38px; text-align:right; padding:0 6px; color:var(--fg-3); user-select:none; }
 .diff-sign { width:20px; }
+/* A phone wraps a long line inside its row instead of scrolling it: a touch screen draws no
+   scrollbar, so a line wider than the sheet simply ended at the edge ("…are_not_sent" with its "():"
+   gone) and read as the whole line. The continuation stays in the text column, after the numbers. */
+@media (max-width: 719px) {
+  .diff-line { min-width: 0; }
+  .diff-line > span:last-child { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .diff-line .linenum, .diff-sign { flex: none; }
+}
 .diff-add { background:color-mix(in srgb, var(--ok) 13%, transparent); }
 .diff-del { background:color-mix(in srgb, var(--bad) 13%, transparent); }
 .tk-add { color:var(--ok); }
