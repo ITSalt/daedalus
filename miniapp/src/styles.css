@@ -1409,12 +1409,17 @@ body.resizing iframe { pointer-events: none; }
 /* A fork keeps its step in from the session it was taken from, inside a folder as outside one. */
 .folder.open > .erow.fork { margin-left: 32px; }
 .chip.tiny { padding: 1px 7px; font-size: var(--fs-11); min-height: 0; flex: none; }
+/* Outside a phone these boxes are not there: the name, the counts and the time are items of the row. */
+.folder-text, .folder-title, .folder-meta { display: contents; }
 @media (max-width: 520px) {
-  /* At 390 px the counts and the time would push the name out; the name is what the folder is. */
-  .folder-head { flex-wrap: wrap; row-gap: 2px; }
-  .folder-counts { margin-left: 26px; }
-  .folder-time { margin-left: auto; }
-  .folder-name { flex: 1 1 auto; }
+  /* At 390 px the counts and the time would push the name out; the name is what the folder is. So
+     the name has a line of its own and the counts and the time share the one under it, in the same
+     place on every folder — wrapping one line instead gave "V.." on one row and a lone "52m" in
+     the middle of the next. */
+  .folder-text { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px; }
+  .folder-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .folder-meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .folder-counts { margin-left: 0; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .erow.fork { margin-left: 22px; border-left: 2px solid var(--line-strong); }
 .erow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; min-height: var(--row-h); padding: 6px 12px; margin-bottom: 4px; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius-md); cursor: pointer; }
@@ -1689,6 +1694,9 @@ h2.settings-specimen { margin: 8px 0; font-size: var(--fs-18); font-weight: 500;
 /* the first item of a meta line keeps its width; what follows truncates */
 .erow-meta > span:first-child, .erow-meta > .nowrap, .erow-meta > .chip, .erow-meta > span[title], .erow-meta > .pill { flex: none; }
 .erow-meta > .mono:not(:first-child) { flex: 0 1 auto; }
+/* The model is the part of a row's state line that gives way, with an ellipsis: held at its width
+   by the rule above, it was cut flush against the row's menu — "DeepSee" with nothing to say so. */
+.erow-meta > span.erow-model { flex: 0 1 auto; }
 .mrow-foot { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); align-items: center; }
 .mrow.default .mtitle::before { content: ""; }
 @media (max-width: 480px) { .kpi-grid > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; } }
@@ -2444,10 +2452,19 @@ input.field[type="range"] {
   .folder .erow { border:0; border-radius:0; background:transparent; margin-inline:0; }
   .folder.single:not(.open) { border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; }
   .folder-expand { order:2; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
-  .folder-actions { order:3; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
+  .folder-actions { order:1; min-width:var(--row-h-touch); min-height:var(--row-h-touch); }
   .folder-root { display:none; }
-  .folder-add { display:grid; place-items:center; width:var(--row-h-touch); height:var(--row-h-touch); min-width:var(--row-h-touch); min-height:var(--row-h-touch); padding:0; }
+  .folder-add { order:2; display:grid; place-items:center; width:var(--row-h-touch); height:var(--row-h-touch); min-width:var(--row-h-touch); min-height:var(--row-h-touch); padding:0; }
   .folder-head > .chev { order:2; margin-left:auto; }
+  /* One order of controls on every row: the chevron inside the row, then its menu, then the new
+     agent. A project of one agent carries its menu inside the agent's row, which is why the
+     project's own menu comes before + rather than after it. The Voice folder's chevron is its own
+     button, and it moves to the same place at the right. */
+  .folder-head.linked > .folder-disclose { order:2; padding:4px 12px 4px 2px; }
+  /* Opening a project of one agent shows its folder's path and nothing else, and the path is not
+     drawn here: the chevron opened nothing, and it was a third, different control on that row. */
+  .folder.single .folder-expand { display:none; }
+  .folder.single .folder-top > .erow { padding-right:0; }
 }
 .search-component progress { width: 100%; accent-color: var(--accent); }
 
@@ -2477,6 +2494,8 @@ h1.start-greeting { margin:0; max-width:18em; font-size:var(--fs-18); font-weigh
 .start-files { text-align:center; }
 .start-list-head { display:flex; align-items:center; gap:var(--space-2); padding:0 14px; }
 .start-list-head .section-title { flex:1; margin-bottom:0; }
+/* The list below keeps its 14 px gutter; the search field ran from one edge of the glass to the other. */
+.start-list > .field.search { display:block; width:calc(100% - 28px); margin:2px 14px 6px; }
 @media (min-width: 1024px) {
   .start { flex:1; min-height:0; }
   .start-hero { flex:1; min-height:0; padding:var(--space-4) var(--space-4) 0; }

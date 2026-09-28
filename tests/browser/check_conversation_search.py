@@ -53,10 +53,10 @@ def run() -> int:
         expect(garden).to_contain_text('Local model')
         expect(garden).to_contain_text('Needs you')
         assert garden.locator('.erow-time').get_attribute('title')
-        garden.locator('.folder-expand').click()
-        # The path is available in project settings; mobile navigation spends no row on it.
-        expect(garden.locator('.folder-root')).to_be_hidden()
-        expect(garden.locator('.folder-expand')).to_have_attribute('aria-expanded', 'true')
+        # The path is available in project settings; mobile navigation spends no row on it. Opening a
+        # project of one agent would show that path and nothing else, so a phone has no chevron for it.
+        expect(garden.locator('.folder-expand')).to_be_hidden()
+        expect(garden.locator('.folder-root')).to_have_count(0)
         # A single-agent project uses the session menu instead of a second overflow beside it.
         expect(garden.locator('.folder-actions')).to_have_count(0)
         garden.get_by_role('button', name='Planting plan: More').click()
